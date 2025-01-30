@@ -2,7 +2,7 @@
 
 ## Project title: *[Insert your project title here]*
 
-### Student name: *[Insert your name here]*
+### Student name: Vladimirs Ribakovs
 
 ### Student email: *[Insert your university email address here]*
 
