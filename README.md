@@ -1,5 +1,3 @@
-[comment]: # (You may find the following markdown cheat sheet useful: https://www.markdownguide.org/cheat-sheet/. You may also consider using an online Markdown editor such as StackEdit or makeareadme.) 
-
 ## Project title: Exploring HESA Data with Large Language Models for Dynamic Visualisation
 
 ### Student name: Vladimirs Ribakovs
@@ -7,29 +5,32 @@
 ### Student email: vr112@student.le.ac.uk
 
 ### Project description: 
-*[Add your project description here, these will typically be around 100-150 words long]*
+The Higher Education Statistics Agency (HESA) collects and provides open-source data on UK universities. They are offering insights into institutional performance, funding decisions and benchmarking. The aim of project is to create a dynamic and userfiendly dashboard using large language models (LLMs) that will allow users to analyse and visualise HESA's data.
+
+The dashboard will enable users to input queries in natural language. The LLM will interpret and convert these queries into structured analyses. These analyses will provide meaningful insights through tables, charts, and comparative reports. The project will initially focus on implementing a static dashboard consisting of the most recent data up to March 2025. The future goal is to make the dashboard update automatically when there is new data provided by HESA.
+
+This project integrates data analysis, natural language processing (NLP), and interactive visualisation. This allows universities to make it easier to understand their positioning within the sector and to compare themselves against peer institutions. It can help to derive strategic insights from HESA’s extensive datasets.
 
 ### List of requirements (objectives): 
 
-[comment]: # (You can add as many additional bullet points as necessary by adding an additional hyphon symbol '-' at the end of each list) 
-
 Essential:
-- [Essential requirement 1]
-- [Essential requirement 2]
-- [Essential requirement 3]
-- [Essential requirement *n*]
+- Natural Language Query Interpretation – Users will type questions and the LLM-powered system will interpret them to retrieve and process relevant HESA data.
+- Data Processing and Integration – Extracting, cleaning, and structuring HESA open-source data for analysis.
+- Interactive Dashboard – A user-friendly interface that displays results dynamically and supports multiple formats like tables, charts, and summary reports.
+- Comparative Analysis – Ability to compare universities, group them by Mission Groups (Russell Group, University Alliance, etc.), and benchmark them based on relevant metrics.
+- Data Export Capabilities – Users should be able to download reports in a structured format (CSV, PDF, or Excel) for further use.
 
 Desirable:
-- [Desirable requirement 1]
-- [Desirable requirement 2]
-- [Desirable requirement 3]
-- [Desirable requirement *n*]
+- Automated Data Retrieval – The system should be able to fetch and update HESA data automatically. This will eliminate the need for manual data downloads and updates.
+- AI Analysis – The LLM will not just fetch data but also provide insights and contextual analysis about it. It will identify trends and make recommendations based on historical data.
+- Advanced Visualisations – It will support more advanced visualisation techniques like interactive graphs, trend projections, and geographic mappings.
+- Custom Query-Building Interface – For users who are unfamiliar with free-text queries, a quick guide will be provided suggesting relevant questions based on available datasets.
+- Historical Data Tracking – Ability to track changes in university performance over time and highlight key shifts and trends.
 
 Optional:
-- [Optional requirement 1]
-- [Optional requirement 2]
-- [Optional requirement 3]
-- [Optional requirement *n*]
+- Predictive Modelling – Using historical HESA data and machine learning models to predict future university performance metrics.
+- Chatbot Integration – Embedding an AI chatbot within the dashboard to allow users to converse with the data and refine their queries dynamically.
+- API for External Use – Developing an API that allows third-party applications to integrate HESA data analysis functionalities.
 
 
 ## Information about this repository
