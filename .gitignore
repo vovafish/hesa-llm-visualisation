@@ -1,2 +1,9 @@
+venv/
 mydata.txt
 notes.txt
+db.sqlite3
+.env
+node_modules/
+*.log
+*.pyc
+pycache/
