@@ -2,18 +2,13 @@
 
 {% block content %}
 <div class="container mx-auto p-4">
-    <form method="POST" class="mb-4">
+    <form method="POST" class="mb-8">
         {% csrf_token %}
         <div class="mb-4">
-            <label for="query" class="block text-gray-700 text-sm font-bold mb-2">
+            <label class="block text-gray-700 text-sm font-bold mb-2">
                 Enter your query:
             </label>
-            <textarea 
-                name="query" 
-                id="query"
-                class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-                rows="4"
-            ></textarea>
+            <textarea name="query" class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"></textarea>
         </div>
         <button type="submit" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
             Submit Query
@@ -21,10 +16,19 @@
     </form>
 
     {% if response %}
-    <div class="mt-4 p-4 bg-gray-100 rounded">
-        <h2 class="text-lg font-bold mb-2">Response:</h2>
-        <p>{{ response }}</p>
-    </div>
+        <div class="mb-8">
+            <h2 class="text-xl font-bold mb-4">Response:</h2>
+            <div class="bg-gray-100 p-4 rounded">
+                {{ response }}
+            </div>
+        </div>
+    {% endif %}
+
+    {% if chart_data %}
+        <div class="mb-8">
+            <h2 class="text-xl font-bold mb-4">Visualization:</h2>
+            <img src="data:image/png;base64,{{ chart_data }}" alt="Data Visualization">
+        </div>
     {% endif %}
 </div>
 {% endblock %}
