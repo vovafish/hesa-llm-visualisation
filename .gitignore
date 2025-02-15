@@ -13,3 +13,10 @@ node_modules/
 *.log
 *.pyc
 pycache/
+
+# Node
+node_modules/
+core/static/css/tailwind.css
+
+# Django
+staticfiles/
