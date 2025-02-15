@@ -1,8 +1,9 @@
-/data/raw_files/*
-!/data/raw_files/.gitkeep
+/hesa-llm-visualisation/data/raw_files/*
+!/hesa-llm-visualisation/data/raw_files/.gitkeep
 
-/data/cleaned_files/*
-!/data/cleaned_files/.gitkeep
+/hesa-llm-visualisation/data/cleaned_files/*
+!/hesa-llm-visualisation/data/cleaned_files/.gitkeep
+
 venv/
 mydata.txt
 notes.txt
