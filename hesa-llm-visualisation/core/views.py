@@ -26,12 +26,13 @@ def query_view(request):
                 # Parse response
                 operations = parse_llm_response(llm_response)
                 
-                # Get and process data
-                df = processor.get_dataset('your_dataset.csv')  # Replace with actual dataset
-                processed_data = apply_data_operations(df, operations)
-                
-                # Generate chart
-                chart_data = generate_chart(processed_data)
+                if 'error' not in operations:
+                    # Get and process data
+                    df = processor.get_dataset(available_datasets[0])  # Use first available dataset for now
+                    processed_data = apply_data_operations(df, operations)
+                    
+                    # Generate chart
+                    chart_data = generate_chart(processed_data, operations.get('chart_type', 'bar'))
                 
                 response = llm_response
         except Exception as e:
