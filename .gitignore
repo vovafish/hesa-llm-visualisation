@@ -7,6 +7,8 @@
 venv/
 mydata.txt
 notes.txt
+plan.txt
+documentation.txt
 db.sqlite3
 .env
 node_modules/
