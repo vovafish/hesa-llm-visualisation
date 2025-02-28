@@ -1,7 +1,7 @@
 {
   "name": "hesa-llm-visualisation",
   "version": "1.0.0",
-  "description": "",
+  "description": "HESA Data Analysis Dashboard",
   "main": "index.js",
   "scripts": {
     "build": "tailwindcss -i ./core/static/src/main.css -o ./core/static/css/tailwind.css --watch"
@@ -9,6 +9,9 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
+  "dependencies": {
+    "chart.js": "^4.4.1"
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",

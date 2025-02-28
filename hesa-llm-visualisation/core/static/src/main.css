@@ -1,3 +1,33 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
+
+@layer components {
+    .dashboard-card {
+        @apply bg-white rounded-lg shadow-md p-6 mb-6;
+    }
+    
+    .dashboard-title {
+        @apply text-2xl font-bold text-gray-800 mb-4;
+    }
+    
+    .dashboard-subtitle {
+        @apply text-lg font-semibold text-gray-700 mb-3;
+    }
+    
+    .chart-container {
+        @apply w-full h-64 md:h-96 bg-white rounded-lg shadow-md p-4 mb-6;
+    }
+    
+    .query-input {
+        @apply w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    }
+    
+    .btn-primary {
+        @apply bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors;
+    }
+    
+    .btn-secondary {
+        @apply bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition-colors;
+    }
+} 

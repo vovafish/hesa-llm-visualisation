@@ -4,17 +4,44 @@
     <title>HESA LLM Visualization</title>
     {% load static %}
     <link href="{% static 'css/tailwind.css' %}" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{% static 'js/dashboard.js' %}" defer></script>
 </head>
-<body>
-    <nav class="bg-gray-800 text-white p-4">
+<body class="bg-gray-100">
+    <nav class="bg-gray-800 text-white p-4 mb-6">
         <div class="container mx-auto">
-            <h1 class="text-xl font-bold">HESA Data Analysis</h1>
+            <div class="flex justify-between items-center">
+                <h1 class="text-xl font-bold">HESA Data Analysis</h1>
+                <div class="space-x-4">
+                    <a href="{% url 'dashboard' %}" class="hover:text-gray-300">Dashboard</a>
+                    <a href="{% url 'documentation' %}" class="hover:text-gray-300">Documentation</a>
+                </div>
+            </div>
         </div>
     </nav>
     
-    <main>
+    <main class="container mx-auto px-4">
+        {% if messages %}
+        <div class="mb-6">
+            {% for message in messages %}
+            <div class="p-4 rounded-lg {% if message.tags == 'error' %}bg-red-100 text-red-700{% else %}bg-green-100 text-green-700{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% block content %}
         {% endblock %}
     </main>
+
+    <footer class="bg-gray-800 text-white p-4 mt-12">
+        <div class="container mx-auto text-center">
+            <p>&copy; {% now "Y" %} University of Leicester. All rights reserved.</p>
+        </div>
+    </footer>
+
+    {% block extra_js %}
+    {% endblock %}
 </body>
 </html>
