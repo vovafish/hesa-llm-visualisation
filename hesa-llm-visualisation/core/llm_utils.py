@@ -1,9 +1,9 @@
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from .llm.gpt_j_handler import GPTJHandler
+from .llm.settings import CURRENT_CONFIG
 
-tokenizer = AutoTokenizer.from_pretrained("EleutherAI/gpt-j-6B")
-model = AutoModelForCausalLM.from_pretrained("EleutherAI/gpt-j-6B")
+# Initialize the GPT-J handler with current configuration
+gpt_handler = GPTJHandler(config=CURRENT_CONFIG)
 
-def generate_response(prompt: str) -> str:
-    inputs = tokenizer(prompt, return_tensors="pt")
-    outputs = model.generate(**inputs, max_new_tokens=50)
-    return tokenizer.decode(outputs[0])
+def generate_response(query: str) -> dict:
+    """Generate response for a natural language query."""
+    return gpt_handler.process_query(query)
