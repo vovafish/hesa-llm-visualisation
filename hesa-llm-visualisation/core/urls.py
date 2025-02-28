@@ -2,5 +2,7 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    path('query/', views.query_view, name='query'),
+    path('', views.dashboard, name='dashboard'),
+    path('process_query/', views.process_query, name='process_query'),
+    path('download/<str:format>/', views.download_data, name='download_data'),
 ]
