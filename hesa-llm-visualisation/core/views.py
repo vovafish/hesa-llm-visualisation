@@ -13,6 +13,10 @@ import io
 import csv
 from datetime import datetime
 
+def documentation(request):
+    """Render the documentation page."""
+    return render(request, 'documentation.html')
+
 def dashboard(request):
     """Render the main dashboard page."""
     return render(request, 'dashboard.html')

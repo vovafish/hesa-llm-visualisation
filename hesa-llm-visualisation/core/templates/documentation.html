@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+    <h1 class="text-3xl font-bold mb-8">Documentation</h1>
+    
+    <!-- Overview Section -->
+    <section class="mb-12">
+        <h2 class="text-2xl font-semibold mb-4">Overview</h2>
+        <div class="bg-white rounded-lg shadow p-6">
+            <p class="mb-4">The HESA Data Analysis Dashboard is a powerful tool for analyzing and visualizing Higher Education Statistics Agency (HESA) data. It uses natural language processing to interpret user queries and generate meaningful visualizations.</p>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="mb-12">
+        <h2 class="text-2xl font-semibold mb-4">Features</h2>
+        <div class="bg-white rounded-lg shadow p-6">
+            <ul class="list-disc list-inside space-y-2">
+                <li>Natural language query processing</li>
+                <li>Interactive data visualizations</li>
+                <li>Multiple data export formats (CSV, Excel, PDF)</li>
+                <li>Summary statistics and insights</li>
+                <li>Historical data analysis</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- Usage Guide Section -->
+    <section class="mb-12">
+        <h2 class="text-2xl font-semibold mb-4">Usage Guide</h2>
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-xl font-medium mb-3">Querying Data</h3>
+            <p class="mb-4">Enter your query in natural language. For example:</p>
+            <ul class="list-disc list-inside space-y-2 mb-6">
+                <li>"Show postgraduate enrollment trends from 2018 to 2022"</li>
+                <li>"Compare student satisfaction between Russell Group universities"</li>
+                <li>"Display international student numbers by year"</li>
+            </ul>
+
+            <h3 class="text-xl font-medium mb-3">Downloading Data</h3>
+            <p>Use the download buttons to export data in your preferred format:</p>
+            <ul class="list-disc list-inside space-y-2">
+                <li>CSV: Raw data format</li>
+                <li>Excel: Spreadsheet format with formatting</li>
+                <li>PDF: Report format with visualizations</li>
+            </ul>
+        </div>
+    </section>
+
+    <!-- Support Section -->
+    <section>
+        <h2 class="text-2xl font-semibold mb-4">Support</h2>
+        <div class="bg-white rounded-lg shadow p-6">
+            <p class="mb-4">For technical support or questions about the data, please contact:</p>
+            <ul class="list-disc list-inside space-y-2">
+                <li>Technical Support: support@example.com</li>
+                <li>Data Queries: data@example.com</li>
+            </ul>
+        </div>
+    </section>
+</div>
+{% endblock %} 

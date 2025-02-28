@@ -1,125 +1,200 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import re
 from datetime import datetime
 import logging
+from .gpt_j_handler import GPTJHandler
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
 class QueryProcessor:
     def __init__(self):
-        """Initialize the query processor with known metrics and institutions."""
-        self.known_metrics = [
-            'enrollment', 'postgraduate', 'undergraduate',
-            'full_time', 'part_time', 'international',
-            'domestic', 'research', 'teaching'
+        """Initialize query processor with GPT-J handler."""
+        self.gpt_handler = GPTJHandler()
+        self.valid_metrics = [
+            'enrollment', 'satisfaction', 'funding',
+            'research', 'staff', 'facilities'
         ]
-        
-        self.known_institutions = [
-            'University of Leicester',
-            'Russell Group',
-            'Million+',
-            'University Alliance'
+        self.valid_comparisons = [
+            'trend', 'comparison', 'ranking',
+            'distribution', 'correlation'
         ]
 
-    def identify_metric(self, query: str) -> List[str]:
-        """Identify metrics mentioned in the query."""
-        metrics = []
-        for metric in self.known_metrics:
-            if metric.lower() in query.lower():
-                metrics.append(metric)
-        return metrics or ['total']  # Default to total if no specific metric found
-
-    def extract_time_period(self, query: str) -> Dict[str, str]:
-        """Extract time period from the query."""
-        # Look for years in the format YYYY
-        years = re.findall(r'\b(19|20)\d{2}\b', query)
-        
-        # Look for relative time periods
-        relative_periods = {
-            'last year': str(datetime.now().year - 1),
-            'this year': str(datetime.now().year),
-            'current': str(datetime.now().year)
-        }
-
-        if years:
-            return {
-                'start_year': min(years),
-                'end_year': max(years)
-            }
-        else:
-            # Check for relative periods
-            for period, year in relative_periods.items():
-                if period in query.lower():
-                    return {
-                        'start_year': year,
-                        'end_year': year
-                    }
-        
-        # Default to current year if no period specified
-        current_year = str(datetime.now().year)
-        return {
-            'start_year': current_year,
-            'end_year': current_year
-        }
-
-    def extract_institutions(self, query: str) -> List[str]:
-        """Extract mentioned institutions from the query."""
-        institutions = []
-        for institution in self.known_institutions:
-            if institution.lower() in query.lower():
-                institutions.append(institution)
-        return institutions or ['University of Leicester']  # Default to UoL
-
-    def identify_comparison(self, query: str) -> str:
-        """Identify the type of comparison requested."""
-        comparison_keywords = {
-            'compare': 'comparison',
-            'versus': 'comparison',
-            'vs': 'comparison',
-            'trend': 'trend',
-            'over time': 'trend',
-            'distribution': 'distribution',
-            'breakdown': 'breakdown'
-        }
-
-        for keyword, comp_type in comparison_keywords.items():
-            if keyword in query.lower():
-                return comp_type
-        
-        return 'single'  # Default to single metric view
-
-    def extract_parameters(self, query: str) -> Dict:
-        """Extract all parameters from the query."""
+    def extract_parameters(self, query: str) -> Dict[str, Any]:
+        """Extract parameters from natural language query."""
         try:
-            parameters = {
-                'metrics': self.identify_metric(query),
-                'time_period': self.extract_time_period(query),
-                'institutions': self.extract_institutions(query),
-                'comparison_type': self.identify_comparison(query)
-            }
-            logger.info(f"Extracted parameters: {parameters}")
-            return parameters
+            # Get structured parameters from GPT-J
+            params = self.gpt_handler.process_query(query)
+            
+            # Validate and clean parameters
+            validated_params = self.validate_parameters(params)
+            
+            # Add visualization suggestions
+            validated_params['visualization'] = self.suggest_visualization(validated_params)
+            
+            return validated_params
+            
         except Exception as e:
             logger.error(f"Error extracting parameters: {str(e)}")
             raise
 
-    def validate_parameters(self, parameters: Dict) -> bool:
-        """Validate extracted parameters."""
+    def validate_parameters(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate and clean extracted parameters."""
         try:
-            # Check if we have at least one metric
-            if not parameters.get('metrics'):
-                return False
+            validated = {}
             
-            # Check if time period is valid
-            time_period = parameters.get('time_period', {})
-            if not time_period.get('start_year') or not time_period.get('end_year'):
-                return False
+            # Validate metrics
+            metrics = params.get('metrics', [])
+            if isinstance(metrics, str):
+                metrics = [metrics]
+            validated['metrics'] = [
+                m.lower() for m in metrics
+                if m.lower() in self.valid_metrics
+            ]
             
-            # Check if we have at least one institution
-            if not parameters.get('institutions'):
-                return False
+            # Validate time period
+            time_period = params.get('time_period', {})
+            if isinstance(time_period, dict):
+                validated['time_period'] = {
+                    'start': time_period.get('start'),
+                    'end': time_period.get('end')
+                }
+            else:
+                validated['time_period'] = {
+                    'start': None,
+                    'end': None
+                }
             
-            return True
+            # Validate institutions
+            institutions = params.get('institutions', [])
+            if isinstance(institutions, str):
+                institutions = [institutions]
+            validated['institutions'] = institutions
+            
+            # Validate comparison type
+            comparison = params.get('comparison_type', '').lower()
+            validated['comparison_type'] = (
+                comparison if comparison in self.valid_comparisons
+                else 'comparison'
+            )
+            
+            return validated
+            
         except Exception as e:
             logger.error(f"Error validating parameters: {str(e)}")
-            return False 
+            raise
+
+    def suggest_visualization(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Suggest appropriate visualization based on parameters."""
+        try:
+            suggestion = {
+                'type': 'bar',  # default
+                'options': {}
+            }
+            
+            comparison_type = params.get('comparison_type')
+            metrics = params.get('metrics', [])
+            time_period = params.get('time_period', {})
+            
+            # Trend analysis over time
+            if comparison_type == 'trend' and time_period.get('start') and time_period.get('end'):
+                suggestion['type'] = 'line'
+                suggestion['options'] = {
+                    'showLine': True,
+                    'tension': 0.1
+                }
+            
+            # Comparison between institutions
+            elif comparison_type == 'comparison' and len(params.get('institutions', [])) > 1:
+                if len(metrics) > 1:
+                    suggestion['type'] = 'radar'
+                else:
+                    suggestion['type'] = 'bar'
+                    suggestion['options'] = {
+                        'indexAxis': 'y' if len(params.get('institutions', [])) > 5 else 'x'
+                    }
+            
+            # Distribution analysis
+            elif comparison_type == 'distribution':
+                suggestion['type'] = 'box'
+            
+            # Correlation analysis
+            elif comparison_type == 'correlation' and len(metrics) == 2:
+                suggestion['type'] = 'scatter'
+            
+            # Ranking visualization
+            elif comparison_type == 'ranking':
+                suggestion['type'] = 'bar'
+                suggestion['options'] = {
+                    'indexAxis': 'y',
+                    'plugins': {
+                        'legend': {
+                            'display': False
+                        }
+                    }
+                }
+            
+            return suggestion
+            
+        except Exception as e:
+            logger.error(f"Error suggesting visualization: {str(e)}")
+            raise
+
+    def generate_pandas_query(self, params: Dict[str, Any]) -> str:
+        """Generate Pandas query string from parameters."""
+        try:
+            query_parts = []
+            
+            # Filter by institutions
+            if params.get('institutions'):
+                institutions = [f"institution == '{inst}'" for inst in params['institutions']]
+                query_parts.append(f"({' | '.join(institutions)})")
+            
+            # Filter by time period
+            time_period = params.get('time_period', {})
+            if time_period.get('start'):
+                query_parts.append(f"year >= {time_period['start']}")
+            if time_period.get('end'):
+                query_parts.append(f"year <= {time_period['end']}")
+            
+            # Combine all conditions
+            query = ' & '.join(query_parts) if query_parts else ''
+            
+            return query
+            
+        except Exception as e:
+            logger.error(f"Error generating Pandas query: {str(e)}")
+            raise
+
+    def process_query(self, query: str, data: pd.DataFrame) -> Dict[str, Any]:
+        """Process query and return results with visualization suggestions."""
+        try:
+            # Extract parameters
+            params = self.extract_parameters(query)
+            
+            # Generate Pandas query
+            pandas_query = self.generate_pandas_query(params)
+            
+            # Filter data
+            if pandas_query:
+                filtered_data = data.query(pandas_query)
+            else:
+                filtered_data = data
+            
+            # Prepare results
+            results = {
+                'parameters': params,
+                'data': filtered_data,
+                'visualization': params['visualization'],
+                'query_interpretation': {
+                    'original_query': query,
+                    'structured_params': params,
+                    'pandas_query': pandas_query
+                }
+            }
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error processing query: {str(e)}")
+            raise 
