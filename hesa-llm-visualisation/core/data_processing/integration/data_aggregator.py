@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class DataAggregator:
     def __init__(self):
-        """Initialize data aggregator with common aggregation functions."""
+        #Initialize data aggregator with common aggregation functions.
         self.aggregation_functions = {
             'sum': np.sum,
             'mean': np.mean,
@@ -35,7 +35,7 @@ class DataAggregator:
                       group_by: Union[str, List[str]],
                       agg_columns: Dict[str, Union[str, List[str]]],
                       include_count: bool = True) -> pd.DataFrame:
-        """Aggregate data based on specified grouping and aggregation functions."""
+        #Aggregate data based on specified grouping and aggregation functions.
         try:
             # Validate inputs
             if not isinstance(group_by, (str, list)):
@@ -95,7 +95,7 @@ class DataAggregator:
                              period: str,
                              agg_columns: Dict[str, Union[str, List[str]]],
                              include_count: bool = True) -> pd.DataFrame:
-        """Aggregate data based on time periods."""
+        #Aggregate data based on time periods.
         try:
             # Validate time column
             if time_column not in df.columns:
@@ -159,7 +159,7 @@ class DataAggregator:
                           window_size: int,
                           agg_columns: Dict[str, Union[str, List[str]]],
                           min_periods: Optional[int] = None) -> pd.DataFrame:
-        """Calculate rolling aggregations with specified window size."""
+        #Calculate rolling aggregations with specified window size.
         try:
             result = df.copy()
             

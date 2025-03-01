@@ -27,21 +27,6 @@ class IntegrationManager:
                          aggregation_config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Integrate multiple datasets using specified configurations.
-        
-        Args:
-            datasets: List of pandas DataFrames to integrate
-            merge_config: Configuration for merging datasets
-            transform_config: Optional configuration for data transformations
-            aggregation_config: Optional configuration for data aggregation
-            
-        Returns:
-            Dictionary containing:
-                - result: The integrated DataFrame
-                - merge_info: Information about the merge operation
-                - transform_info: Information about transformations
-                - aggregation_info: Information about aggregations
-                - validation: Validation results
-                - summary: Summary statistics
         """
         try:
             result = {

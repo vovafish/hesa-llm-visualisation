@@ -4,6 +4,9 @@
 /hesa-llm-visualisation/data/cleaned_files/*
 !/hesa-llm-visualisation/data/cleaned_files/.gitkeep
 
+/hesa-llm-visualisation/data/examples/*
+!/hesa-llm-visualisation/data/examples/.gitkeep
+
 venv/
 mydata.txt
 notes.txt
@@ -14,11 +17,57 @@ db.sqlite3
 node_modules/
 *.log
 *.pyc
-pycache/
+__pycache__/
+.vscode/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+.cursorrules
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Node
 node_modules/
 core/static/css/tailwind.css
+core/static/src/main.css
 
 # Django
 staticfiles/
+
+# Jupyter notebooks
+.ipynb_checkpoints
+
+# Test & coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
