@@ -28,6 +28,22 @@ class CSVValidator:
             'value': (0, float('inf'))
         }
 
+    def validate(self, file_path: str) -> List[Dict]:
+        """
+        Validate a CSV file and return a list of issues.
+        This is a wrapper for validate_file method to maintain compatibility.
+        
+        Args:
+            file_path: Path to the CSV file to validate
+            
+        Returns:
+            List of dictionaries describing validation issues
+        """
+        validation_result = self.validate_file(Path(file_path))
+        if 'issues' in validation_result:
+            return validation_result['issues']
+        return []
+
     def check_format(self, file_path: Path) -> Tuple[bool, Optional[str]]:
         """Check if file is a valid CSV and can be read."""
         try:

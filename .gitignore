@@ -4,14 +4,22 @@
 /hesa-llm-visualisation/data/cleaned_files/*
 !/hesa-llm-visualisation/data/cleaned_files/.gitkeep
 
+/hesa-llm-visualisation/data/reports/*
+!/hesa-llm-visualisation/data/reports/.gitkeep
+
+/hesa-llm-visualisation/data/figures/*
+!/hesa-llm-visualisation/data/figures/.gitkeep
+
 /hesa-llm-visualisation/data/examples/*
 !/hesa-llm-visualisation/data/examples/.gitkeep
 
 venv/
 mydata.txt
 notes.txt
+structure.txt
 plan.txt
 documentation.txt
+project_info
 db.sqlite3
 .env
 node_modules/
