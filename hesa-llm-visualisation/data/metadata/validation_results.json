@@ -1,0 +1,207 @@
+{
+  "validation_results": [
+    {
+      "id": 1,
+      "file_name": "student_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:04:30.603788",
+      "error_count": 0,
+      "warning_count": 2,
+      "fixed_issues_count": 1,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 2,
+        "fixed_issues_count": 1,
+        "report": {
+          "warnings": [
+            "Some student ages might be incorrect",
+            "Some grade values are unusually high"
+          ],
+          "fixed_issues": [
+            "Fixed missing values in student_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "file_name": "student_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:06:21.679404",
+      "error_count": 0,
+      "warning_count": 2,
+      "fixed_issues_count": 1,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 2,
+        "fixed_issues_count": 1,
+        "report": {
+          "warnings": [
+            "Some student ages might be incorrect",
+            "Some grade values are unusually high"
+          ],
+          "fixed_issues": [
+            "Fixed missing values in student_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "file_name": "finance_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:06:21.715672",
+      "error_count": 0,
+      "warning_count": 0,
+      "fixed_issues_count": 0,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 0,
+        "fixed_issues_count": 0,
+        "report": {}
+      }
+    },
+    {
+      "id": 4,
+      "file_name": "student_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:07:27.139956",
+      "error_count": 0,
+      "warning_count": 2,
+      "fixed_issues_count": 1,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 2,
+        "fixed_issues_count": 1,
+        "report": {
+          "warnings": [
+            "Some student ages might be incorrect",
+            "Some grade values are unusually high"
+          ],
+          "fixed_issues": [
+            "Fixed missing values in student_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "file_name": "finance_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:07:27.173897",
+      "error_count": 0,
+      "warning_count": 0,
+      "fixed_issues_count": 0,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 0,
+        "fixed_issues_count": 0,
+        "report": {}
+      }
+    },
+    {
+      "id": 6,
+      "file_name": "student_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:09:03.109811",
+      "error_count": 0,
+      "warning_count": 2,
+      "fixed_issues_count": 1,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 2,
+        "fixed_issues_count": 1,
+        "report": {
+          "warnings": [
+            "Some student ages might be incorrect",
+            "Some grade values are unusually high"
+          ],
+          "fixed_issues": [
+            "Fixed missing values in student_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "file_name": "finance_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:09:03.152479",
+      "error_count": 0,
+      "warning_count": 0,
+      "fixed_issues_count": 0,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 0,
+        "fixed_issues_count": 0,
+        "report": {}
+      }
+    },
+    {
+      "id": 8,
+      "file_name": "student_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:09:56.043439",
+      "error_count": 0,
+      "warning_count": 2,
+      "fixed_issues_count": 1,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 2,
+        "fixed_issues_count": 1,
+        "report": {
+          "warnings": [
+            "Some student ages might be incorrect",
+            "Some grade values are unusually high"
+          ],
+          "fixed_issues": [
+            "Fixed missing values in student_id"
+          ]
+        }
+      }
+    },
+    {
+      "id": 9,
+      "file_name": "finance_data.csv",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "processed_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "status": "valid",
+      "validation_date": "2025-03-04T18:09:56.082733",
+      "error_count": 0,
+      "warning_count": 0,
+      "fixed_issues_count": 0,
+      "validation_report": {
+        "status": "valid",
+        "error_count": 0,
+        "warning_count": 0,
+        "fixed_issues_count": 0,
+        "report": {}
+      }
+    }
+  ],
+  "last_updated": "2025-03-04T18:09:56.082733"
+}

@@ -1,0 +1,133 @@
+{
+  "datasets": {
+    "hesa_student_records_2023.1": {
+      "id": "hesa_student_records_2023.1",
+      "name": "Student Records",
+      "data_type": "student",
+      "source_name": "HESA",
+      "version_number": "2023.1",
+      "file_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "row_count": 100,
+      "processed_at": "2025-03-04T18:04:30.593274",
+      "updated_at": "2025-03-04T18:09:56.037860",
+      "is_valid": true,
+      "metadata": {
+        "columns": [
+          "student_id",
+          "name",
+          "age",
+          "course",
+          "grade"
+        ],
+        "dtypes": {
+          "student_id": "int64",
+          "name": "object",
+          "age": "int64",
+          "course": "object",
+          "grade": "int64"
+        },
+        "shape": [
+          100,
+          5
+        ],
+        "summary": {
+          "student_id": {
+            "min": 1.0,
+            "max": 100.0,
+            "mean": 50.5,
+            "null_count": 0
+          },
+          "name": {
+            "min": null,
+            "max": null,
+            "mean": null,
+            "null_count": 0
+          },
+          "age": {
+            "min": 18.0,
+            "max": 27.0,
+            "mean": 22.5,
+            "null_count": 0
+          },
+          "course": {
+            "min": null,
+            "max": null,
+            "mean": null,
+            "null_count": 0
+          },
+          "grade": {
+            "min": 70.0,
+            "max": 99.0,
+            "mean": 83.6,
+            "null_count": 0
+          }
+        }
+      }
+    },
+    "hesa_financial_records_2023.1": {
+      "id": "hesa_financial_records_2023.1",
+      "name": "Financial Records",
+      "data_type": "finance",
+      "source_name": "HESA",
+      "version_number": "2023.1",
+      "file_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "row_count": 20,
+      "processed_at": "2025-03-04T18:06:21.697042",
+      "updated_at": "2025-03-04T18:09:56.071319",
+      "is_valid": true,
+      "metadata": {
+        "columns": [
+          "institution_id",
+          "institution_name",
+          "total_income",
+          "research_income",
+          "student_fees"
+        ],
+        "dtypes": {
+          "institution_id": "int64",
+          "institution_name": "object",
+          "total_income": "int64",
+          "research_income": "int64",
+          "student_fees": "int64"
+        },
+        "shape": [
+          20,
+          5
+        ],
+        "summary": {
+          "institution_id": {
+            "min": 1.0,
+            "max": 20.0,
+            "mean": 10.5,
+            "null_count": 0
+          },
+          "institution_name": {
+            "min": null,
+            "max": null,
+            "mean": null,
+            "null_count": 0
+          },
+          "total_income": {
+            "min": 10500000.0,
+            "max": 20000000.0,
+            "mean": 15250000.0,
+            "null_count": 0
+          },
+          "research_income": {
+            "min": 2100000.0,
+            "max": 4000000.0,
+            "mean": 3050000.0,
+            "null_count": 0
+          },
+          "student_fees": {
+            "min": 5200000.0,
+            "max": 9000000.0,
+            "mean": 7100000.0,
+            "null_count": 0
+          }
+        }
+      }
+    }
+  },
+  "last_updated": "2025-03-04T18:09:56.073941"
+}

@@ -13,8 +13,17 @@
 /hesa-llm-visualisation/data/examples/*
 !/hesa-llm-visualisation/data/examples/.gitkeep
 
+/hesa-llm-visualisation/data/demo/*
+!/hesa-llm-visualisation/data/demo/.gitkeep
+
+
+/hesa-llm-visualisation/data/cache/*
+!/hesa-llm-visualisation/data/cache/.gitkeep
+
+
 venv/
 mydata.txt
+developer_guide.txt
 notes.txt
 project_plan.txt
 structure.txt

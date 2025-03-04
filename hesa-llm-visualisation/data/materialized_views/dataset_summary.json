@@ -1,0 +1,20 @@
+[
+  {
+    "id": "hesa_financial_records_2023.1",
+    "name": "Financial Records",
+    "data_type": "finance",
+    "source": "HESA",
+    "version": "2023.1",
+    "row_count": 20,
+    "processed_at": "2025-03-04T18:06:21.697042"
+  },
+  {
+    "id": "hesa_student_records_2023.1",
+    "name": "Student Records",
+    "data_type": "student",
+    "source": "HESA",
+    "version": "2023.1",
+    "row_count": 100,
+    "processed_at": "2025-03-04T18:04:30.593274"
+  }
+]

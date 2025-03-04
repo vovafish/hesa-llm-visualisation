@@ -1,0 +1,20 @@
+{
+  "files": {
+    "student_data.csv": {
+      "type": "cleaned",
+      "added_date": "2025-03-04T18:09:56.046800",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
+      "size": 3018,
+      "last_modified": "2025-03-04T18:09:56.024288"
+    },
+    "finance_data.csv": {
+      "type": "cleaned",
+      "added_date": "2025-03-04T18:09:56.082733",
+      "original_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
+      "size": 917,
+      "last_modified": "2025-03-04T18:09:56.026899"
+    }
+  },
+  "last_update": "2025-03-04T18:02:20.187956",
+  "version": "1.0"
+}
