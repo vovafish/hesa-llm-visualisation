@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}HESA Charts - Test{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">HESA Data Visualization</h1>
+    
+    <div class="mb-4">
+        <label for="chartType" class="block text-sm font-medium text-gray-700">Select Chart Type:</label>
+        <select id="chartType" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+            <option value="line">Line Chart</option>
+            <option value="bar">Bar Chart</option>
+            <option value="pie">Pie Chart</option>
+        </select>
+    </div>
+
+    <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+        <strong class="font-bold">Error!</strong>
+        <span class="block sm:inline" id="errorText"></span>
+    </div>
+
+    <div id="loadingIndicator" class="hidden">
+        <div class="flex justify-center items-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+            <span class="ml-2">Loading...</span>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-lg shadow p-6">
+        <img id="chartImage" class="w-full" alt="Chart will appear here" />
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentChartType = 'line';
+
+function showError(message) {
+    const errorDiv = document.getElementById('errorMessage');
+    const errorText = document.getElementById('errorText');
+    errorText.textContent = message;
+    errorDiv.classList.remove('hidden');
+}
+
+function hideError() {
+    document.getElementById('errorMessage').classList.add('hidden');
+}
+
+function showLoading() {
+    document.getElementById('loadingIndicator').classList.remove('hidden');
+}
+
+function hideLoading() {
+    document.getElementById('loadingIndicator').classList.add('hidden');
+}
+
+async function loadChart(chartType) {
+    try {
+        hideError();
+        showLoading();
+
+        const response = await fetch(`/api/chart/${chartType}/`);
+        if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error || 'Failed to load chart data');
+        }
+        
+        const data = await response.json();
+        document.getElementById('chartImage').src = data.data.image;
+    } catch (error) {
+        showError(error.message);
+        console.error('Error loading chart:', error);
+    } finally {
+        hideLoading();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const chartTypeSelect = document.getElementById('chartType');
+    chartTypeSelect.addEventListener('change', (e) => {
+        loadChart(e.target.value);
+    });
+    
+    // Load initial chart
+    loadChart('line');
+});
+</script>
+{% endblock %} 

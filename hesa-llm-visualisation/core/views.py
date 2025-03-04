@@ -6,12 +6,21 @@ from .llm_utils import generate_response
 from .data_processing import CSVProcessor
 from .utils.query_processor import parse_llm_response, apply_data_operations
 from .utils.chart_generator import generate_chart
+from .visualization.chart_generator import ChartGenerator
 import json
 import pandas as pd
+import matplotlib
+matplotlib.use('Agg')  # Use Agg backend for thread safety
 import matplotlib.pyplot as plt
 import io
 import csv
 from datetime import datetime
+from pathlib import Path
+from django.conf import settings
+import os
+from .data_processor import transform_chart_data, prepare_chart_data
+import seaborn as sns
+import base64
 
 def documentation(request):
     """Render the documentation page."""
@@ -164,3 +173,99 @@ def generate_summary(data):
             'stats': {'error': str(e)},
             'insights': ['Unable to generate insights due to an error']
         }
+
+def test_charts(request):
+    return render(request, 'visualization/test_charts.html')
+
+def get_chart_data(request, chart_type):
+    try:
+        # Path to the CSV file
+        csv_path = os.path.join(settings.BASE_DIR, 'data', 'cleaned_files', 'chart-1_cleaned.csv')
+        
+        # Read the CSV file with pandas
+        try:
+            # First read the metadata to determine where data starts
+            with open(csv_path, 'r') as f:
+                lines = f.readlines()
+                
+            # Find where the actual data starts (after metadata)
+            data_start = 0
+            for i, line in enumerate(lines):
+                if 'Academic Year' in line or 'Level of study' in line:
+                    data_start = i
+                    break
+            
+            # Read the CSV file starting from the data
+            df = pd.read_csv(csv_path, skiprows=data_start)
+            
+            # Clean up column names
+            df.columns = df.columns.str.strip()
+            
+            # Ensure required columns exist
+            if 'Level of study' not in df.columns:
+                raise ValueError("Column 'Level of study' not found in the data")
+            if 'Academic Year' not in df.columns:
+                raise ValueError("Column 'Academic Year' not found in the data")
+            if 'Number' not in df.columns:
+                raise ValueError("Column 'Number' not found in the data")
+            
+            # Convert Number to numeric, replacing any non-numeric values with NaN
+            df['Number'] = pd.to_numeric(df['Number'], errors='coerce')
+            
+            # Drop any rows with missing values
+            df = df.dropna(subset=['Number', 'Level of study', 'Academic Year'])
+            
+        except Exception as e:
+            raise ValueError(f"Error reading CSV file: {str(e)}")
+        
+        # Create figure (using Agg backend)
+        plt.figure(figsize=(10, 6))
+        
+        if chart_type == 'line':
+            # Group by years and plot each level of study
+            for level in df['Level of study'].unique():
+                level_data = df[df['Level of study'] == level]
+                plt.plot(level_data['Academic Year'], level_data['Number'], label=level, marker='o')
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.xticks(rotation=45)
+            plt.title('Students by Level of Study Over Time')
+            
+        elif chart_type == 'bar':
+            # Group by Level of study and sum the numbers
+            data = df.groupby('Level of study')['Number'].sum().sort_values(ascending=False)
+            plt.bar(range(len(data)), data.values)
+            plt.xticks(range(len(data)), data.index, rotation=45, ha='right')
+            plt.title('Total Students by Level of Study')
+            
+        elif chart_type == 'pie':
+            # Group by Level of study and sum the numbers
+            data = df.groupby('Level of study')['Number'].sum()
+            plt.pie(data.values, labels=data.index, autopct='%1.1f%%')
+            plt.title('Distribution of Students by Level of Study')
+            
+        else:
+            raise ValueError(f"Unsupported chart type: {chart_type}")
+        
+        # Adjust layout
+        plt.tight_layout()
+        
+        # Save to bytes buffer
+        buffer = io.BytesIO()
+        plt.savefig(buffer, format='png', bbox_inches='tight', dpi=300)
+        buffer.seek(0)
+        image_png = buffer.getvalue()
+        buffer.close()
+        plt.close()
+        
+        # Encode
+        graphic = base64.b64encode(image_png)
+        graphic = graphic.decode('utf-8')
+        
+        return JsonResponse({
+            'data': {
+                'image': f'data:image/png;base64,{graphic}'
+            }
+        })
+    
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)

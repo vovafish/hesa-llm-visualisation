@@ -1,26 +1,38 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="h-full">
 <head>
-    <title>HESA LLM Visualization</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}HESA Data Visualization{% endblock %}</title>
     {% load static %}
     <link href="{% static 'css/tailwind.css' %}" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="{% static 'js/dashboard.js' %}" defer></script>
+    {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-100">
-    <nav class="bg-gray-800 text-white p-4 mb-6">
-        <div class="container mx-auto">
-            <div class="flex justify-between items-center">
-                <h1 class="text-xl font-bold">HESA Data Analysis</h1>
-                <div class="space-x-4">
-                    <a href="{% url 'dashboard' %}" class="hover:text-gray-300">Dashboard</a>
-                    <a href="{% url 'documentation' %}" class="hover:text-gray-300">Documentation</a>
+<body class="flex flex-col min-h-screen bg-gray-100">
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between h-16">
+                <div class="flex">
+                    <div class="flex-shrink-0 flex items-center">
+                        <a href="/" class="text-xl font-bold text-gray-800">HESA Dashboard</a>
+                    </div>
+                    <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
+                        <a href="/" class="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
+                            Dashboard
+                        </a>
+                        <a href="/test-charts/" class="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
+                            Charts
+                        </a>
+                        <a href="/documentation/" class="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent hover:border-gray-300">
+                            Documentation
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </nav>
     
-    <main class="container mx-auto px-4">
+    <main class="flex-grow container mx-auto px-4 py-8">
         {% if messages %}
         <div class="mb-6">
             {% for message in messages %}
@@ -35,13 +47,14 @@
         {% endblock %}
     </main>
 
-    <footer class="bg-gray-800 text-white p-4 mt-12">
-        <div class="container mx-auto text-center">
-            <p>&copy; {% now "Y" %} University of Leicester. All rights reserved.</p>
+    <footer class="bg-white shadow-lg mt-auto">
+        <div class="max-w-7xl mx-auto py-4 px-4">
+            <p class="text-center text-gray-500 text-sm">
+                HESA Data Visualization Tool
+            </p>
         </div>
     </footer>
 
-    {% block extra_js %}
-    {% endblock %}
+    {% block extra_js %}{% endblock %}
 </body>
 </html>
