@@ -104,40 +104,29 @@ class ValidationPipeline:
         if self.verbose:
             logger.info("ValidationPipeline initialized")
     
-    def generate_sample_data(self, num_files: int = 5, rows_per_file: int = 100, error_rate: float = 0.05):
+    def generate_sample_data(self, rows_per_dataset: int = 100, error_rate: float = 0.05):
         """
         Generate sample HESA data files with controlled errors.
         
         Args:
-            num_files: Number of files to generate
-            rows_per_file: Number of rows per file
+            rows_per_dataset: Number of rows per file
             error_rate: Proportion of cells to contain errors
-            
-        Returns:
-            List of paths to generated files
         """
-        if generate_all_datasets is None:
-            logger.error("Dataset generator not available. Cannot generate sample data.")
-            return []
-        
-        logger.info(f"Generating {num_files} sample HESA data files with {rows_per_file} rows each")
-        logger.info(f"Introducing errors at a rate of {error_rate:.1%}")
+        logger.info("Generating sample HESA data with controlled errors...")
+        logger.info(f"Generating sample HESA data files with {rows_per_dataset} rows each")
+        logger.info(f"Introducing errors at a rate of {error_rate * 100}%")
         
         try:
-            file_paths = generate_all_datasets(
-                output_dir=self.raw_dir,
-                num_files=num_files,
-                rows_per_dataset=rows_per_file,
-                error_rate=error_rate,
-                all_years=True
-            )
-            
-            logger.info(f"Successfully generated {len(file_paths)} sample files")
-            return file_paths
-        
+            if generate_all_datasets:
+                generate_all_datasets(
+                    output_dir=self.raw_dir,
+                    rows_per_dataset=rows_per_dataset,
+                    error_rate=error_rate
+                )
+            else:
+                logger.warning("Sample data generation not available - dataset generator not found")
         except Exception as e:
             logger.error(f"Error generating sample data: {str(e)}")
-            return []
     
     def run_pipeline(self, generate_samples: bool = False):
         """

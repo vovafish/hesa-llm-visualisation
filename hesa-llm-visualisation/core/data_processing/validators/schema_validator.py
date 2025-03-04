@@ -47,10 +47,60 @@ class SchemaValidator:
         
         self.relationships = {
             'primary_key': ['institution_id', 'year', 'metric_type'],
-            'foreign_keys': {
-                'institution_id': 'institutions.institution_id'
+            'foreign_keys': {}
+        }
+
+    def validate_dataframe(self, df: pd.DataFrame, file_name: str = None) -> Dict[str, any]:
+        """
+        Validate a DataFrame against the schema and return validation results.
+        
+        Args:
+            df (pd.DataFrame): The DataFrame to validate
+            file_name (str, optional): Name of the file being validated
+            
+        Returns:
+            Dict[str, any]: Validation results containing:
+                - is_valid (bool): Whether the DataFrame is valid
+                - errors (List[str]): List of validation errors
+                - warnings (List[str]): List of validation warnings
+                - summary (Dict): Summary of validation results
+        """
+        # Initialize validation results
+        validation_results = {
+            'is_valid': True,
+            'errors': [],
+            'warnings': [],
+            'summary': {
+                'total_issues': 0,
+                'critical_issues': 0,
+                'warnings': 0,
+                'fixed_issues': 0
             }
         }
+        
+        try:
+            # Add file name to results if provided
+            if file_name:
+                validation_results['file_name'] = file_name
+            
+            # Validate schema
+            schema_results = self.validate_schema(df)
+            if not schema_results.get('is_valid', False):
+                validation_results['errors'].extend(schema_results.get('errors', []))
+                validation_results['is_valid'] = False
+            
+            # Update summary
+            validation_results['summary']['total_issues'] = len(validation_results['errors']) + len(validation_results['warnings'])
+            validation_results['summary']['critical_issues'] = len(validation_results['errors'])
+            validation_results['summary']['warnings'] = len(validation_results['warnings'])
+            
+        except Exception as e:
+            validation_results['is_valid'] = False
+            validation_results['errors'].append(f"Unexpected error during validation: {str(e)}")
+            validation_results['summary']['critical_issues'] += 1
+            validation_results['summary']['total_issues'] += 1
+            
+        return validation_results
 
     def validate_schema(self, df: pd.DataFrame) -> Dict:
         """Validate dataframe against defined schema."""
