@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block content %}
 <div class="dashboard-card">
@@ -69,36 +70,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // This will be moved to dashboard.js
-    document.addEventListener('DOMContentLoaded', function() {
-        const exampleQueriesBtn = document.getElementById('exampleQueries');
-        const exampleQueriesModal = document.getElementById('exampleQueriesModal');
-        const closeExampleQueriesBtn = document.getElementById('closeExampleQueries');
-        const queryInput = document.getElementById('query');
-        const exampleQueries = document.querySelectorAll('.example-query');
-
-        exampleQueriesBtn.addEventListener('click', () => {
-            exampleQueriesModal.classList.remove('hidden');
-        });
-
-        closeExampleQueriesBtn.addEventListener('click', () => {
-            exampleQueriesModal.classList.add('hidden');
-        });
-
-        exampleQueries.forEach(query => {
-            query.addEventListener('click', () => {
-                queryInput.value = query.textContent.trim();
-                exampleQueriesModal.classList.add('hidden');
-            });
-        });
-
-        // Close modal when clicking outside
-        exampleQueriesModal.addEventListener('click', (e) => {
-            if (e.target === exampleQueriesModal) {
-                exampleQueriesModal.classList.add('hidden');
-            }
-        });
-    });
-</script>
+<!-- Include Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+<!-- Include our dashboard JavaScript -->
+<script src="{% static 'js/dashboard.js' %}"></script>
 {% endblock %} 

@@ -1,234 +1,267 @@
-// Chart instance
-let mainChart = null;
+/**
+ * HESA Data Visualization - Dashboard JavaScript
+ * 
+ * This file contains the JavaScript code for the dashboard,
+ * handling query submission, visualization, and data interaction.
+ */
 
-// Initialize the dashboard
 document.addEventListener('DOMContentLoaded', function() {
-    initializeChart();
-    setupEventListeners();
-});
+    // UI Elements
+    const queryForm = document.getElementById('queryForm');
+    const interpretationCard = document.getElementById('interpretationCard');
+    const interpretationResult = document.getElementById('interpretationResult');
+    const dataSummary = document.getElementById('dataSummary');
+    const exampleQueriesBtn = document.getElementById('exampleQueries');
+    const exampleQueriesModal = document.getElementById('exampleQueriesModal');
+    const closeExampleQueriesBtn = document.getElementById('closeExampleQueries');
+    const downloadCSVBtn = document.getElementById('downloadCSV');
+    const downloadExcelBtn = document.getElementById('downloadExcel');
+    const downloadPDFBtn = document.getElementById('downloadPDF');
+    
+    // Example queries handling
+    exampleQueriesBtn.addEventListener('click', () => {
+        exampleQueriesModal.classList.remove('hidden');
+    });
 
-// Initialize the main chart
-function initializeChart() {
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    mainChart = new Chart(ctx, {
-        type: 'bar',  // Default type, will be updated based on data
-        data: {
-            labels: [],
-            datasets: []
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: true,
-                    text: 'HESA Data Visualization'
-                }
-            }
+    closeExampleQueriesBtn.addEventListener('click', () => {
+        exampleQueriesModal.classList.add('hidden');
+    });
+
+    document.querySelectorAll('.example-query').forEach(query => {
+        query.addEventListener('click', () => {
+            document.getElementById('query').value = query.textContent.trim();
+            exampleQueriesModal.classList.add('hidden');
+        });
+    });
+
+    // Close modal when clicking outside
+    exampleQueriesModal.addEventListener('click', (e) => {
+        if (e.target === exampleQueriesModal) {
+            exampleQueriesModal.classList.add('hidden');
         }
     });
-}
-
-// Set up event listeners
-function setupEventListeners() {
-    const queryForm = document.getElementById('queryForm');
-    const downloadButtons = {
-        csv: document.getElementById('downloadCSV'),
-        pdf: document.getElementById('downloadPDF'),
-        excel: document.getElementById('downloadExcel')
-    };
-
+    
+    // Chart rendering
+    let mainChart = null;
+    
     // Form submission
-    queryForm.addEventListener('submit', async (e) => {
+    queryForm.addEventListener('submit', function(e) {
         e.preventDefault();
-        await handleQuerySubmission(e.target);
-    });
-
-    // Download buttons
-    Object.entries(downloadButtons).forEach(([format, button]) => {
-        button.addEventListener('click', () => handleDownload(format));
-    });
-}
-
-// Handle query submission
-async function handleQuerySubmission(form) {
-    try {
-        const formData = new FormData(form);
         
         // Show loading state
         showLoading();
-
-        const response = await fetch(form.action, {
-            method: 'POST',
-            body: formData,
-            headers: {
-                'X-CSRFToken': formData.get('csrfmiddlewaretoken')
-            }
-        });
-
-        if (!response.ok) {
-            throw new Error('Network response was not ok');
-        }
-
-        const data = await response.json();
         
-        // Update UI with results
-        updateQueryInterpretation(data.interpretation);
-        updateVisualization(data.visualization);
-        updateDataSummary(data.summary);
-
-        // Hide loading state
-        hideLoading();
-
-    } catch (error) {
-        console.error('Error:', error);
-        showError('An error occurred while processing your query.');
-        hideLoading();
-    }
-}
-
-// Update the chart with new data
-function updateVisualization(visualizationData) {
-    if (!visualizationData) return;
-
-    const {type, data, options} = visualizationData;
-
-    // Destroy existing chart if it exists
-    if (mainChart) {
-        mainChart.destroy();
-    }
-
-    // Create new chart with updated data
-    const ctx = document.getElementById('mainChart').getContext('2d');
-    mainChart = new Chart(ctx, {
-        type: type || 'bar',
-        data: data,
-        options: {
-            ...options,
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: true,
-                    text: visualizationData.title || 'HESA Data Visualization'
-                }
+        // Get the CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Get the query text
+        const queryText = document.getElementById('query').value;
+        
+        // Send the query to the backend
+        fetch(queryForm.action, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+            },
+            body: new URLSearchParams({
+                'query': queryText
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            
+            if (data.status === 'error') {
+                showError(data.error);
+                return;
             }
-        }
+            
+            // Show the interpretation card
+            interpretationCard.classList.remove('hidden');
+            
+            // Display the interpretation
+            displayInterpretation(data.interpretation);
+            
+            // Display the visualization
+            renderChart(data.visualization);
+            
+            // Display the summary
+            displaySummary(data.summary, data.row_count);
+            
+            // Enable download buttons
+            enableDownloadButtons();
+        })
+        .catch(error => {
+            hideLoading();
+            showError('An error occurred while processing your query. Please try again.');
+            console.error('Error:', error);
+        });
     });
-}
-
-// Update query interpretation display
-function updateQueryInterpretation(interpretation) {
-    const interpretationCard = document.getElementById('interpretationCard');
-    const interpretationResult = document.getElementById('interpretationResult');
-
-    if (interpretation) {
+    
+    function showLoading() {
+        // Add a loading indicator to the page
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = 'loadingIndicator';
+        loadingDiv.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+        loadingDiv.innerHTML = `
+            <div class="bg-white p-6 rounded-lg">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                <p class="text-center mt-4">Processing your query...</p>
+            </div>
+        `;
+        document.body.appendChild(loadingDiv);
+    }
+    
+    function hideLoading() {
+        // Remove the loading indicator
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (loadingIndicator) {
+            loadingIndicator.remove();
+        }
+    }
+    
+    function showError(message) {
+        // Display error message
         interpretationCard.classList.remove('hidden');
         interpretationResult.innerHTML = `
-            <p class="text-gray-700">${interpretation}</p>
-        `;
-    } else {
-        interpretationCard.classList.add('hidden');
-    }
-}
-
-// Update data summary display
-function updateDataSummary(summary) {
-    const dataSummary = document.getElementById('dataSummary');
-    
-    if (!summary) {
-        dataSummary.innerHTML = '<p class="text-gray-500">No summary available</p>';
-        return;
-    }
-
-    let summaryHTML = '<div class="space-y-4">';
-    
-    // Add key statistics
-    if (summary.stats) {
-        summaryHTML += `
-            <div class="grid grid-cols-2 gap-4">
-                ${Object.entries(summary.stats).map(([key, value]) => `
-                    <div class="bg-white p-3 rounded shadow-sm">
-                        <div class="text-sm text-gray-500">${key}</div>
-                        <div class="text-lg font-semibold">${value}</div>
-                    </div>
-                `).join('')}
+            <div class="bg-red-100 text-red-700 p-4 rounded">
+                <p class="font-bold">Error</p>
+                <p>${message}</p>
             </div>
         `;
+        
+        // Clear chart and summary
+        if (mainChart) {
+            mainChart.destroy();
+            mainChart = null;
+        }
+        dataSummary.innerHTML = '';
     }
-
-    // Add insights if available
-    if (summary.insights) {
-        summaryHTML += `
-            <div class="mt-4">
-                <h4 class="font-semibold mb-2">Key Insights:</h4>
-                <ul class="list-disc list-inside space-y-1">
-                    ${summary.insights.map(insight => `
-                        <li class="text-gray-700">${insight}</li>
-                    `).join('')}
-                </ul>
-            </div>
-        `;
-    }
-
-    summaryHTML += '</div>';
-    dataSummary.innerHTML = summaryHTML;
-}
-
-// Handle file downloads
-async function handleDownload(format) {
-    try {
-        const response = await fetch(`/download/${format}`, {
-            method: 'GET',
-            headers: {
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+    
+    function displayInterpretation(interpretation) {
+        // Format the interpretation data
+        let html = '<div class="space-y-2">';
+        
+        if (interpretation.metrics && interpretation.metrics.length > 0) {
+            html += `<p><strong>Metrics:</strong> ${interpretation.metrics.join(', ')}</p>`;
+        }
+        
+        if (interpretation.institutions && interpretation.institutions.length > 0) {
+            html += `<p><strong>Institutions:</strong> ${interpretation.institutions.join(', ')}</p>`;
+        }
+        
+        if (interpretation.time_period) {
+            const timePeriod = [];
+            if (interpretation.time_period.start) {
+                timePeriod.push(`From ${interpretation.time_period.start}`);
             }
-        });
-
-        if (!response.ok) {
-            throw new Error('Download failed');
+            if (interpretation.time_period.end) {
+                timePeriod.push(`To ${interpretation.time_period.end}`);
+            }
+            if (timePeriod.length > 0) {
+                html += `<p><strong>Time Period:</strong> ${timePeriod.join(' ')}</p>`;
+            }
         }
-
-        // Handle the download based on format
-        if (format === 'csv' || format === 'excel') {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `hesa_data.${format}`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-        } else if (format === 'pdf') {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            window.open(url);
+        
+        if (interpretation.comparison_type) {
+            html += `<p><strong>Analysis Type:</strong> ${interpretation.comparison_type.charAt(0).toUpperCase() + interpretation.comparison_type.slice(1)}</p>`;
         }
-
-    } catch (error) {
-        console.error('Download error:', error);
-        showError('Failed to download the file.');
+        
+        html += '</div>';
+        interpretationResult.innerHTML = html;
     }
-}
-
-// UI Helper Functions
-function showLoading() {
-    // Add loading indicator logic here
-    document.body.classList.add('cursor-wait');
-}
-
-function hideLoading() {
-    document.body.classList.remove('cursor-wait');
-}
-
-function showError(message) {
-    // Add error display logic here
-    alert(message); // Replace with better error UI
-} 
+    
+    function renderChart(visualization) {
+        const chartCanvas = document.getElementById('mainChart');
+        
+        // Destroy existing chart if it exists
+        if (mainChart) {
+            mainChart.destroy();
+        }
+        
+        // Create a new chart
+        const ctx = chartCanvas.getContext('2d');
+        mainChart = new Chart(ctx, {
+            type: visualization.type,
+            data: visualization.data,
+            options: visualization.options
+        });
+    }
+    
+    function displaySummary(summary, rowCount) {
+        let html = '<div class="space-y-4">';
+        
+        // Display row count
+        html += `<p><strong>Total Records:</strong> ${rowCount}</p>`;
+        
+        // Display statistical summary
+        if (summary && summary.statistics) {
+            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
+            html += '<thead class="bg-gray-50"><tr>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Metric</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>';
+            html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+            
+            Object.keys(summary.statistics).forEach(key => {
+                html += '<tr>';
+                html += `<td class="px-6 py-4 whitespace-nowrap">${key}</td>`;
+                html += `<td class="px-6 py-4 whitespace-nowrap">${summary.statistics[key]}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        // Display other summary information
+        if (summary && summary.top_values) {
+            html += '<h4 class="font-semibold text-lg mt-4">Top Values</h4>';
+            html += '<div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">';
+            html += '<thead class="bg-gray-50"><tr>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>';
+            html += '<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>';
+            html += '</tr></thead><tbody class="bg-white divide-y divide-gray-200">';
+            
+            Object.keys(summary.top_values).forEach(category => {
+                const values = summary.top_values[category];
+                if (values && values.length > 0) {
+                    values.forEach((item, index) => {
+                        html += '<tr>';
+                        if (index === 0) {
+                            html += `<td class="px-6 py-4 whitespace-nowrap" rowspan="${values.length}">${category}</td>`;
+                        }
+                        html += `<td class="px-6 py-4 whitespace-nowrap">${item.value}</td>`;
+                        html += `<td class="px-6 py-4 whitespace-nowrap">${item.count}</td>`;
+                        html += '</tr>';
+                    });
+                }
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        html += '</div>';
+        dataSummary.innerHTML = html;
+    }
+    
+    function enableDownloadButtons() {
+        // Enable download buttons and set up event listeners
+        // This would be implemented in a full version to download data in different formats
+        downloadCSVBtn.disabled = false;
+        downloadExcelBtn.disabled = false;
+        downloadPDFBtn.disabled = false;
+        
+        // Example implementation for CSV download
+        downloadCSVBtn.addEventListener('click', () => {
+            window.location.href = '/download/csv/';
+        });
+        
+        // Example implementation for Excel download
+        downloadExcelBtn.addEventListener('click', () => {
+            window.location.href = '/download/excel/';
+        });
+        
+        // PDF download would require additional implementation
+    }
+}); 

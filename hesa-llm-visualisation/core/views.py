@@ -21,6 +21,7 @@ import os
 from .data_processor import transform_chart_data, prepare_chart_data
 import seaborn as sns
 import base64
+import logging
 
 def documentation(request):
     """Render the documentation page."""
@@ -39,33 +40,87 @@ def process_query(request):
         if not query:
             return JsonResponse({'error': 'No query provided'}, status=400)
 
-        # Initialize processors
-        csv_processor = CSVProcessor()
-        
-        # Get LLM response
+        # Log the incoming query
+        logger = logging.getLogger(__name__)
+        logger.info(f"Processing query: {query}")
+
+        # Get LLM response using our utility
         llm_response = generate_response(query)
+        logger.info(f"LLM response received: {type(llm_response)}")
         
         # Parse LLM response into operations
         operations = parse_llm_response(llm_response)
         
-        # Get and process data
+        if 'error' in operations:
+            return JsonResponse({
+                'status': 'error',
+                'error': f"Error parsing query: {operations['error']}"
+            }, status=400)
+            
+        # Get the latest dataset from CSV processor
+        csv_processor = CSVProcessor()
         dataset = csv_processor.get_latest_dataset()
-        processed_data = apply_data_operations(dataset, operations)
         
-        # Generate visualization data
-        chart_data = generate_chart(processed_data, operations.get('chart_type', 'bar'))
+        if dataset is None or dataset.empty:
+            return JsonResponse({
+                'status': 'error',
+                'error': 'No dataset available for analysis'
+            }, status=404)
+            
+        # Apply operations to filter/transform data
+        try:
+            processed_data = apply_data_operations(dataset, operations)
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'error': f"Error processing data: {str(e)}"
+            }, status=400)
+            
+        if processed_data.empty:
+            return JsonResponse({
+                'status': 'error',
+                'error': 'No data matches the query criteria'
+            }, status=404)
+        
+        # Generate chart based on the operations
+        chart_type = operations.get('chart_type', 'bar')
+        chart_options = operations.get('chart_options', {})
+        
+        # Use the ChartGenerator for visualization
+        chart_generator = ChartGenerator()
+        chart_data = chart_generator.generate_chart_data(
+            processed_data, 
+            chart_type=chart_type,
+            options=chart_options
+        )
         
         # Generate summary statistics
         summary = generate_summary(processed_data)
         
-        return JsonResponse({
+        # Prepare response with all the data
+        response_data = {
             'status': 'success',
-            'interpretation': llm_response,
-            'visualization': chart_data,
-            'summary': summary
-        })
+            'query': query,
+            'interpretation': {
+                'metrics': operations.get('metrics', []),
+                'time_period': operations.get('time_period', {}),
+                'institutions': operations.get('institutions', []),
+                'comparison_type': operations.get('comparison_type', 'comparison')
+            },
+            'visualization': {
+                'type': chart_type,
+                'data': chart_data,
+                'options': chart_options
+            },
+            'summary': summary,
+            'row_count': len(processed_data)
+        }
+        
+        return JsonResponse(response_data)
         
     except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in process_query view: {str(e)}")
         return JsonResponse({
             'status': 'error',
             'error': str(e)
