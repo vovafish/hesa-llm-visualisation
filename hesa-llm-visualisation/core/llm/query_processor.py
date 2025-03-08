@@ -108,7 +108,21 @@ class QueryProcessor:
             # Comparison between institutions
             elif comparison_type == 'comparison' and len(institutions) > 1:
                 if len(metrics) > 1:
+                    # For multiple metrics across institutions, use radar chart
                     suggestion['type'] = 'radar'
+                    suggestion['options'] = {
+                        'plugins': {
+                            'title': {
+                                'display': True,
+                                'text': 'Multi-metric Comparison'
+                            }
+                        },
+                        'scales': {
+                            'r': {
+                                'beginAtZero': True
+                            }
+                        }
+                    }
                 else:
                     suggestion['type'] = 'bar'
                     suggestion['options'] = {
@@ -142,7 +156,8 @@ class QueryProcessor:
             
             # Ranking visualization
             elif comparison_type == 'ranking':
-                suggestion['type'] = 'bar'
+                # Use funnel chart for ranking with decreasing values
+                suggestion['type'] = 'funnel'
                 suggestion['options'] = {
                     'indexAxis': 'y',
                     'plugins': {
@@ -172,6 +187,19 @@ class QueryProcessor:
                         'y': {
                             'title': {
                                 'display': True
+                            }
+                        }
+                    }
+                }
+                
+            # Multi-dimensional analysis with 3+ variables
+            elif len(metrics) >= 3:
+                suggestion['type'] = 'bubble'
+                suggestion['options'] = {
+                    'plugins': {
+                        'tooltip': {
+                            'callbacks': {
+                                'label': "function(context) { return `(${context.raw.x}, ${context.raw.y}, ${context.raw.r})`; }"
                             }
                         }
                     }

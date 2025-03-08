@@ -4,7 +4,7 @@
 {% block content %}
 <div class="dashboard-card">
     <h2 class="dashboard-title">Natural Language Query</h2>
-    <form id="queryForm" method="POST" action="{% url 'process_query' %}" class="space-y-4">
+    <form id="queryForm" method="POST" action="{% url 'core:process_query' %}" class="space-y-4">
         {% csrf_token %}
         <div>
             <label for="query" class="block text-gray-700 mb-2">Enter your query:</label>
@@ -12,7 +12,7 @@
                    id="query" 
                    name="query" 
                    class="query-input"
-                   placeholder="e.g., How has postgraduate enrolment changed between 2021 and 2022 in the University of Leicester?"
+                   placeholder="e.g., Show me student enrollment trends from 2021 to 2022"
                    required>
         </div>
         <div class="flex space-x-4">
@@ -55,13 +55,16 @@
         <h3 class="text-xl font-bold mb-4">Example Queries</h3>
         <ul class="space-y-2 mb-4">
             <li class="p-2 hover:bg-gray-100 rounded cursor-pointer example-query">
-                How has postgraduate enrolment changed between 2021 and 2022 in the University of Leicester?
+                Show me student enrollment trends from 2021 to 2022
             </li>
             <li class="p-2 hover:bg-gray-100 rounded cursor-pointer example-query">
-                Compare undergraduate student satisfaction scores between Russell Group universities in 2022
+                Compare student satisfaction scores across universities in 2022
             </li>
             <li class="p-2 hover:bg-gray-100 rounded cursor-pointer example-query">
-                Show the trend of international student enrollment at University of Leicester from 2018 to 2022
+                Show me the distribution of student grades in 2022
+            </li>
+            <li class="p-2 hover:bg-gray-100 rounded cursor-pointer example-query">
+                What is the total funding received by universities in 2022?
             </li>
         </ul>
         <button type="button" class="btn-secondary" id="closeExampleQueries">Close</button>

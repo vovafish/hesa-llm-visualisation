@@ -30,6 +30,7 @@ structure.txt
 plan.txt
 documentation.txt
 project_info
+testing_plan.md
 db.sqlite3
 .env
 node_modules/

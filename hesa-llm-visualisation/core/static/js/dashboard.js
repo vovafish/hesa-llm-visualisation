@@ -48,14 +48,21 @@ document.addEventListener('DOMContentLoaded', function() {
     queryForm.addEventListener('submit', function(e) {
         e.preventDefault();
         
+        console.log("Form submitted");
+        
         // Show loading state
         showLoading();
         
         // Get the CSRF token
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        console.log("CSRF Token:", csrfToken);
         
         // Get the query text
         const queryText = document.getElementById('query').value;
+        console.log("Query:", queryText);
+        
+        // Log the form action
+        console.log("Form action:", queryForm.action);
         
         // Send the query to the backend
         fetch(queryForm.action, {
@@ -68,7 +75,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 'query': queryText
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log("Response status:", response.status);
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             hideLoading();
             
@@ -81,10 +94,10 @@ document.addEventListener('DOMContentLoaded', function() {
             interpretationCard.classList.remove('hidden');
             
             // Display the interpretation
-            displayInterpretation(data.interpretation);
+            displayInterpretation(data.query_interpretation);
             
             // Display the visualization
-            renderChart(data.visualization);
+            renderChart(data.chart);
             
             // Display the summary
             displaySummary(data.summary, data.row_count);
@@ -152,27 +165,22 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         if (interpretation.time_period) {
-            const timePeriod = [];
-            if (interpretation.time_period.start) {
-                timePeriod.push(`From ${interpretation.time_period.start}`);
-            }
-            if (interpretation.time_period.end) {
-                timePeriod.push(`To ${interpretation.time_period.end}`);
-            }
-            if (timePeriod.length > 0) {
-                html += `<p><strong>Time Period:</strong> ${timePeriod.join(' ')}</p>`;
-            }
+            html += `<p><strong>Time Period:</strong> ${interpretation.time_period.start} to ${interpretation.time_period.end}</p>`;
         }
         
         if (interpretation.comparison_type) {
-            html += `<p><strong>Analysis Type:</strong> ${interpretation.comparison_type.charAt(0).toUpperCase() + interpretation.comparison_type.slice(1)}</p>`;
+            html += `<p><strong>Analysis Type:</strong> ${interpretation.comparison_type}</p>`;
+        }
+        
+        if (interpretation.visualization) {
+            html += `<p><strong>Chart Type:</strong> ${interpretation.visualization.type}</p>`;
         }
         
         html += '</div>';
         interpretationResult.innerHTML = html;
     }
     
-    function renderChart(visualization) {
+    function renderChart(chartConfig) {
         const chartCanvas = document.getElementById('mainChart');
         
         // Destroy existing chart if it exists
@@ -180,13 +188,32 @@ document.addEventListener('DOMContentLoaded', function() {
             mainChart.destroy();
         }
         
+        // Create chart configuration
+        const config = {
+            type: chartConfig.type,
+            data: {
+                labels: chartConfig.data.map(d => d.year || d.institution),
+                datasets: [{
+                    label: chartConfig.data[0] ? Object.keys(chartConfig.data[0]).find(k => k !== 'year' && k !== 'institution') : '',
+                    data: chartConfig.data.map(d => Object.values(d).find(v => typeof v === 'number')),
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        };
+        
         // Create a new chart
-        const ctx = chartCanvas.getContext('2d');
-        mainChart = new Chart(ctx, {
-            type: visualization.type,
-            data: visualization.data,
-            options: visualization.options
-        });
+        mainChart = new Chart(chartCanvas, config);
     }
     
     function displaySummary(summary, rowCount) {

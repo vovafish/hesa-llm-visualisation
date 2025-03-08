@@ -14,7 +14,8 @@ class ModelConfig:
     low_cpu_mem_usage: bool = True
     
     # Generation settings
-    max_length: int = 100
+    max_length: int = 512      # Maximum combined length of input + output
+    max_new_tokens: int = 100  # Maximum number of tokens to generate
     temperature: float = 0.7
     top_p: float = 0.9
     do_sample: bool = True
@@ -28,7 +29,8 @@ class ModelConfig:
         return cls(
             use_smaller_model=True,
             use_8bit=True,
-            max_length=50,
+            max_length=512,       # Increased from 50 to handle longer inputs
+            max_new_tokens=100,   # Added to control output length
             temperature=0.9
         )
     
@@ -38,6 +40,7 @@ class ModelConfig:
         return cls(
             use_smaller_model=False,
             use_8bit=True,
-            max_length=100,
+            max_length=1024,       # Increased to handle very long inputs
+            max_new_tokens=150,    # Added to control output length
             temperature=0.7
         ) 

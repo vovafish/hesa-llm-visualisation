@@ -9,7 +9,7 @@
       "file_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\student_data.csv",
       "row_count": 100,
       "processed_at": "2025-03-04T18:04:30.593274",
-      "updated_at": "2025-03-04T18:09:56.037860",
+      "updated_at": "2025-03-08T14:09:56.298470",
       "is_valid": true,
       "metadata": {
         "columns": [
@@ -73,7 +73,7 @@
       "file_path": "C:\\Users\\vladi\\Desktop\\vr112\\hesa-llm-visualisation\\data\\demo\\finance_data.csv",
       "row_count": 20,
       "processed_at": "2025-03-04T18:06:21.697042",
-      "updated_at": "2025-03-04T18:09:56.071319",
+      "updated_at": "2025-03-08T14:09:56.330113",
       "is_valid": true,
       "metadata": {
         "columns": [
@@ -129,5 +129,5 @@
       }
     }
   },
-  "last_updated": "2025-03-04T18:09:56.073941"
+  "last_updated": "2025-03-08T14:09:56.331930"
 }

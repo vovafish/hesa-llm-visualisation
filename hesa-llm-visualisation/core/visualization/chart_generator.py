@@ -6,7 +6,10 @@ from .charts import (
     create_pie_chart,
     create_scatter_chart,
     create_box_chart,
-    create_heatmap_chart
+    create_heatmap_chart,
+    create_radar_chart,
+    create_funnel_chart,
+    create_bubble_chart
 )
 import logging
 
@@ -23,7 +26,10 @@ class ChartGenerator:
             'scatter': create_scatter_chart,
             'box': create_box_chart,
             'boxplot': create_box_chart,  # Alias for 'box'
-            'heatmap': create_heatmap_chart
+            'heatmap': create_heatmap_chart,
+            'radar': create_radar_chart,
+            'funnel': create_funnel_chart,
+            'bubble': create_bubble_chart
         }
     
     def preprocess_data(self, data: pd.DataFrame, options: Optional[Dict[str, Any]] = None) -> pd.DataFrame:

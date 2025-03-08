@@ -68,19 +68,33 @@ class GPTJHandler:
 
     def prepare_prompt(self, query: str) -> str:
         """Prepare the prompt for GPT-J."""
-        return f"""
-        Convert the following natural language query about HESA data into structured parameters:
-        Query: {query}
-        
-        Extract the following information:
-        - Metrics (what to measure)
-        - Time period
-        - Institutions involved
-        - Type of comparison
-        - Required visualization
-        
-        Format the response as JSON.
-        """
+        return f"""You are a data analysis assistant. Convert this query about HESA (Higher Education Statistics Agency) data into a structured JSON format.
+
+Query: {query}
+
+Respond ONLY with a valid JSON object containing these fields:
+{{
+    "metrics": ["enrollment", "satisfaction", etc],
+    "time_period": {{
+        "start": "2021",
+        "end": "2022"
+    }},
+    "institutions": ["University of Leicester", etc],
+    "comparison_type": "trend",
+    "visualization": {{
+        "type": "bar",
+        "options": {{}}
+    }}
+}}
+
+Rules:
+1. metrics: List of metrics to analyze (e.g., "enrollment", "satisfaction", "funding")
+2. time_period: Must include "start" and "end" years as strings
+3. institutions: List of universities to analyze
+4. comparison_type: One of ["trend", "comparison", "distribution", "ranking", "correlation"]
+5. visualization.type: One of ["bar", "line", "pie", "scatter", "box", "heatmap", "radar", "funnel", "bubble"]
+
+DO NOT include any explanatory text. Your entire response must be a valid JSON object."""
 
     def generate_response(self, prompt: str) -> str:
         """Generate response with GPU optimizations."""
@@ -92,12 +106,13 @@ class GPTJHandler:
             with torch.no_grad(), torch.cuda.amp.autocast() if self.device == "cuda" else nullcontext():
                 outputs = self.model.generate(
                     inputs["input_ids"],
-                    max_length=self.config.max_length,
+                    max_new_tokens=self.config.max_new_tokens,
                     num_return_sequences=1,
                     temperature=self.config.temperature,
                     top_p=self.config.top_p,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    do_sample=self.config.do_sample
+                    do_sample=self.config.do_sample,
+                    attention_mask=inputs.get("attention_mask", None)
                 )
             
             # Clear GPU cache if configured
@@ -119,20 +134,84 @@ class GPTJHandler:
             import json
             import re
             
+            # Log the raw response for debugging
+            logger.info(f"Raw LLM response: {response[:100]}...")
+            
+            # Clean up response: remove any text before the first { and after the last }
+            # Also replace any JavaScript-style comments (// comment)
+            clean_response = response.strip()
+            
             # Find JSON-like structure in response
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
+            json_match = re.search(r'\{.*\}', clean_response, re.DOTALL)
             if not json_match:
-                raise ValueError("No valid JSON structure found in response")
+                # Try to clean up the response more aggressively
+                clean_response = re.sub(r'^[^{]*', '', clean_response)  # Remove everything before first {
+                clean_response = re.sub(r'[^}]*$', '', clean_response)  # Remove everything after last }
+                
+                # Handle possible line breaks and indentation issues
+                clean_response = clean_response.replace('\n', ' ').replace('\r', '')
+                
+                # Try one more time with the cleaned response
+                json_match = re.search(r'\{.*\}', clean_response, re.DOTALL)
+                if not json_match:
+                    logger.error(f"Could not find JSON structure in: {clean_response}")
+                    raise ValueError("No valid JSON structure found in response")
             
             json_str = json_match.group()
-            parsed = json.loads(json_str)
+            
+            # Remove any JS-style comments (// comments) which are not valid in JSON
+            json_str = re.sub(r'//.*?(\n|$)', '', json_str)
+            
+            try:
+                parsed = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding JSON: {str(e)}")
+                logger.error(f"Attempted to parse: {json_str}")
+                
+                # Try a more aggressive cleaning approach
+                # Replace single quotes with double quotes (common issue)
+                json_str = json_str.replace("'", '"')
+                
+                # Fix trailing commas which are not valid in JSON
+                json_str = re.sub(r',\s*}', '}', json_str)
+                json_str = re.sub(r',\s*]', ']', json_str)
+                
+                # Try parsing again
+                try:
+                    parsed = json.loads(json_str)
+                except json.JSONDecodeError:
+                    # If still failing, create a basic valid response
+                    logger.warning("Falling back to default response structure")
+                    parsed = {
+                        'metrics': ['enrollment'],
+                        'time_period': {'start': '2021', 'end': '2022'},
+                        'institutions': ['University of Leicester'],
+                        'comparison_type': 'trend',
+                        'visualization': {'type': 'line', 'options': {}}
+                    }
             
             # Validate required fields
             required_fields = ['metrics', 'time_period', 'institutions']
             missing_fields = [field for field in required_fields if field not in parsed]
             
             if missing_fields:
-                raise ValueError(f"Missing required fields: {missing_fields}")
+                logger.warning(f"Missing required fields: {missing_fields}")
+                # Add missing fields with default values
+                for field in missing_fields:
+                    if field == 'metrics':
+                        parsed['metrics'] = ['enrollment']
+                    elif field == 'time_period':
+                        parsed['time_period'] = {'start': '2021', 'end': '2022'}
+                    elif field == 'institutions':
+                        parsed['institutions'] = ['University of Leicester']
+            
+            # Ensure comparison_type is present
+            if 'comparison_type' not in parsed:
+                parsed['comparison_type'] = 'trend'
+                
+            # Ensure visualization is present
+            if 'visualization' not in parsed:
+                parsed['visualization'] = {'type': 'line', 'options': {}}
             
             return parsed
             

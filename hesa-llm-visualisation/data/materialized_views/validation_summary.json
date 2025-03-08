@@ -70,5 +70,37 @@
     "warning_count": 0,
     "fixed_issues_count": 0,
     "validation_date": "2025-03-04T18:09:56.082733"
+  },
+  {
+    "file_name": "student_data.csv",
+    "status": "valid",
+    "error_count": 0,
+    "warning_count": 2,
+    "fixed_issues_count": 1,
+    "validation_date": "2025-03-08T13:51:38.155264"
+  },
+  {
+    "file_name": "finance_data.csv",
+    "status": "valid",
+    "error_count": 0,
+    "warning_count": 0,
+    "fixed_issues_count": 0,
+    "validation_date": "2025-03-08T13:51:38.188510"
+  },
+  {
+    "file_name": "student_data.csv",
+    "status": "valid",
+    "error_count": 0,
+    "warning_count": 2,
+    "fixed_issues_count": 1,
+    "validation_date": "2025-03-08T14:09:56.302833"
+  },
+  {
+    "file_name": "finance_data.csv",
+    "status": "valid",
+    "error_count": 0,
+    "warning_count": 0,
+    "fixed_issues_count": 0,
+    "validation_date": "2025-03-08T14:09:56.335923"
   }
 ]
