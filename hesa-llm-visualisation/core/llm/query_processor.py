@@ -95,6 +95,7 @@ class QueryProcessor:
             comparison_type = params.get('comparison_type')
             metrics = params.get('metrics', [])
             time_period = params.get('time_period', {})
+            institutions = params.get('institutions', [])
             
             # Trend analysis over time
             if comparison_type == 'trend' and time_period.get('start') and time_period.get('end'):
@@ -105,22 +106,39 @@ class QueryProcessor:
                 }
             
             # Comparison between institutions
-            elif comparison_type == 'comparison' and len(params.get('institutions', [])) > 1:
+            elif comparison_type == 'comparison' and len(institutions) > 1:
                 if len(metrics) > 1:
                     suggestion['type'] = 'radar'
                 else:
                     suggestion['type'] = 'bar'
                     suggestion['options'] = {
-                        'indexAxis': 'y' if len(params.get('institutions', [])) > 5 else 'x'
+                        'indexAxis': 'y' if len(institutions) > 5 else 'x'
                     }
             
             # Distribution analysis
             elif comparison_type == 'distribution':
                 suggestion['type'] = 'box'
+                suggestion['options'] = {
+                    'plugins': {
+                        'title': {
+                            'display': True,
+                            'text': 'Distribution Analysis'
+                        }
+                    }
+                }
             
             # Correlation analysis
-            elif comparison_type == 'correlation' and len(metrics) == 2:
+            elif comparison_type == 'correlation' and len(metrics) >= 2:
                 suggestion['type'] = 'scatter'
+                suggestion['options'] = {
+                    'plugins': {
+                        'tooltip': {
+                            'callbacks': {
+                                'label': "function(context) { return `(${context.raw.x}, ${context.raw.y})`; }"
+                            }
+                        }
+                    }
+                }
             
             # Ranking visualization
             elif comparison_type == 'ranking':
@@ -130,6 +148,31 @@ class QueryProcessor:
                     'plugins': {
                         'legend': {
                             'display': False
+                        }
+                    }
+                }
+                
+            # Heatmap for multi-dimensional data
+            elif comparison_type == 'heatmap' or (len(metrics) >= 1 and len(institutions) > 5):
+                suggestion['type'] = 'heatmap'
+                suggestion['options'] = {
+                    'plugins': {
+                        'tooltip': {
+                            'callbacks': {
+                                'label': "function(context) { return context.raw.v; }"
+                            }
+                        }
+                    },
+                    'scales': {
+                        'x': {
+                            'title': {
+                                'display': True
+                            }
+                        },
+                        'y': {
+                            'title': {
+                                'display': True
+                            }
                         }
                     }
                 }

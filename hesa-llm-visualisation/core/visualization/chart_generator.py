@@ -1,6 +1,13 @@
 import pandas as pd
 from typing import Dict, Any, Optional
-from .charts import create_line_chart, create_bar_chart, create_pie_chart
+from .charts import (
+    create_line_chart, 
+    create_bar_chart, 
+    create_pie_chart,
+    create_scatter_chart,
+    create_box_chart,
+    create_heatmap_chart
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,7 +19,11 @@ class ChartGenerator:
         self.chart_creators = {
             'line': create_line_chart,
             'bar': create_bar_chart,
-            'pie': create_pie_chart
+            'pie': create_pie_chart,
+            'scatter': create_scatter_chart,
+            'box': create_box_chart,
+            'boxplot': create_box_chart,  # Alias for 'box'
+            'heatmap': create_heatmap_chart
         }
     
     def preprocess_data(self, data: pd.DataFrame, options: Optional[Dict[str, Any]] = None) -> pd.DataFrame:

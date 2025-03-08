@@ -2,6 +2,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import logging
 from typing import Dict, Any, Optional
+from contextlib import nullcontext
 from .config import ModelConfig
 
 logger = logging.getLogger(__name__)
