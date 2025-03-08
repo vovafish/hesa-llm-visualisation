@@ -29,11 +29,33 @@
     </div>
 </div>
 
+<!-- Interactive Controls -->
+<div id="interactiveControls" class="dashboard-card hidden">
+    <h3 class="dashboard-subtitle">Interactive Controls</h3>
+    <div class="bg-gray-50 p-4 rounded-lg">
+        <div class="mb-4">
+            <h4 class="text-sm font-bold mb-2">Filters</h4>
+            <div id="filterControls" class="space-y-2">
+                <!-- Dynamic filter controls will be added here -->
+            </div>
+        </div>
+        <div class="mb-4">
+            <h4 class="text-sm font-bold mb-2">Date Range</h4>
+            <div id="dateRangeControl" class="space-y-2">
+                <!-- Dynamic date range controls will be added here -->
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     <div class="dashboard-card">
         <h3 class="dashboard-subtitle">Visualization</h3>
         <div class="chart-container">
             <canvas id="mainChart"></canvas>
+        </div>
+        <div class="mt-4 text-sm text-gray-600 italic">
+            <p>Tip: Click on a data point to drill down for more details</p>
         </div>
         <div class="flex justify-end space-x-4 mt-4">
             <button type="button" class="btn-secondary" id="downloadCSV">Download CSV</button>
