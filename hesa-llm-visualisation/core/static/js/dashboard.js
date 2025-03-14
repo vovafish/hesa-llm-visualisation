@@ -15,36 +15,99 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get result container
     const queryResultsContainer = document.getElementById('queryResults');
     
+    // Get sample queries elements
+    const sampleQueriesBtn = document.getElementById('sampleQueriesBtn');
+    const sampleQueriesDropdown = document.getElementById('sampleQueriesDropdown');
+    
     console.log('Elements found:', {
         lineChartBtn: !!lineChartBtn,
         barChartBtn: !!barChartBtn,
         pieChartBtn: !!pieChartBtn,
-        queryResultsContainer: !!queryResultsContainer
+        queryResultsContainer: !!queryResultsContainer,
+        sampleQueriesBtn: !!sampleQueriesBtn,
+        sampleQueriesDropdown: !!sampleQueriesDropdown
     });
     
-    // Sample query (this would typically come from user input)
-    const sampleQuery = "Find full-time student enrollment and term-time accommodation for The University of Surrey and The University of Leicester and The University of Warwick in 2015";
+    // Sample Queries Button Click Handler
+    if (sampleQueriesBtn && sampleQueriesDropdown) {
+        sampleQueriesBtn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent event from bubbling up
+            sampleQueriesDropdown.classList.toggle('hidden');
+        });
+        
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!sampleQueriesBtn.contains(e.target) && !sampleQueriesDropdown.contains(e.target)) {
+                sampleQueriesDropdown.classList.add('hidden');
+            }
+        });
+        
+        // Handle sample query item clicks
+        const sampleQueryItems = document.querySelectorAll('.sample-query-item');
+        sampleQueryItems.forEach(item => {
+            item.addEventListener('click', function() {
+                const queryInput = document.getElementById('dashboardQuery');
+                if (queryInput) {
+                    const query = this.getAttribute('data-query');
+                    queryInput.value = query;
+                    sampleQueriesDropdown.classList.add('hidden');
+                    
+                    // Optional: Highlight the input to indicate it was changed
+                    queryInput.classList.add('ring-2', 'ring-blue-500');
+                    setTimeout(() => {
+                        queryInput.classList.remove('ring-2', 'ring-blue-500');
+                    }, 1000);
+                }
+            });
+        });
+    }
     
     // Line Chart Button Click Handler
     lineChartBtn.addEventListener('click', function() {
         console.log('Line Chart button clicked');
         
+        // Get the query from the input field
+        const queryInput = document.getElementById('dashboardQuery');
+        if (!queryInput || !queryInput.value.trim()) {
+            alert('Please enter a query first.');
+            return;
+        }
+        
+        const userQuery = queryInput.value.trim();
+        console.log('Using query:', userQuery);
+        
         // Show loading state
         showLoading();
         
         // Process the query
-        processQuery(sampleQuery, 'line');
+        processQuery(userQuery, 'line');
     });
     
     // Bar Chart Button Click Handler
     barChartBtn.addEventListener('click', function() {
         console.log('Bar Chart button clicked');
+        
+        // Get the query from the input field
+        const queryInput = document.getElementById('dashboardQuery');
+        if (!queryInput || !queryInput.value.trim()) {
+            alert('Please enter a query first.');
+            return;
+        }
+        
         alert('Bar chart functionality not implemented yet');
     });
     
     // Pie Chart Button Click Handler
     pieChartBtn.addEventListener('click', function() {
         console.log('Pie Chart button clicked');
+        
+        // Get the query from the input field
+        const queryInput = document.getElementById('dashboardQuery');
+        if (!queryInput || !queryInput.value.trim()) {
+            alert('Please enter a query first.');
+            return;
+        }
+        
         alert('Pie chart functionality not implemented yet');
     });
     
@@ -205,4 +268,184 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
     }
-}); 
+});
+
+function handleHesaResponse(response) {
+    // DIRECT ALERT - This will definitely show up
+    if (response && response.file_info) {
+        let fileNames = [];
+        if (Array.isArray(response.file_info)) {
+            // Multiple files case
+            fileNames = response.file_info.map(fi => fi.file_name || "Unknown file");
+        } else {
+            // Single file case (legacy)
+            let fileName = "Unknown file";
+            if (response.file_info.file_name) {
+                fileName = response.file_info.file_name;
+            } else if (response.file_info.cleaned_file_path) {
+                fileName = response.file_info.cleaned_file_path.split('\\').pop();
+            } else if (response.file_info.raw_file) {
+                fileName = response.file_info.raw_file.split('\\').pop();
+            }
+            fileNames.push(fileName);
+        }
+        
+        // Show an alert that can't be missed
+        window.alert("FILES USED: " + fileNames.join(", "));
+    }
+    
+    // Rest of the function continues...
+    // Basic console log to ensure this function is being called
+    console.log("⭐⭐⭐ HANDLE RESPONSE FUNCTION STARTED ⭐⭐⭐");
+    
+    if (response.status === 'success') {
+        // Clear previous results
+        document.getElementById('results-container').innerHTML = '';
+        
+        // Get raw file_info for debugging
+        console.log("RAW FILE INFO:", JSON.stringify(response.file_info));
+        
+        // Extract filename(s) with fallbacks
+        let fileInfo = "";
+        if (Array.isArray(response.file_info)) {
+            // Multiple files case
+            fileInfo = response.file_info.map(fi => {
+                return `${fi.year}: ${fi.file_name || "Unknown file"}`;
+            }).join("<br>");
+        } else {
+            // Single file case (legacy)
+            let fileName = "Unknown file";
+            if (response.file_info.file_name) {
+                fileName = response.file_info.file_name;
+            } else if (response.file_info.cleaned_file_path) {
+                const parts = response.file_info.cleaned_file_path.split('\\');
+                fileName = parts[parts.length - 1];
+            } else if (response.file_info.raw_file) {
+                const parts = response.file_info.raw_file.split('\\');
+                fileName = parts[parts.length - 1];
+            }
+            fileInfo = fileName;
+        }
+        
+        // Very visible console logs
+        console.log("✅✅✅ FILES USED: " + fileInfo + " ✅✅✅");
+        
+        // Create a container for results
+        const resultsContainer = document.getElementById('results-container');
+        
+        // 1. Create query section
+        const querySection = document.createElement('div');
+        querySection.className = 'mb-4';
+        querySection.innerHTML = `
+            <h3 class="text-lg font-bold mb-2">Query:</h3>
+            <p>${response.query_info ? response.query_info.original_query || 'N/A' : 'N/A'}</p>
+        `;
+        resultsContainer.appendChild(querySection);
+        
+        // 2. Create a VERY visible filename section
+        const fileNameSection = document.createElement('div');
+        fileNameSection.style.backgroundColor = 'red';
+        fileNameSection.style.color = 'white';
+        fileNameSection.style.padding = '10px';
+        fileNameSection.style.margin = '10px 0';
+        fileNameSection.style.fontWeight = 'bold';
+        fileNameSection.style.fontSize = '16px';
+        fileNameSection.innerHTML = `FILES USED:<br>${fileInfo}`;
+        resultsContainer.appendChild(fileNameSection);
+        
+        // 3. Results heading
+        const resultsHeading = document.createElement('h3');
+        resultsHeading.className = 'text-lg font-bold mb-2';
+        resultsHeading.textContent = 'Results:';
+        resultsContainer.appendChild(resultsHeading);
+        
+        // 4. Create table
+        const table = document.createElement('table');
+        table.className = 'min-w-full divide-y divide-gray-200';
+        
+        // Create header
+        const thead = document.createElement('thead');
+        thead.className = 'bg-gray-50';
+        const headerRow = document.createElement('tr');
+        
+        if (response.columns && response.columns.length > 0) {
+            response.columns.forEach(col => {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+                th.textContent = col;
+                headerRow.appendChild(th);
+            });
+        }
+        
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Create body
+        const tbody = document.createElement('tbody');
+        tbody.className = 'bg-white divide-y divide-gray-200';
+        
+        if (response.data && response.data.length > 0) {
+            response.data.forEach(row => {
+                const dataRow = document.createElement('tr');
+                response.columns.forEach(col => {
+                    const td = document.createElement('td');
+                    td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-500';
+                    td.textContent = row[col] || '';
+                    dataRow.appendChild(td);
+                });
+                tbody.appendChild(dataRow);
+            });
+        }
+        
+        table.appendChild(tbody);
+        resultsContainer.appendChild(table);
+        
+        // 5. Create chart if chart data is available
+        if (response.chart_data) {
+            const chartSection = document.createElement('div');
+            chartSection.className = 'mt-8';
+            chartSection.innerHTML = `
+                <h3 class="text-lg font-bold mb-2">Chart:</h3>
+                <div class="h-96">
+                    <canvas id="dataChart"></canvas>
+                </div>
+            `;
+            resultsContainer.appendChild(chartSection);
+            
+            // Render chart
+            const ctx = document.getElementById('dataChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: response.chart_data.labels,
+                    datasets: response.chart_data.datasets || [{
+                        label: response.chart_data.label || 'Value',
+                        data: response.chart_data.values || [],
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Show the results container
+        resultsContainer.classList.remove('hidden');
+        
+        // Final confirmation log
+        console.log("⭐⭐⭐ HANDLE RESPONSE FUNCTION COMPLETED SUCCESSFULLY ⭐⭐⭐");
+        
+    } else {
+        // Show error message
+        showAlert('error', `Error: ${response.error}`);
+    }
+} 

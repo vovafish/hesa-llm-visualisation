@@ -326,68 +326,93 @@ def process_hesa_query(request):
         
         logger.info(f"Found {len(file_matches)} matching CSV files: {file_matches}")
         
-        # Find the specific file for the requested year
-        logger.info(f"Looking for file matching year: {query_info['year']}")
-        target_file = find_file_for_year(file_matches, query_info['year'])
+        # Track all files used and data extracted
+        all_file_info = []
+        all_data = []
+        all_columns = None
         
-        if not target_file:
-            logger.warning(f"No data found for year: {query_info['year']}")
+        # Process each year in the query
+        for year in query_info['years']:
+            # Find the specific file for the current year
+            logger.info(f"Looking for file matching year: {year}")
+            target_file = find_file_for_year(file_matches, year)
+            
+            if not target_file:
+                logger.warning(f"No data found for year: {year}")
+                continue  # Skip this year but continue with others
+            
+            logger.info(f"Found file for requested year {year}: {target_file}")
+            
+            # Get just the filename for display
+            file_name = Path(target_file).name
+            
+            # Check if a cleaned version exists
+            cleaned_file_path = Path(settings.BASE_DIR) / 'data' / 'cleaned_files' / file_name
+            
+            if cleaned_file_path.exists():
+                # Add a very noticeable log message
+                logger.info("="*50)
+                logger.info(f"USING CLEANED FILE FOR YEAR {year}: {file_name}")
+                logger.info("="*50)
+            else:
+                logger.warning(f"⚠️ No cleaned version found for year {year}, will process raw file: {file_name}")
+            
+            # Extract data for the specified HE providers
+            logger.info(f"Extracting data for HE providers: {query_info['he_providers']} for year {year}")
+            result = extract_provider_data(target_file, query_info['he_providers'])
+            
+            if not result:
+                logger.warning(f"No data found for providers: {query_info['he_providers']} in year {year}")
+                continue  # Skip this year but continue with others
+            
+            logger.info(f"Data extracted successfully for year {year}: {len(result['data'])} rows found")
+            
+            # Store the columns from the first successful result
+            if all_columns is None:
+                all_columns = result['columns']
+            
+            # Add year information to each row
+            for row in result['data']:
+                row['Year'] = year  # Add the year as a new column
+                all_data.append(row)
+            
+            # Store file info
+            all_file_info.append({
+                'year': year,
+                'raw_file': target_file,
+                'using_cleaned_file': cleaned_file_path.exists(),
+                'cleaned_file_path': str(cleaned_file_path) if cleaned_file_path.exists() else None,
+                'file_name': file_name
+            })
+        
+        # Check if we found any data
+        if not all_data:
+            logger.warning(f"No data found for any year in range: {query_info['years']}")
             return JsonResponse({
                 'status': 'error', 
-                'error': f"No data found for year: {query_info['year']}"
+                'error': f"No data found for any year in range: {query_info['years']}"
             }, status=404)
         
-        logger.info(f"Found file for requested year: {target_file}")
+        logger.info(f"Combined data for all years: {len(all_data)} rows")
         
-        # Get just the filename for display
-        file_name = Path(target_file).name
-        
-        # Check if a cleaned version exists
-        cleaned_file_path = Path(settings.BASE_DIR) / 'data' / 'cleaned_files' / file_name
-        
-        if cleaned_file_path.exists():
-            # Add a very noticeable log message
-            logger.info("="*50)
-            logger.info(f"USING CLEANED FILE: {file_name}")
-            logger.info("="*50)
-        else:
-            logger.warning(f"⚠️ No cleaned version found, will process raw file: {file_name}")
-        
-        # Extract data for the specified HE provider
-        logger.info(f"Extracting data for HE provider: {query_info['he_providers']}")
-        result = extract_provider_data(target_file, query_info['he_providers'])
-        
-        if not result:
-            logger.warning(f"No data found for provider: {query_info['he_providers']}")
-            return JsonResponse({
-                'status': 'error', 
-                'error': f"No data found for provider: {query_info['he_providers']}"
-            }, status=404)
-        
-        logger.info(f"Data extracted successfully: {len(result['data'])} rows found")
+        # Add 'Year' to columns if it's not already there
+        if all_columns and 'Year' not in all_columns:
+            all_columns.append('Year')
         
         # Convert data to chart format if needed
         chart_data = None
         if chart_type == 'line':
             logger.info("Preparing data for line chart")
-            chart_data = prepare_chart_data_from_result(result)
-        
-        # Prepare file information for the response
-        file_info = {
-            'raw_file': target_file,
-            'using_cleaned_file': cleaned_file_path.exists(),
-            'cleaned_file_path': str(cleaned_file_path) if cleaned_file_path.exists() else None,
-            'file_name': file_name  # Add the simple filename for easier display
-        }
+            chart_data = prepare_chart_data_from_result({'columns': all_columns, 'data': all_data})
         
         # Return the results
         logger.info("Returning results to client")
         return JsonResponse({
             'status': 'success',
             'query_info': query_info,
-            'file_info': file_info,
-            'columns': result['columns'],
-            'data': result['data'],
+            'file_info': all_file_info,
+            'columns': all_columns,
+            'data': all_data,
             'chart_data': chart_data
         })
         
@@ -406,7 +431,7 @@ def parse_hesa_query(query):
     Parse a natural language query to extract:
     - File pattern (keywords from the file name)
     - HE provider name(s) - can handle multiple providers separated by "and"
-    - Year
+    - Year or year range (e.g., 2015, 2015-2016, from 2015 to 2016)
     """
     logger = logging.getLogger(__name__)
     
@@ -437,8 +462,17 @@ def parse_hesa_query(query):
     # Extract HE provider(s) (university name(s))
     providers = []
     
-    # First try the pattern "for X and Y in 2015"
-    provider_section_match = re.search(r'for\s+(.*?)\s+in\s+\d{4}', query)
+    # Try to extract provider section using regex patterns
+    provider_section_match = None
+    
+    # Try pattern for year range: "for X in 2015-2016" or "for X in 2015 to 2016"
+    if not provider_section_match:
+        provider_section_match = re.search(r'for\s+(.*?)\s+in\s+\d{4}\s*[\-–—to]\s*\d{4}', query)
+    
+    # Try standard pattern: "for X in 2015"
+    if not provider_section_match:
+        provider_section_match = re.search(r'for\s+(.*?)\s+in\s+\d{4}', query)
+    
     if provider_section_match:
         provider_section = provider_section_match.group(1).strip()
         logger.info(f"Found provider section: {provider_section}")
@@ -456,29 +490,61 @@ def parse_hesa_query(query):
     else:
         logger.warning("Failed to extract HE provider(s) from query")
     
-    # Extract year
-    year_match = re.search(r'in\s+(\d{4})', query)
-    year = year_match.group(1) if year_match else None
-    if year:
-        logger.info(f"Extracted year: {year}")
-    else:
-        logger.warning("Failed to extract year from query")
+    # Extract year or year range
+    years = []
+    
+    # Try to extract year range first: 2015-2016 format
+    year_range_match = re.search(r'in\s+(\d{4})\s*[\-–—]\s*(\d{4})', query)
+    if year_range_match:
+        start_year = year_range_match.group(1)
+        end_year = year_range_match.group(2)
+        logger.info(f"Extracted year range: {start_year} to {end_year}")
+        
+        # Add all years in the range
+        for year in range(int(start_year), int(end_year) + 1):
+            years.append(str(year))
+        
+        logger.info(f"Years in range: {years}")
+    
+    # Try "from X to Y" format
+    elif re.search(r'in\s+\d{4}\s+to\s+\d{4}', query):
+        year_range_match = re.search(r'in\s+(\d{4})\s+to\s+(\d{4})', query)
+        if year_range_match:
+            start_year = year_range_match.group(1)
+            end_year = year_range_match.group(2)
+            logger.info(f"Extracted year range (from-to format): {start_year} to {end_year}")
+            
+            # Add all years in the range
+            for year in range(int(start_year), int(end_year) + 1):
+                years.append(str(year))
+            
+            logger.info(f"Years in range: {years}")
+    
+    # If no range found, try single year
+    elif not years:
+        year_match = re.search(r'in\s+(\d{4})', query)
+        if year_match:
+            years.append(year_match.group(1))
+            logger.info(f"Extracted single year: {years[0]}")
+    
+    if not years:
+        logger.warning("Failed to extract year or year range from query")
     
     # If we couldn't extract essential components, return None
-    if not file_pattern_keywords or not providers or not year:
+    if not file_pattern_keywords or not providers or not years:
         logger.warning("Missing essential components from query")
         if not file_pattern_keywords:
             logger.warning("Missing file pattern keywords")
         if not providers:
             logger.warning("Missing HE provider(s)")
-        if not year:
-            logger.warning("Missing year")
+        if not years:
+            logger.warning("Missing year or year range")
         return None
     
     return {
         'file_pattern': ' '.join(file_pattern_keywords),
-        'he_providers': providers,  # Now returns a list of providers
-        'year': year
+        'he_providers': providers,
+        'years': years  # Now returns a list of years
     }
 
 def find_relevant_csv_files(file_pattern):
@@ -872,31 +938,110 @@ def process_raw_file(file_path, he_providers):
         return None
 
 def prepare_chart_data_from_result(result):
-    """Prepare chart data from the query result for use with Chart.js."""
+    """
+    Prepare chart data from the query result for use with Chart.js.
+    Now handles multiple rows for different providers and years.
+    """
     if not result or not result['data'] or not result['columns']:
         return None
     
-    data = result['data'][0]  # Get the first (and only) row
+    data = result['data']
     columns = result['columns']
     
-    # Skip the first column (HE provider) and any columns that might have text values
-    numeric_data = []
-    labels = []
+    # Determine which column has the provider name
+    provider_col = None
+    for col in columns:
+        if 'provider' in col.lower() or 'institution' in col.lower() or 'university' in col.lower():
+            provider_col = col
+            break
     
-    for col in columns[1:]:  # Skip the first column (HE provider)
-        if col in data:
+    if not provider_col:
+        provider_col = columns[0]  # Fallback to first column
+    
+    # Get unique providers and years
+    providers = []
+    years = []
+    
+    for row in data:
+        if provider_col in row and row[provider_col] not in providers:
+            providers.append(row[provider_col])
+        
+        if 'Year' in row and row['Year'] not in years:
+            years.append(row['Year'])
+    
+    # Sort years chronologically
+    years.sort()
+    
+    # Find numeric columns (excluding Year and provider columns)
+    numeric_columns = []
+    for col in columns:
+        if col != provider_col and col != 'Year':
             try:
-                # Try to convert to numeric, handling format like "1,234"
-                value = data[col].replace(',', '') if isinstance(data[col], str) else data[col]
-                value = float(value)
-                numeric_data.append(value)
-                labels.append(col)
+                # Check if at least one row has a numeric value for this column
+                for row in data:
+                    if col in row:
+                        value = row[col]
+                        if isinstance(value, str):
+                            value = value.replace(',', '')  # Remove commas from numbers like "1,234"
+                        float(value)  # Try to convert to float
+                        numeric_columns.append(col)
+                        break
             except (ValueError, TypeError):
-                # Skip if it's not a numeric value
-                pass
+                # Skip non-numeric columns
+                continue
+    
+    # If no numeric columns found (unlikely), return None
+    if not numeric_columns:
+        return None
+    
+    # Create datasets for Chart.js
+    # Each provider will have its own dataset for each numeric column
+    datasets = []
+    
+    # First, use the first numeric column for all providers
+    main_metric = numeric_columns[0]
+    
+    for provider in providers:
+        dataset = {
+            'label': f"{provider} - {main_metric}",
+            'data': [],
+            'borderColor': get_random_color(),
+            'backgroundColor': 'rgba(0, 0, 0, 0.1)',
+            'fill': False
+        }
+        
+        # Collect data points for each year
+        for year in years:
+            value_found = False
+            
+            # Find the matching row for this provider and year
+            for row in data:
+                if row.get(provider_col) == provider and row.get('Year') == year and main_metric in row:
+                    try:
+                        value = row[main_metric]
+                        if isinstance(value, str):
+                            value = value.replace(',', '')  # Remove commas
+                        dataset['data'].append(float(value))
+                        value_found = True
+                        break
+                    except (ValueError, TypeError):
+                        pass
+            
+            # If no value found for this year, add null for continuity
+            if not value_found:
+                dataset['data'].append(None)
+        
+        datasets.append(dataset)
     
     return {
-        'labels': labels,
-        'values': numeric_data,
-        'label': data[columns[0]] if columns and columns[0] in data else 'Value'
+        'labels': years,
+        'datasets': datasets
     }
+
+def get_random_color():
+    """Generate a random color for chart datasets."""
+    import random
+    r = random.randint(0, 255)
+    g = random.randint(0, 255)
+    b = random.randint(0, 255)
+    return f'rgb({r}, {g}, {b})'
