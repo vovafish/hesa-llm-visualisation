@@ -9,6 +9,7 @@ from .utils.chart_generator import generate_chart
 from .visualization.chart_generator import ChartGenerator
 import json
 import pandas as pd
+import numpy as np
 import matplotlib
 matplotlib.use('Agg')  # Use Agg backend for thread safety
 import matplotlib.pyplot as plt
@@ -24,6 +25,25 @@ import seaborn as sns
 import base64
 import logging
 from .data_processing.storage.storage_service import StorageService
+
+# Custom JSON encoder to handle NaN values and other numeric types
+class NumericEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, (np.integer, np.int64)):
+            return int(obj)
+        elif isinstance(obj, (np.floating, np.float64)):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif pd.isna(obj):
+            return None
+        return super(NumericEncoder, self).default(obj)
+
+# Custom JsonResponse that uses our encoder
+def CustomJsonResponse(data, **kwargs):
+    return JsonResponse(data, encoder=NumericEncoder, **kwargs)
 
 def documentation(request):
     """Render the documentation page."""
@@ -43,14 +63,14 @@ def process_query(request):
         # Get query from request
         query = request.POST.get('query')
         if not query:
-            return JsonResponse({'error': 'No query provided'}, status=400)
+            return CustomJsonResponse({'error': 'No query provided'}, status=400)
 
         # Log the incoming query
         logger = logging.getLogger(__name__)
         logger.info(f"Processing query: {query}")
 
         # For testing, return a simple response
-        return JsonResponse({
+        return CustomJsonResponse({
             'status': 'success',
             'query': query,
             'chart': {
@@ -72,7 +92,7 @@ def process_query(request):
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Error in process_query view: {str(e)}")
-        return JsonResponse({
+        return CustomJsonResponse({
             'status': 'error',
             'error': str(e)
         }, status=500)
@@ -86,7 +106,7 @@ def download_data(request, format):
         data = csv_processor.get_latest_processed_data()
         
         if data is None:
-            return JsonResponse({'error': 'No data available'}, status=404)
+            return CustomJsonResponse({'error': 'No data available'}, status=404)
         
         # Create filename with timestamp
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -133,10 +153,10 @@ def download_data(request, format):
             return response
             
         else:
-            return JsonResponse({'error': 'Invalid format'}, status=400)
+            return CustomJsonResponse({'error': 'Invalid format'}, status=400)
             
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return CustomJsonResponse({'error': str(e)}, status=500)
 
 def generate_summary(data):
     """Generate summary statistics from processed data."""
@@ -271,14 +291,14 @@ def get_chart_data(request, chart_type):
         graphic = base64.b64encode(image_png)
         graphic = graphic.decode('utf-8')
         
-        return JsonResponse({
+        return CustomJsonResponse({
             'data': {
                 'image': f'data:image/png;base64,{graphic}'
             }
         })
     
     except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
+        return CustomJsonResponse({'error': str(e)}, status=500)
 
 @require_http_methods(["POST"])
 def process_hesa_query(request):
@@ -295,7 +315,7 @@ def process_hesa_query(request):
         
         if not query:
             logger.warning("No query provided in request")
-            return JsonResponse({'status': 'error', 'error': 'No query provided'}, status=400)
+            return CustomJsonResponse({'status': 'error', 'error': 'No query provided'}, status=400)
         
         # Parse the query to extract components
         logger.info("Parsing query to extract components")
@@ -303,7 +323,7 @@ def process_hesa_query(request):
         
         if not query_info:
             logger.warning(f"Failed to parse query: {query}")
-            return JsonResponse({
+            return CustomJsonResponse({
                 'status': 'error', 
                 'error': 'Could not parse the query. Please ensure it contains file pattern, HE provider, and year.'
             }, status=400)
@@ -319,7 +339,7 @@ def process_hesa_query(request):
         
         if not file_matches:
             logger.warning(f"No CSV files found matching pattern: {query_info['file_pattern']}")
-            return JsonResponse({
+            return CustomJsonResponse({
                 'status': 'error', 
                 'error': f"No CSV files found matching pattern: {query_info['file_pattern']}"
             }, status=404)
@@ -388,7 +408,7 @@ def process_hesa_query(request):
         # Check if we found any data
         if not all_data:
             logger.warning(f"No data found for any year in range: {query_info['years']}")
-            return JsonResponse({
+            return CustomJsonResponse({
                 'status': 'error', 
                 'error': f"No data found for any year in range: {query_info['years']}"
             }, status=404)
@@ -407,7 +427,7 @@ def process_hesa_query(request):
         
         # Return the results
         logger.info("Returning results to client")
-        return JsonResponse({
+        return CustomJsonResponse({
             'status': 'success',
             'query_info': query_info,
             'file_info': all_file_info,
@@ -421,7 +441,7 @@ def process_hesa_query(request):
         logger.error(f"Error in process_hesa_query view: {str(e)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
-        return JsonResponse({
+        return CustomJsonResponse({
             'status': 'error',
             'error': str(e)
         }, status=500)
@@ -548,56 +568,193 @@ def parse_hesa_query(query):
     }
 
 def find_relevant_csv_files(file_pattern):
-    """Find CSV files in the raw_files directory that match the given pattern."""
+    """Find CSV files that match the given pattern using metadata from cleaned files."""
     logger = logging.getLogger(__name__)
     
-    # Get path to raw_files directory
-    raw_files_dir = Path(settings.BASE_DIR) / 'data' / 'raw_files'
+    # Get path to cleaned_files directory (use this instead of raw_files)
+    cleaned_files_dir = Path(settings.BASE_DIR) / 'data' / 'cleaned_files'
     
-    logger.info(f"Searching for CSV files in: {raw_files_dir}")
+    logger.info(f"Searching for CSV files in: {cleaned_files_dir}")
     
     # Check if directory exists
-    if not raw_files_dir.exists():
-        logger.error(f"Directory does not exist: {raw_files_dir}")
+    if not cleaned_files_dir.exists():
+        logger.error(f"Directory does not exist: {cleaned_files_dir}")
         return []
     
     # List all CSV files in the directory
-    all_csv_files = list(raw_files_dir.glob('*.csv'))
+    all_csv_files = list(cleaned_files_dir.glob('*.csv'))
     logger.info(f"Found {len(all_csv_files)} CSV files in directory")
     
     # Extract keywords from file pattern
     pattern_keywords = [keyword.lower() for keyword in file_pattern.lower().split()]
     
-    # Find all CSV files that contain most of the pattern keywords
+    # Find all CSV files that match based on metadata
     matching_files = []
     for file_path in all_csv_files:
-        filename = file_path.name.lower()
-        logger.info(f"Checking file: {filename}")
-        
-        # Count how many keywords match
-        keyword_matches = 0
-        for keyword in pattern_keywords:
-            # Check for variations to improve matching
-            if keyword in filename:
-                keyword_matches += 1
-            elif keyword == 'enrollment' and 'enrolment' in filename:
-                keyword_matches += 1  # Handle UK/US spelling differences
-            elif keyword == 'enrollments' and 'enrolments' in filename:
-                keyword_matches += 1
-            elif keyword == 'term-time' and 'term time' in filename:
-                keyword_matches += 1
-        
-        # If at least half of the keywords match, consider it a match
-        match_threshold = max(1, len(pattern_keywords) // 2)
-        if keyword_matches >= match_threshold:
-            matching_files.append(str(file_path))
-            logger.info(f"File matched ({keyword_matches} keywords): {file_path}")
+        try:
+            # Read just the first line of the file to get metadata
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                first_line = f.readline().strip()
+            
+            # Check if it contains our metadata format
+            if first_line.startswith('#METADATA:'):
+                # Extract the JSON metadata
+                metadata_json = first_line[9:].strip()  # Skip the #METADATA: prefix
+                try:
+                    # Try to parse the JSON, handling potential issues
+                    try:
+                        metadata = json.loads(metadata_json)
+                    except json.JSONDecodeError as json_error:
+                        # If there's an error, try to clean the JSON string
+                        logger.warning(f"Initial JSON parse error for {file_path.name}: {str(json_error)}")
+                        # Try removing any trailing characters that might be causing issues
+                        metadata_json = re.sub(r'\s+[^\{\}\"]+$', '', metadata_json)
+                        metadata = json.loads(metadata_json)
+                    
+                    title = metadata.get('title', '').lower()
+                    keywords = [k.lower() for k in metadata.get('keywords', [])]
+                    
+                    logger.info(f"File {file_path.name} has metadata: title='{title}', keywords={keywords}")
+                    
+                    # Count how many pattern keywords match in title or expanded keywords
+                    keyword_matches = 0
+                    matched_terms = []
+                    
+                    for pattern_word in pattern_keywords:
+                        # Check if it matches the title
+                        if pattern_word in title:
+                            keyword_matches += 1
+                            matched_terms.append(pattern_word)
+                            continue
+                            
+                        # Check if it matches any of the expanded keywords
+                        for keyword in keywords:
+                            if pattern_word in keyword or keyword in pattern_word:
+                                keyword_matches += 1
+                                matched_terms.append(f"{pattern_word}→{keyword}")
+                                break
+                    
+                    # If enough keywords match, consider it a match
+                    match_threshold = max(1, len(pattern_keywords) // 2)  # At least half the keywords
+                    if keyword_matches >= match_threshold:
+                        matching_files.append(str(file_path))
+                        logger.info(f"File matched via metadata ({keyword_matches}/{len(pattern_keywords)} keywords): {file_path} - matched: {matched_terms}")
+                
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid metadata JSON in file: {file_path}")
+                    # Try to extract the title from the metadata even if JSON parsing fails
+                    try:
+                        title_match = re.search(r'"title":\s*"([^"]+)"', metadata_json)
+                        if title_match:
+                            title = title_match.group(1).lower()
+                            # Match against the extracted title
+                            keyword_matches = sum(1 for word in pattern_keywords if word in title)
+                            match_threshold = max(1, len(pattern_keywords) // 2)
+                            if keyword_matches >= match_threshold:
+                                matching_files.append(str(file_path))
+                                logger.info(f"File matched via regex-extracted title ({keyword_matches}/{len(pattern_keywords)} keywords): {file_path}")
+                                continue  # Skip fallback if we matched by title
+                    except Exception as e:
+                        logger.warning(f"Error extracting title from metadata: {str(e)}")
+                    
+                    # Fall back to checking the filename as before
+                    _check_filename_match(file_path, pattern_keywords, matching_files)
+            else:
+                # No metadata, fall back to checking the filename
+                logger.info(f"No metadata found in {file_path.name}, falling back to filename matching")
+                _check_filename_match(file_path, pattern_keywords, matching_files)
+                
+        except Exception as e:
+            logger.error(f"Error reading metadata from {file_path}: {str(e)}")
+            # Fall back to checking the filename
+            _check_filename_match(file_path, pattern_keywords, matching_files)
     
     return matching_files
 
-def find_file_for_year(file_matches, year):
-    """Find the specific file for the requested year."""
+def _check_filename_match(file_path, pattern_keywords, matching_files):
+    """Helper function to check if a filename matches the pattern keywords."""
     logger = logging.getLogger(__name__)
+    filename = file_path.name.lower()
+    
+    # Count how many keywords match in the filename
+    keyword_matches = 0
+    for keyword in pattern_keywords:
+        # Check for variations to improve matching
+        if keyword in filename:
+            keyword_matches += 1
+        elif keyword == 'enrollment' and 'enrolment' in filename:
+            keyword_matches += 1  # Handle UK/US spelling differences
+        elif keyword == 'enrollments' and 'enrolments' in filename:
+            keyword_matches += 1
+        elif keyword == 'term-time' and 'term time' in filename:
+            keyword_matches += 1
+    
+    # If at least half of the keywords match, consider it a match
+    match_threshold = max(1, len(pattern_keywords) // 2)
+    if keyword_matches >= match_threshold:
+        matching_files.append(str(file_path))
+        logger.info(f"File matched by filename ({keyword_matches} keywords): {file_path}")
+
+def find_file_for_year(file_matches, year):
+    """Find the specific file for the requested year using metadata if available."""
+    logger = logging.getLogger(__name__)
+    
+    # Try to find an exact match in metadata first
+    for file_path in file_matches:
+        try:
+            # Read metadata from the first line
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                first_line = f.readline().strip()
+            
+            if first_line.startswith('#METADATA:'):
+                try:
+                    metadata_json = first_line[9:].strip()
+                    # Try to parse the JSON, handling potential issues
+                    try:
+                        metadata = json.loads(metadata_json)
+                    except json.JSONDecodeError as json_error:
+                        # If there's an error, try to clean the JSON string
+                        logger.warning(f"Initial JSON parse error in find_file_for_year for {file_path}: {str(json_error)}")
+                        # Try removing any trailing characters that might be causing issues
+                        metadata_json = re.sub(r'\s+[^\{\}\"]+$', '', metadata_json)
+                        metadata = json.loads(metadata_json)
+                    
+                    # Check if academic_year matches
+                    academic_year = metadata.get('academic_year', '')
+                    if academic_year:
+                        year_match = False
+                        
+                        # Check different formats for academic year in metadata
+                        if str(year) == academic_year:
+                            year_match = True
+                        elif f"{year}" in academic_year:
+                            year_match = True
+                        elif f"{year}/{str(int(year) + 1)[2:]}" in academic_year:  # 2015/16
+                            year_match = True
+                        elif f"{year}-{str(int(year) + 1)[2:]}" in academic_year:  # 2015-16
+                            year_match = True
+                        
+                        if year_match:
+                            logger.info(f"Found file for year {year} using metadata: {file_path}")
+                            return file_path
+                except Exception as e:
+                    # If JSON parsing fails, try to extract the academic_year using regex
+                    try:
+                        year_match = re.search(r'"academic_year":\s*"([^"]+)"', first_line)
+                        if year_match:
+                            academic_year = year_match.group(1)
+                            # Check if year matches any of our formats
+                            if str(year) == academic_year or f"{year}" in academic_year:
+                                logger.info(f"Found file for year {year} using regex-extracted academic_year: {file_path}")
+                                return file_path
+                    except Exception as extract_error:
+                        logger.warning(f"Error extracting academic_year with regex: {str(extract_error)}")
+        
+        except Exception as e:
+            logger.warning(f"Error reading metadata from {file_path}: {str(e)}")
+    
+    # If no match found using metadata, fall back to filename matching
+    logger.info("Falling back to filename matching for year")
     
     # Different formats for academic year
     academic_year_formats = [
@@ -641,8 +798,15 @@ def extract_provider_data(file_path, he_providers):
         if cleaned_file_path.exists():
             logger.info(f"Using cleaned version of file: {cleaned_file_path}")
             try:
+                # Check if first line is metadata
+                with open(cleaned_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    first_line = f.readline().strip()
+                
+                # If first line is metadata, skip it when reading with pandas
+                skiprows = 1 if first_line.startswith('#METADATA:') else 0
+                
                 # Try reading the cleaned file directly
-                df = pd.read_csv(cleaned_file_path)
+                df = pd.read_csv(cleaned_file_path, skiprows=skiprows)
                 logger.info(f"Successfully read cleaned file with shape: {df.shape}")
             except Exception as e:
                 logger.error(f"Error reading cleaned file: {str(e)}")
@@ -724,6 +888,9 @@ def extract_provider_data(file_path, he_providers):
         combined_rows = pd.concat(all_provider_rows)
         logger.info(f"Combined data for all providers: {len(combined_rows)} rows")
         
+        # Replace NaN values with None before converting to dict - this is key to fix the JSON issue
+        combined_rows = combined_rows.replace({np.nan: None})
+        
         # Convert the rows to a dict for the response
         provider_data = combined_rows.to_dict('records')
         
@@ -748,8 +915,16 @@ def process_raw_file(file_path, he_providers):
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as file:
             lines = file.readlines()
         
+        # Check if first line is metadata and skip it if needed
+        skip_first_line = False
+        if lines and lines[0].strip().startswith('#METADATA:'):
+            logger.info(f"Found metadata in first line, will skip for data processing")
+            skip_first_line = True
+            # Adjust lines to skip metadata
+            lines = lines[1:]
+        
         # Log the first few lines to help with debugging
-        logger.info(f"First 10 lines of the file:")
+        logger.info(f"First 10 lines of the file (after metadata if present):")
         for i, line in enumerate(lines[:10]):
             logger.info(f"Line {i}: {line.strip()}")
         
@@ -784,7 +959,9 @@ def process_raw_file(file_path, he_providers):
         # Custom read approach:
         # 1. Read only the header row to get column names
         try:
-            header_df = pd.read_csv(file_path, skiprows=header_row, nrows=1)
+            # Adjust skiprows to account for metadata if present
+            skiprows_header = header_row + (1 if skip_first_line else 0)
+            header_df = pd.read_csv(file_path, skiprows=skiprows_header, nrows=1)
             column_names = header_df.columns
             logger.info(f"Column names from header: {column_names}")
         except Exception as e:
@@ -802,13 +979,18 @@ def process_raw_file(file_path, he_providers):
         
         # 2. Read the data starting from the data row
         try:
-            df = pd.read_csv(file_path, skiprows=data_start_row, names=column_names)
+            # Adjust skiprows to account for metadata if present
+            skiprows_data = data_start_row + (1 if skip_first_line else 0)
+            df = pd.read_csv(file_path, skiprows=skiprows_data, names=column_names)
             logger.info(f"Read data with shape: {df.shape}")
         except Exception as e:
             logger.error(f"Error reading data: {str(e)}")
             # Try with different approach
             try:
-                df = pd.read_csv(file_path, skiprows=range(0, data_start_row), names=column_names)
+                skiprows_range = list(range(0, data_start_row))
+                if skip_first_line:
+                    skiprows_range.insert(0, 0)  # Add line 0 (metadata) to skip list
+                df = pd.read_csv(file_path, skiprows=skiprows_range, names=column_names)
                 logger.info(f"Alternative parsing successful with shape: {df.shape}")
             except Exception as e2:
                 logger.error(f"Alternative parsing also failed: {str(e2)}")
@@ -922,6 +1104,9 @@ def process_raw_file(file_path, he_providers):
         combined_rows = pd.concat(all_provider_rows)
         logger.info(f"Combined data for all providers: {len(combined_rows)} rows")
         
+        # Replace NaN values with None before converting to dict - this is key to fix the JSON issue
+        combined_rows = combined_rows.replace({np.nan: None})
+        
         # Convert the rows to a dict for the response
         provider_data = combined_rows.to_dict('records')
         
@@ -1019,13 +1204,25 @@ def prepare_chart_data_from_result(result):
                 if row.get(provider_col) == provider and row.get('Year') == year and main_metric in row:
                     try:
                         value = row[main_metric]
-                        if isinstance(value, str):
+                        if value is None:
+                            # Handle None values by using null (will be converted to 'null' in JSON)
+                            dataset['data'].append(None)
+                        elif isinstance(value, str):
                             value = value.replace(',', '')  # Remove commas
-                        dataset['data'].append(float(value))
+                            dataset['data'].append(float(value))
+                        else:
+                            # Handle potential NaN values
+                            if pd.isna(value):  # This checks for np.nan, pd.NA, etc.
+                                dataset['data'].append(None)
+                            else:
+                                dataset['data'].append(float(value))
                         value_found = True
                         break
                     except (ValueError, TypeError):
-                        pass
+                        # If conversion fails, add null
+                        dataset['data'].append(None)
+                        value_found = True
+                        break
             
             # If no value found for this year, add null for continuity
             if not value_found:
@@ -1033,13 +1230,18 @@ def prepare_chart_data_from_result(result):
         
         datasets.append(dataset)
     
-    return {
+    # Create the final result
+    chart_data = {
         'labels': years,
         'datasets': datasets
     }
+    
+    # Convert any remaining NaN values to None for proper JSON serialization
+    # This is a safety step in case any NaN values slipped through
+    return json.loads(json.dumps(chart_data, cls=NumericEncoder))
 
 def get_random_color():
-    """Generate a random color for chart datasets."""
+    """Generate a random RGB color."""
     import random
     r = random.randint(0, 255)
     g = random.randint(0, 255)

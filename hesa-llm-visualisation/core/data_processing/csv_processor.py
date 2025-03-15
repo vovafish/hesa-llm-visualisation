@@ -1,7 +1,8 @@
 import pandas as pd
 import os
+import json
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import logging
 import csv
 import re
@@ -14,12 +15,35 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 RAW_FILES_DIR = BASE_DIR / 'data' / 'raw_files'
 CLEANED_FILES_DIR = BASE_DIR / 'data' / 'cleaned_files'
+CONFIG_DIR = BASE_DIR / 'config'
 
 class CSVProcessor:
     def __init__(self):
         self.raw_dir = RAW_FILES_DIR
         self.clean_dir = CLEANED_FILES_DIR
+        self.synonyms_mapping = self._load_synonyms_mapping()
         
+    def _load_synonyms_mapping(self) -> Dict[str, List[str]]:
+        """Load synonym mappings from the config file."""
+        # Define a minimal set of synonyms as a fallback
+        basic_synonyms = {
+            "university": ["he provider", "institution", "college"],
+            "student": ["learner", "pupil"],
+            "course": ["program", "programme", "study"]
+        }
+        
+        synonyms_path = CONFIG_DIR / 'synonyms.json'
+        try:
+            if synonyms_path.exists():
+                with open(synonyms_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                logger.warning(f"Synonyms file not found: {synonyms_path}, using basic synonyms")
+                return basic_synonyms
+        except Exception as e:
+            logger.error(f"Error loading synonyms mapping: {str(e)}, using basic synonyms")
+            return basic_synonyms
+    
     def validate_csv(self, file_path: Path) -> bool:
         """
         Validates if the CSV file is properly formatted and contains expected data.
@@ -47,6 +71,23 @@ class CSVProcessor:
         except Exception as e:
             logger.error(f"Error validating {file_path}: {str(e)}")
             return False
+    
+    def extract_metadata(self, file_path: Path) -> Dict[str, Any]:
+        """Extract metadata from the first line of the file if it exists."""
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                first_line = f.readline().strip()
+                
+            if first_line.startswith('#METADATA:'):
+                # Extract the JSON metadata
+                metadata_json = first_line[9:]  # Skip the #METADATA: prefix
+                metadata = json.loads(metadata_json)
+                return metadata
+            else:
+                return {}
+        except Exception as e:
+            self.logger.warning(f"Error extracting metadata from {file_path}: {str(e)}")
+            return {}
     
     def find_data_start(self, file_path: Path) -> Tuple[int, List[str]]:
         """
@@ -201,18 +242,30 @@ class CSVProcessor:
                     results[file_path.name] = False
                     continue
                 
+                # Extract metadata
+                metadata = self.extract_metadata(file_path)
+                
                 # Clean data
                 cleaned_df = self.clean_csv(file_path)
                 if cleaned_df is None:
                     results[file_path.name] = False
                     continue
                 
-                # Save cleaned file
-                cleaned_path = self.clean_dir / file_path.name
-                cleaned_df.to_csv(cleaned_path, index=False)
-                results[file_path.name] = True
+                # Create metadata line
+                metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
                 
-                logger.info(f"Successfully processed {file_path.name}")
+                # Save cleaned file with metadata
+                cleaned_path = self.clean_dir / file_path.name
+                
+                # Write metadata line first, then the data
+                with open(cleaned_path, 'w', encoding='utf-8') as f:
+                    f.write(metadata_line)
+                
+                # Then append the dataframe
+                cleaned_df.to_csv(cleaned_path, index=False, mode='a')
+                
+                results[file_path.name] = True
+                logger.info(f"Successfully processed {file_path.name} with metadata")
                 
             except Exception as e:
                 logger.error(f"Error processing {file_path.name}: {str(e)}")
@@ -239,16 +292,28 @@ class CSVProcessor:
             if not self.validate_csv(file_path):
                 return False
             
+            # Extract metadata
+            metadata = self.extract_metadata(file_path)
+            
             # Clean data
             cleaned_df = self.clean_csv(file_path)
             if cleaned_df is None:
                 return False
             
-            # Save cleaned file
-            cleaned_path = self.clean_dir / file_name
-            cleaned_df.to_csv(cleaned_path, index=False)
+            # Create metadata line
+            metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
             
-            logger.info(f"Successfully processed {file_name}")
+            # Save cleaned file with metadata
+            cleaned_path = self.clean_dir / file_name
+            
+            # Write metadata line first, then the data
+            with open(cleaned_path, 'w', encoding='utf-8') as f:
+                f.write(metadata_line)
+            
+            # Then append the dataframe
+            cleaned_df.to_csv(cleaned_path, index=False, mode='a')
+            
+            logger.info(f"Successfully processed {file_name} with metadata")
             return True
             
         except Exception as e:
