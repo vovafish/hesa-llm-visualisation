@@ -344,8 +344,185 @@ def process_hesa_query(request):
                 'error': f"No CSV files found matching pattern: {query_info['file_pattern']}"
             }, status=404)
         
-        logger.info(f"Found {len(file_matches)} matching CSV files: {file_matches}")
+        logger.info(f"Found {len(file_matches)} matching CSV files")
         
+        # Filter files by requested years
+        requested_years = query_info['years']
+        year_filtered_matches = []
+        
+        # First, try to find exact year matches
+        for year in requested_years:
+            exact_year_matches = [
+                m for m in file_matches 
+                if m.get('year') and m.get('year') == str(year)
+            ]
+            
+            if exact_year_matches:
+                # Add exact year matches to our filtered list
+                for match in exact_year_matches:
+                    if match not in year_filtered_matches:
+                        year_filtered_matches.append(match)
+                        logger.info(f"Exact year match found for {year}: {match['file_name']}")
+        
+        # If no exact matches, try a more lenient approach (check if year appears in filename)
+        if not year_filtered_matches:
+            logger.info("No exact year matches found, trying filename pattern matching")
+            
+            for year in requested_years:
+                # Look for patterns like "2020&21", "2020/21", "2020-21"
+                year_patterns = [
+                    f"{year}",
+                    f"{year}&{str(int(year) + 1)[2:]}",
+                    f"{year}-{str(int(year) + 1)[2:]}",
+                    f"{year}/{str(int(year) + 1)[2:]}",
+                    f"{year}_{str(int(year) + 1)[2:]}",
+                    f"{year}-{int(year) + 1}"
+                ]
+                
+                for match in file_matches:
+                    for pattern in year_patterns:
+                        if pattern in match['file_name']:
+                            if match not in year_filtered_matches:
+                                year_filtered_matches.append(match)
+                                logger.info(f"Year pattern match found for {year}: {match['file_name']} (pattern: {pattern})")
+                            break
+        
+        # If we have year-filtered matches, use those instead of all matches
+        if year_filtered_matches:
+            logger.info(f"Using {len(year_filtered_matches)} year-filtered matches instead of all {len(file_matches)} matches")
+            file_matches = year_filtered_matches
+        else:
+            logger.warning(f"⚠️ No files found matching requested years: {requested_years}. Using all matching files instead.")
+            
+        # Re-sort by score since we might have re-ordered things
+        file_matches.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Check if we have multiple potential matches with similar scores
+        multiple_matches = False
+        
+        if len(file_matches) > 1:
+            # Check if top matches have similar scores (within 2 points)
+            top_score = file_matches[0]['score']
+            similar_matches = [m for m in file_matches if top_score - m['score'] <= 2]
+            
+            if len(similar_matches) > 1:
+                multiple_matches = True
+                logger.info(f"Multiple files with similar scores found: {len(similar_matches)}")
+                
+                # Group similar files by their base title pattern (excluding the year)
+                # This will combine files that represent the same dataset but for different years
+                
+                # Helper function to extract base title (without year)
+                def extract_base_title(filename):
+                    # Remove year pattern from filename
+                    base_title = re.sub(r'\d{4}[\&\-_\/]\d{2}', 'YEAR', filename)
+                    return base_title
+                
+                # Group files by their base title
+                grouped_files = {}
+                for match in similar_matches:
+                    file_name = match['file_name']
+                    base_title = extract_base_title(file_name)
+                    
+                    if base_title not in grouped_files:
+                        grouped_files[base_title] = []
+                    
+                    grouped_files[base_title].append(match)
+                
+                logger.info(f"Grouped files into {len(grouped_files)} distinct dataset types")
+                
+                # Process preview data for each group
+                all_file_results = []
+                
+                for base_title, files in grouped_files.items():
+                    logger.info(f"Processing group: {base_title} with {len(files)} files")
+                    
+                    # Sort files within group by year
+                    files.sort(key=lambda x: x.get('year', '0000'))
+                    
+                    # Get a representative file for structure
+                    representative_file = files[0]
+                    
+                    # Create a combined preview for all files in this group
+                    combined_preview_data = None
+                    all_file_paths = []
+                    all_file_names = []
+                    all_years = []
+                    
+                    # Process each file in the group
+                    for file_match in files:
+                        file_path = file_match['file_path']
+                        file_name = file_match['file_name']
+                        file_year = file_match.get('year', 'Unknown')
+                        
+                        # Only include files for the requested years
+                        if file_year != 'Unknown' and file_year not in query_info['years']:
+                            logger.info(f"Skipping file {file_name} with year {file_year} not in requested years {query_info['years']}")
+                            continue
+                        
+                        all_file_paths.append(file_path)
+                        all_file_names.append(file_name)
+                        all_years.append(file_year)
+                        
+                        # Get individual file preview
+                        preview_data = extract_provider_data_preview(file_path, query_info['he_providers'], max_rows=3, requested_years=query_info['years'])
+                        
+                        if preview_data:
+                            if not combined_preview_data:
+                                # First file in group, use as base
+                                combined_preview_data = preview_data
+                            else:
+                                # Add data from this file to the combined data
+                                combined_preview_data['data'].extend(preview_data['data'])
+                    
+                    if combined_preview_data:
+                        # Create a unique ID for this group
+                        group_id = hash(base_title) % 10000000  # Use modulo to keep it a reasonable size
+                        
+                        # Combine all file paths with a separator for later processing
+                        joined_file_paths = "||".join(all_file_paths)
+                        
+                        # Clean up the base title for display
+                        display_title = base_title.replace('YEAR', '').strip()
+                        
+                        # Sort the combined data by year
+                        combined_preview_data['data'].sort(key=lambda x: x.get('Year', '0000'))
+                        
+                        # Add to results
+                        # Limit total preview data to 3 rows across all files
+                        has_more_rows = False
+                        if len(combined_preview_data['data']) > 3:
+                            # Set flag indicating there are more rows than shown
+                            has_more_rows = True
+                            # Truncate data to only 3 rows
+                            combined_preview_data['data'] = combined_preview_data['data'][:3]
+                            
+                        all_file_results.append({
+                            'file_info': {
+                                'group_title': display_title,
+                                'file_names': all_file_names,
+                                'file_paths': joined_file_paths,
+                                'years': all_years,
+                                'match_score': representative_file['score'],
+                                'matched_terms': representative_file['matched_terms']
+                            },
+                            'columns': combined_preview_data['columns'],
+                            'data': combined_preview_data['data'],
+                            'has_more_rows': has_more_rows,
+                            'file_id': group_id
+                        })
+                
+                # If we have multiple groups with preview data, return them
+                if all_file_results:
+                    logger.info("Returning preview data for multiple grouped dataset types")
+                    return CustomJsonResponse({
+                        'status': 'success',
+                        'query_info': query_info,
+                        'multiple_matches': True,
+                        'preview_results': all_file_results
+                    })
+        
+        # Otherwise proceed with single file processing as before
         # Track all files used and data extracted
         all_file_info = []
         all_data = []
@@ -355,16 +532,39 @@ def process_hesa_query(request):
         for year in query_info['years']:
             # Find the specific file for the current year
             logger.info(f"Looking for file matching year: {year}")
-            target_file = find_file_for_year(file_matches, year)
             
-            if not target_file:
-                logger.warning(f"No data found for year: {year}")
+            # Try to find an exact match for this year
+            year_matches = [m for m in file_matches if m.get('year') and m.get('year') == str(year)]
+            
+            # If no exact match, try pattern matching
+            if not year_matches:
+                year_patterns = [
+                    f"{year}",
+                    f"{year}&{str(int(year) + 1)[2:]}",
+                    f"{year}-{str(int(year) + 1)[2:]}",
+                    f"{year}/{str(int(year) + 1)[2:]}",
+                    f"{year}_{str(int(year) + 1)[2:]}",
+                    f"{year}-{int(year) + 1}"
+                ]
+                
+                for match in file_matches:
+                    for pattern in year_patterns:
+                        if pattern in match['file_name']:
+                            year_matches.append(match)
+                            break
+            
+            if not year_matches:
+                logger.warning(f"No file found for year: {year}")
                 continue  # Skip this year but continue with others
             
-            logger.info(f"Found file for requested year {year}: {target_file}")
+            # Use the highest-scoring file for this year
+            target_file = max(year_matches, key=lambda x: x['score'])
             
-            # Get just the filename for display
-            file_name = Path(target_file).name
+            # Extract the file_path from the file_match object
+            file_path = target_file['file_path']
+            file_name = target_file['file_name']
+            
+            logger.info(f"Found file for requested year {year}: {file_path}")
             
             # Check if a cleaned version exists
             cleaned_file_path = Path(settings.BASE_DIR) / 'data' / 'cleaned_files' / file_name
@@ -379,7 +579,7 @@ def process_hesa_query(request):
             
             # Extract data for the specified HE providers
             logger.info(f"Extracting data for HE providers: {query_info['he_providers']} for year {year}")
-            result = extract_provider_data(target_file, query_info['he_providers'])
+            result = extract_provider_data(file_path, query_info['he_providers'])
             
             if not result:
                 logger.warning(f"No data found for providers: {query_info['he_providers']} in year {year}")
@@ -391,15 +591,18 @@ def process_hesa_query(request):
             if all_columns is None:
                 all_columns = result['columns']
             
+            # Get the file year (if available)
+            file_year = target_file.get('year', year)
+            
             # Add year information to each row
             for row in result['data']:
-                row['Year'] = year  # Add the year as a new column
+                row['Year'] = file_year  # Use the actual file year, not the requested year
                 all_data.append(row)
             
             # Store file info
             all_file_info.append({
-                'year': year,
-                'raw_file': target_file,
+                'year': file_year,  # Use the actual file year
+                'raw_file': file_path,
                 'using_cleaned_file': cleaned_file_path.exists(),
                 'cleaned_file_path': str(cleaned_file_path) if cleaned_file_path.exists() else None,
                 'file_name': file_name
@@ -439,6 +642,249 @@ def process_hesa_query(request):
     except Exception as e:
         logger = logging.getLogger(__name__)
         logger.error(f"Error in process_hesa_query view: {str(e)}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return CustomJsonResponse({
+            'status': 'error',
+            'error': str(e)
+        }, status=500)
+
+@require_http_methods(["POST"])
+def select_file_source(request):
+    """Process request to select a specific file source after preview."""
+    try:
+        # Get query and file ID from request
+        query = request.POST.get('query')
+        file_id = request.POST.get('file_id')
+        chart_type = request.POST.get('chart_type', 'line')
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Processing file selection - Query: {query}, File ID: {file_id}")
+        
+        if not query or not file_id:
+            return CustomJsonResponse({
+                'status': 'error', 
+                'error': 'Missing query or file ID'
+            }, status=400)
+        
+        # Parse the query
+        query_info = parse_hesa_query(query)
+        if not query_info:
+            return CustomJsonResponse({
+                'status': 'error', 
+                'error': 'Could not parse the query'
+            }, status=400)
+        
+        # Store the original query text
+        query_info['original_query'] = query
+        
+        # Find all matching files again
+        file_matches = find_relevant_csv_files(query_info['file_pattern'])
+        if not file_matches:
+            return CustomJsonResponse({
+                'status': 'error', 
+                'error': 'No matching files found'
+            }, status=404)
+        
+        # Check if we're dealing with a group ID or a single file ID
+        # First, try to find a single file match
+        selected_file = None
+        for match in file_matches:
+            if hash(match['file_path']) % 10000000 == int(file_id):
+                selected_file = match
+                break
+        
+        # If no single file match, look for a group match
+        if not selected_file:
+            # Helper function to extract base title (without year)
+            def extract_base_title(filename):
+                # Remove year pattern from filename
+                base_title = re.sub(r'\d{4}[\&\-_\/]\d{2}', 'YEAR', filename)
+                return base_title
+            
+            # Group files by their base title
+            grouped_files = {}
+            for match in file_matches:
+                file_name = match['file_name']
+                base_title = extract_base_title(file_name)
+                
+                if base_title not in grouped_files:
+                    grouped_files[base_title] = []
+                
+                grouped_files[base_title].append(match)
+            
+            # Check each group to see if its hash matches the file_id
+            for base_title, files in grouped_files.items():
+                if hash(base_title) % 10000000 == int(file_id):
+                    logger.info(f"Found matching group: {base_title} with {len(files)} files")
+                    
+                    # Process all files in this group
+                    all_file_info = []
+                    all_data = []
+                    all_columns = None
+                    
+                    # Sort files by year
+                    files.sort(key=lambda x: x.get('year', '0000'))
+                    
+                    # Collect all files matching the requested years
+                    matching_files = []
+                    for match in files:
+                        file_year = match.get('year')
+                        if file_year and file_year in query_info['years']:
+                            matching_files.append(match)
+                    
+                    # If no files match the requested years, use the original files list
+                    if not matching_files:
+                        logger.warning(f"No files match the requested years {query_info['years']}. Using all available files.")
+                        matching_files = files
+                    
+                    # Process each file in the matching set
+                    for file_match in matching_files:
+                        file_path = file_match['file_path']
+                        file_name = file_match['file_name']
+                        file_year = file_match.get('year')
+                        
+                        logger.info(f"Processing file from group: {file_name}")
+                        
+                        # Check if a cleaned version exists
+                        cleaned_file_path = Path(settings.BASE_DIR) / 'data' / 'cleaned_files' / file_name
+                        using_cleaned_file = cleaned_file_path.exists()
+                        
+                        # Extract data for the specified HE providers
+                        result = extract_provider_data(file_path, query_info['he_providers'])
+                        
+                        if result:
+                            # Store the columns from the first successful result
+                            if all_columns is None:
+                                all_columns = result['columns']
+                            
+                            # If we don't have a file year, try to extract it from the filename
+                            if not file_year:
+                                year_match = re.search(r'(\d{4})[\&\-_\/](\d{2})', file_name)
+                                if year_match:
+                                    file_year = year_match.group(1)
+                                    logger.info(f"Extracted year from filename: {file_year}")
+                            
+                            # Add year information to each row
+                            for row in result['data']:
+                                row['Year'] = file_year
+                                all_data.append(row)
+                            
+                            # Store file info
+                            all_file_info.append({
+                                'year': file_year,
+                                'raw_file': file_path,
+                                'using_cleaned_file': using_cleaned_file,
+                                'cleaned_file_path': str(cleaned_file_path) if using_cleaned_file else None,
+                                'file_name': file_name
+                            })
+                    
+                    # Check if we found any data
+                    if not all_data:
+                        return CustomJsonResponse({
+                            'status': 'error', 
+                            'error': f"No data found for providers: {query_info['he_providers']} in selected files"
+                        }, status=404)
+                    
+                    # Add 'Year' to columns if not already there
+                    if all_columns and 'Year' not in all_columns:
+                        all_columns.append('Year')
+                    
+                    # Convert data to chart format if needed
+                    chart_data = None
+                    if chart_type == 'line':
+                        logger.info("Preparing data for line chart")
+                        chart_data = prepare_chart_data_from_result({'columns': all_columns, 'data': all_data})
+                    
+                    # Return the results
+                    return CustomJsonResponse({
+                        'status': 'success',
+                        'query_info': query_info,
+                        'file_info': all_file_info,  # Now returns an array of file info objects
+                        'columns': all_columns,
+                        'data': all_data,
+                        'chart_data': chart_data
+                    })
+            
+            # If we get here, no matching group was found
+            return CustomJsonResponse({
+                'status': 'error', 
+                'error': 'Selected dataset type not found'
+            }, status=404)
+        
+        # If we found a single file match, process it as before
+        logger.info(f"Found selected file: {selected_file['file_name']}")
+        
+        # Process the selected file
+        file_path = selected_file['file_path']
+        file_name = selected_file['file_name']
+        file_year = selected_file.get('year')
+        
+        # Log the file info for debugging
+        logger.info("\n" + "*" * 80 + "    ")
+        logger.info(f"PROCESSING FILE: {file_name}")
+        logger.info("*" * 80)
+        
+        # Check if a cleaned version exists
+        cleaned_file_path = Path(settings.BASE_DIR) / 'data' / 'cleaned_files' / file_name
+        using_cleaned_file = cleaned_file_path.exists()
+        
+        # Extract data for the specified HE providers
+        logger.info(f"Processing file: {file_path} for providers: {query_info['he_providers']}")
+        result = extract_provider_data(file_path, query_info['he_providers'])
+        
+        if not result:
+            return CustomJsonResponse({
+                'status': 'error', 
+                'error': f"No data found for providers: {query_info['he_providers']} in file: {file_name}"
+            }, status=404)
+        
+        # If we don't have a file year from the file matching process, try to extract it from the filename
+        if not file_year:
+            # Try to extract year from the filename
+            year_match = re.search(r'(\d{4})[\&\-_\/](\d{2})', file_name)
+            if year_match:
+                file_year = year_match.group(1)
+                logger.info(f"Extracted year from filename: {file_year}")
+            else:
+                # Default to the first year from the query if we can't extract it
+                file_year = query_info['years'][0] if query_info['years'] else None
+                logger.info(f"Using default year from query: {file_year}")
+        
+        # Add year information to each row
+        for row in result['data']:
+            row['Year'] = file_year
+        
+        # Add 'Year' to columns if not already there
+        columns = result['columns']
+        if 'Year' not in columns:
+            columns.append('Year')
+        
+        # Convert data to chart format if needed
+        chart_data = None
+        if chart_type == 'line':
+            logger.info("Preparing data for line chart")
+            chart_data = prepare_chart_data_from_result(result)
+        
+        # Return the results with a single file in the file_info array for consistency
+        return CustomJsonResponse({
+            'status': 'success',
+            'query_info': query_info,
+            'file_info': [{
+                'year': file_year,
+                'raw_file': file_path,
+                'using_cleaned_file': using_cleaned_file,
+                'cleaned_file_path': str(cleaned_file_path) if using_cleaned_file else None,
+                'file_name': file_name
+            }],
+            'columns': columns,
+            'data': result['data'],
+            'chart_data': chart_data
+        })
+        
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in select_file_source view: {str(e)}")
         import traceback
         logger.error(f"Traceback: {traceback.format_exc()}")
         return CustomJsonResponse({
@@ -589,12 +1035,21 @@ def find_relevant_csv_files(file_pattern):
     pattern_keywords = [keyword.lower() for keyword in file_pattern.lower().split()]
     
     # Find all CSV files that match based on metadata
-    matching_files = []
+    matching_files_with_scores = []
+    
     for file_path in all_csv_files:
         try:
             # Read just the first line of the file to get metadata
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                 first_line = f.readline().strip()
+            
+            # Default year extraction from filename
+            file_year = None
+            # Try to extract year from filename using regex
+            year_match = re.search(r'(\d{4})[\&\-_\/](\d{2})', file_path.name)
+            if year_match:
+                file_year = year_match.group(1)  # Extract the first year
+                logger.info(f"Extracted year from filename: {file_year} for {file_path.name}")
             
             # Check if it contains our metadata format
             if first_line.startswith('#METADATA:'):
@@ -614,85 +1069,110 @@ def find_relevant_csv_files(file_pattern):
                     title = metadata.get('title', '').lower()
                     keywords = [k.lower() for k in metadata.get('keywords', [])]
                     
-                    logger.info(f"File {file_path.name} has metadata: title='{title}', keywords={keywords}")
+                    # Try to get year from metadata if not already extracted from filename
+                    if not file_year and 'academic_year' in metadata:
+                        academic_year = metadata.get('academic_year', '')
+                        # Extract the first year from formats like "2015/16" or "2015-16"
+                        year_match = re.search(r'(\d{4})', academic_year)
+                        if year_match:
+                            file_year = year_match.group(1)
+                            logger.info(f"Extracted year from metadata: {file_year} for {file_path.name}")
                     
-                    # Count how many pattern keywords match in title or expanded keywords
+                    # Count keyword matches
                     keyword_matches = 0
                     matched_terms = []
                     
-                    for pattern_word in pattern_keywords:
-                        # Check if it matches the title
-                        if pattern_word in title:
-                            keyword_matches += 1
-                            matched_terms.append(pattern_word)
-                            continue
-                            
-                        # Check if it matches any of the expanded keywords
-                        for keyword in keywords:
-                            if pattern_word in keyword or keyword in pattern_word:
-                                keyword_matches += 1
-                                matched_terms.append(f"{pattern_word}→{keyword}")
-                                break
+                    # Check title for keyword matches
+                    title_matches = sum(1 for keyword in pattern_keywords if keyword in title)
+                    if title_matches > 0:
+                        keyword_matches += title_matches
+                        matched_terms.append(f"title contains {title_matches} keywords")
                     
-                    # If enough keywords match, consider it a match
-                    match_threshold = max(1, len(pattern_keywords) // 2)  # At least half the keywords
-                    if keyword_matches >= match_threshold:
-                        matching_files.append(str(file_path))
-                        logger.info(f"File matched via metadata ({keyword_matches}/{len(pattern_keywords)} keywords): {file_path} - matched: {matched_terms}")
+                    # Check keywords for matches
+                    expanded_keywords = []
+                    for k in keywords:
+                        expanded_keywords.extend(k.split())
+                    
+                    keyword_match_count = 0
+                    for pattern_kw in pattern_keywords:
+                        if any(pattern_kw in ex_kw for ex_kw in expanded_keywords):
+                            keyword_match_count += 1
+                    
+                    if keyword_match_count > 0:
+                        keyword_matches += keyword_match_count
+                        matched_terms.append(f"keywords match {keyword_match_count} terms")
+                    
+                    # If we have matches, add this file to our results
+                    if keyword_matches > 0:
+                        matching_files_with_scores.append({
+                            'file_path': str(file_path),
+                            'score': keyword_matches,
+                            'matched_terms': matched_terms,
+                            'file_name': file_path.name,
+                            'year': file_year  # Add the extracted year
+                        })
+                        logger.info(f"File matched by metadata ({keyword_matches} keywords): {file_path} (Year: {file_year})")
                 
-                except json.JSONDecodeError:
+                except Exception as e:
                     logger.warning(f"Invalid metadata JSON in file: {file_path}")
-                    # Try to extract the title from the metadata even if JSON parsing fails
-                    try:
-                        title_match = re.search(r'"title":\s*"([^"]+)"', metadata_json)
-                        if title_match:
-                            title = title_match.group(1).lower()
-                            # Match against the extracted title
-                            keyword_matches = sum(1 for word in pattern_keywords if word in title)
-                            match_threshold = max(1, len(pattern_keywords) // 2)
-                            if keyword_matches >= match_threshold:
-                                matching_files.append(str(file_path))
-                                logger.info(f"File matched via regex-extracted title ({keyword_matches}/{len(pattern_keywords)} keywords): {file_path}")
-                                continue  # Skip fallback if we matched by title
-                    except Exception as e:
-                        logger.warning(f"Error extracting title from metadata: {str(e)}")
-                    
-                    # Fall back to checking the filename as before
-                    _check_filename_match(file_path, pattern_keywords, matching_files)
+                    logger.warning(f"Error: {str(e)}")
+                    # Fall back to filename matching if metadata parsing fails
+                    _check_filename_match_with_score(file_path, pattern_keywords, matching_files_with_scores)
+                    # Add year information from filename if we fell back to filename matching
+                    if matching_files_with_scores and matching_files_with_scores[-1]['file_path'] == str(file_path):
+                        matching_files_with_scores[-1]['year'] = file_year
             else:
-                # No metadata, fall back to checking the filename
-                logger.info(f"No metadata found in {file_path.name}, falling back to filename matching")
-                _check_filename_match(file_path, pattern_keywords, matching_files)
-                
+                # If no metadata, fall back to filename matching
+                logger.info(f"No metadata found in file, falling back to filename matching: {file_path}")
+                _check_filename_match_with_score(file_path, pattern_keywords, matching_files_with_scores)
+                # Add year information from filename if we have a match
+                if matching_files_with_scores and matching_files_with_scores[-1]['file_path'] == str(file_path):
+                    matching_files_with_scores[-1]['year'] = file_year
+        
         except Exception as e:
-            logger.error(f"Error reading metadata from {file_path}: {str(e)}")
-            # Fall back to checking the filename
-            _check_filename_match(file_path, pattern_keywords, matching_files)
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            # Continue with the next file
     
-    return matching_files
+    # Sort by score (highest first)
+    matching_files_with_scores.sort(key=lambda x: x['score'], reverse=True)
+    
+    logger.info(f"Found {len(matching_files_with_scores)} matching files")
+    
+    return matching_files_with_scores
 
-def _check_filename_match(file_path, pattern_keywords, matching_files):
-    """Helper function to check if a filename matches the pattern keywords."""
+def _check_filename_match_with_score(file_path, pattern_keywords, matching_files_with_scores):
+    """Helper function to check if a filename matches the pattern keywords and add with score."""
     logger = logging.getLogger(__name__)
     filename = file_path.name.lower()
     
     # Count how many keywords match in the filename
     keyword_matches = 0
+    matched_terms = []
+    
     for keyword in pattern_keywords:
         # Check for variations to improve matching
         if keyword in filename:
             keyword_matches += 1
+            matched_terms.append(keyword)
         elif keyword == 'enrollment' and 'enrolment' in filename:
             keyword_matches += 1  # Handle UK/US spelling differences
+            matched_terms.append(f"{keyword}→enrolment")
         elif keyword == 'enrollments' and 'enrolments' in filename:
             keyword_matches += 1
+            matched_terms.append(f"{keyword}→enrolments")
         elif keyword == 'term-time' and 'term time' in filename:
             keyword_matches += 1
+            matched_terms.append(f"{keyword}→term time")
     
     # If at least half of the keywords match, consider it a match
     match_threshold = max(1, len(pattern_keywords) // 2)
     if keyword_matches >= match_threshold:
-        matching_files.append(str(file_path))
+        matching_files_with_scores.append({
+            'file_path': str(file_path),
+            'score': keyword_matches,
+            'matched_terms': matched_terms,
+            'file_name': file_path.name
+        })
         logger.info(f"File matched by filename ({keyword_matches} keywords): {file_path}")
 
 def find_file_for_year(file_matches, year):
@@ -700,7 +1180,8 @@ def find_file_for_year(file_matches, year):
     logger = logging.getLogger(__name__)
     
     # Try to find an exact match in metadata first
-    for file_path in file_matches:
+    for file_match in file_matches:
+        file_path = file_match['file_path']
         try:
             # Read metadata from the first line
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -736,7 +1217,7 @@ def find_file_for_year(file_matches, year):
                         
                         if year_match:
                             logger.info(f"Found file for year {year} using metadata: {file_path}")
-                            return file_path
+                            return file_match
                 except Exception as e:
                     # If JSON parsing fails, try to extract the academic_year using regex
                     try:
@@ -746,7 +1227,7 @@ def find_file_for_year(file_matches, year):
                             # Check if year matches any of our formats
                             if str(year) == academic_year or f"{year}" in academic_year:
                                 logger.info(f"Found file for year {year} using regex-extracted academic_year: {file_path}")
-                                return file_path
+                                return file_match
                     except Exception as extract_error:
                         logger.warning(f"Error extracting academic_year with regex: {str(extract_error)}")
         
@@ -768,11 +1249,12 @@ def find_file_for_year(file_matches, year):
     
     logger.info(f"Looking for files with year patterns: {academic_year_formats}")
     
-    for file_path in file_matches:
+    for file_match in file_matches:
+        file_path = file_match['file_path']
         for year_format in academic_year_formats:
             if year_format in file_path:
                 logger.info(f"Found matching year format '{year_format}' in {file_path}")
-                return file_path
+                return file_match
     
     return None
 
@@ -1086,7 +1568,7 @@ def process_raw_file(file_path, he_providers):
                                 logger.info(f"Found provider with keyword match: {provider_name}")
                                 provider_rows = df[df[he_provider_col] == provider_name]
                                 break
-                
+            
                 if not provider_rows.empty:
                     logger.info(f"Found {len(provider_rows)} rows for provider: {he_provider}")
                     all_provider_rows.append(provider_rows)
@@ -1247,3 +1729,141 @@ def get_random_color():
     g = random.randint(0, 255)
     b = random.randint(0, 255)
     return f'rgb({r}, {g}, {b})'
+
+def extract_provider_data_preview(file_path, he_providers, max_rows=3, requested_years=None):
+    """
+    Extract a preview of data for the specified HE providers from the CSV file.
+    Limited to a maximum number of rows for quick preview display.
+    """
+    try:
+        logger = logging.getLogger(__name__)
+        
+        # Get just the filename without the path
+        file_name = Path(file_path).name
+        
+        logger.info(f"Processing preview for file: {file_path} for providers: {he_providers}")
+        
+        # Check if file exists
+        if not Path(file_path).exists():
+            logger.error(f"File does not exist: {file_path}")
+            return None
+        
+        # Try to extract year from the filename
+        file_year = None
+        year_match = re.search(r'(\d{4})[\&\-_\/](\d{2})', file_name)
+        if year_match:
+            file_year = year_match.group(1)
+            logger.info(f"Extracted year from filename for preview: {file_year}")
+        
+        # Read the CSV file
+        try:
+            # Check if first line is metadata
+            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                first_line = f.readline().strip()
+            
+            # If first line is metadata, skip it when reading with pandas
+            skiprows = 1 if first_line.startswith('#METADATA:') else 0
+            
+            # Try to extract year from metadata if we couldn't from filename
+            if skiprows == 1 and not file_year:
+                try:
+                    if first_line.startswith('#METADATA:'):
+                        metadata_json = first_line[9:].strip()
+                        metadata = json.loads(metadata_json)
+                        if 'academic_year' in metadata:
+                            year_match = re.search(r'(\d{4})', metadata['academic_year'])
+                            if year_match:
+                                file_year = year_match.group(1)
+                                logger.info(f"Extracted year from metadata for preview: {file_year}")
+                except Exception as e:
+                    logger.warning(f"Could not extract year from metadata: {str(e)}")
+            
+            # Read the file
+            df = pd.read_csv(file_path, skiprows=skiprows)
+            logger.info(f"Successfully read file with shape: {df.shape}")
+        except Exception as e:
+            logger.error(f"Error reading file: {str(e)}")
+            return None
+        
+        # If we have requested years, check if this file's year is in the requested years
+        if requested_years and file_year:
+            if file_year not in requested_years:
+                logger.info(f"File year {file_year} not in requested years {requested_years}, skipping")
+                return None
+        
+        # Look for the HE provider column
+        he_provider_col = None
+        possible_provider_columns = df.columns
+        
+        for col_name in possible_provider_columns:
+            col_lower = str(col_name).lower()
+            if ('he provider' in col_lower or 'provider' in col_lower or 
+                'institution' in col_lower or 'university' in col_lower):
+                he_provider_col = col_name
+                logger.info(f"Found provider column: {he_provider_col}")
+                break
+        
+        if not he_provider_col:
+            logger.error("No HE provider column found in CSV file")
+            return None
+        
+        # Look for data for each provider
+        all_provider_rows = []
+        
+        for provider in he_providers:
+            logger.info(f"Looking for data for provider: {provider}")
+            
+            # Try exact match first
+            logger.info(f"Looking for exact match with provider: {provider}      ")
+            provider_rows = df[df[he_provider_col] == provider]
+            
+            # If no results, try with "The" prefix
+            if len(provider_rows) == 0 and not provider.lower().startswith('the '):
+                logger.info(f"Trying with 'The' prefix")
+                provider_rows = df[df[he_provider_col] == f"The {provider}"]
+            
+            # If still no results, try case-insensitive contains
+            if len(provider_rows) == 0:
+                logger.info(f"Trying contains match")
+                # Convert to string first to handle non-string columns
+                mask = df[he_provider_col].astype(str).str.lower().str.contains(provider.lower())
+                provider_rows = df[mask]
+            
+            if len(provider_rows) > 0:
+                logger.info(f"Found {len(provider_rows)} rows for provider: {provider}")
+                
+                # Limit to max_rows
+                provider_rows = provider_rows.head(max_rows)
+                
+                # Convert to dict for output
+                for _, row in provider_rows.iterrows():
+                    all_provider_rows.append(row.to_dict())
+            else:
+                logger.warning(f"No data found for provider: {provider}")
+        
+        # Add year to all rows if we have it
+        if file_year:
+            for row in all_provider_rows:
+                row['Year'] = file_year
+        
+        # Return data with columns
+        if all_provider_rows:
+            # Get columns from the first row
+            columns = list(all_provider_rows[0].keys())
+            
+            # Add Year to columns if it's in the data but not in columns
+            if file_year and 'Year' not in columns:
+                columns.append('Year')
+            
+            logger.info(f"Preview data ready with {len(all_provider_rows)} rows and {len(columns)} columns")
+            return {
+                'columns': columns,
+                'data': all_provider_rows
+            }
+        else:
+            logger.warning("No data found for any provider")
+            return None
+        
+    except Exception as e:
+        logger.error(f"Error extracting provider data preview: {str(e)}")
+        return None

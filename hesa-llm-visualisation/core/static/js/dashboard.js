@@ -167,6 +167,134 @@ document.addEventListener('DOMContentLoaded', function() {
         // Clear previous results
         queryResultsContainer.innerHTML = '';
         
+        // Check if we have multiple matches that need a preview
+        if (data.multiple_matches && data.preview_results) {
+            console.log('Multiple file matches found, displaying previews');
+            
+            // Display warning about multiple matches
+            let warningHTML = `
+                <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-6" role="alert">
+                    <p class="font-bold">Warning: Your query matched multiple data sources (${data.preview_results.length} dataset types)</p>
+                    <p>Previews from each dataset type are shown below. Select one to view complete results.</p>
+                    <p class="mt-2 text-sm">Note: You requested data for year(s): <strong>${data.query_info.years.join(", ")}</strong></p>
+                </div>
+            `;
+            queryResultsContainer.innerHTML = warningHTML;
+            
+            // Display each dataset type preview
+            data.preview_results.forEach(result => {
+                // Get file years for display
+                const fileYears = result.file_info.years || [];
+                const yearsText = fileYears.length > 0 ? fileYears.join(", ") : 'Unknown years';
+                
+                // Format matched terms for better display
+                let matchedTermsHtml = '';
+                if (result.file_info.matched_terms && result.file_info.matched_terms.length > 0) {
+                    matchedTermsHtml = result.file_info.matched_terms.join(', ');
+                } else {
+                    matchedTermsHtml = 'No specific terms matched';
+                }
+                
+                // Format file names for display
+                const fileNames = result.file_info.file_names || [];
+                let fileNamesHtml = '';
+                if (fileNames.length > 0) {
+                    fileNamesHtml = `
+                        <div class="mt-2 mb-3 text-sm">
+                            <p class="font-medium">Source files (showing data for ${data.query_info.years.join(", ")} only):</p>
+                            <ul class="list-disc pl-5 text-gray-600">
+                                ${fileNames.map(name => `<li>${name}</li>`).join('')}
+                            </ul>
+                        </div>
+                    `;
+                }
+                
+                // Create a highlight class if any of the file years match requested years
+                const yearMatch = fileYears.some(year => data.query_info.years.includes(year)) ? 
+                    'border-green-500 bg-green-50' : 'border-gray-200';
+                
+                let previewHTML = `
+                    <div class="rounded-lg shadow p-4 mb-6 file-preview border-l-4 ${yearMatch}" data-file-id="${result.file_id}">
+                        <h3 class="text-lg font-semibold mb-2">Dataset: ${result.file_info.group_title}</h3>
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <p class="text-sm text-gray-700"><span class="font-medium">Years:</span> ${yearsText}</p>
+                            <p class="text-sm text-gray-700"><span class="font-medium">Match score:</span> ${result.file_info.match_score}</p>
+                        </div>
+                        <p class="mb-2 text-sm text-gray-700"><span class="font-medium">Matched terms:</span> ${matchedTermsHtml}</p>
+                        ${fileNamesHtml}
+                        
+                        <div class="overflow-x-auto mb-4">
+                            <table class="min-w-full bg-white border border-gray-300">
+                                <thead>
+                                    <tr>
+                                `;
+                                
+                                // Add table headers
+                                if (result.columns && result.columns.length > 0) {
+                                    result.columns.forEach(column => {
+                                        previewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left">${column}</th>`;
+                                    });
+                                }
+                                
+                                previewHTML += `
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                `;
+                                
+                                // Add preview data rows
+                                if (result.data && result.data.length > 0) {
+                                    result.data.forEach(row => {
+                                        previewHTML += '<tr>';
+                                        result.columns.forEach(column => {
+                                            previewHTML += `<td class="px-4 py-2 border-b border-gray-300">${row[column] || ''}</td>`;
+                                        });
+                                        previewHTML += '</tr>';
+                                    });
+                                } else {
+                                    previewHTML += `
+                                        <tr>
+                                            <td colspan="${result.columns ? result.columns.length : 1}" class="px-4 py-2 text-center text-gray-500">
+                                                No preview data available
+                                            </td>
+                                        </tr>
+                                    `;
+                                }
+                                
+                                previewHTML += `
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            ${result.has_more_rows ? `
+                            <div class="bg-blue-100 text-blue-800 p-3 mb-4 rounded text-sm">
+                                <p><i class="fas fa-info-circle mr-1"></i> Preview limited to 3 rows. Select this dataset to view all matching data.</p>
+                            </div>
+                            ` : ''}
+                            
+                            <button class="select-file-btn bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded" 
+                                    data-file-id="${result.file_id}">
+                                Select This Dataset
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
+                queryResultsContainer.innerHTML += previewHTML;
+            });
+            
+            // Add event listeners to the select buttons
+            document.querySelectorAll('.select-file-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const fileId = this.getAttribute('data-file-id');
+                    selectFile(query, fileId);
+                });
+            });
+            
+            return; // Exit early as we're showing previews
+        }
+        
+        // Regular result display (not multiple matches)
         // Create results HTML
         let resultsHTML = `
             <div class="bg-white rounded-lg shadow p-4 mb-6">
@@ -174,50 +302,71 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p class="mb-4 text-gray-700">${query}</p>
                 
                 <h3 class="text-lg font-semibold mb-2">Results:</h3>
+            `;
+            
+            // Add file info section if available
+            if (data.file_info && data.file_info.length > 0) {
+                resultsHTML += `
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-3 mb-4">
+                        <p class="font-medium">Source files (showing data for ${data.query_info.years.join(", ")} only):</p>
+                        <ul class="list-disc pl-5 text-gray-600">
+                `;
+                
+                data.file_info.forEach(fileInfo => {
+                    resultsHTML += `<li>${fileInfo.file_name} (${fileInfo.year || 'Unknown year'})</li>`;
+                });
+                
+                resultsHTML += `
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            resultsHTML += `
                 <div class="overflow-x-auto">
                     <table class="min-w-full bg-white border border-gray-300">
                         <thead>
                             <tr>
-        `;
-        
-        // Add table headers
-        if (data.columns && data.columns.length > 0) {
-            console.log('Table columns:', data.columns);
-            data.columns.forEach(column => {
-                resultsHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left">${column}</th>`;
-            });
-        } else {
-            console.warn('No columns found in data');
-        }
-        
-        resultsHTML += `
+            `;
+            
+            // Add table headers
+            if (data.columns && data.columns.length > 0) {
+                console.log('Table columns:', data.columns);
+                data.columns.forEach(column => {
+                    resultsHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left">${column}</th>`;
+                });
+            } else {
+                console.warn('No columns found in data');
+            }
+            
+            resultsHTML += `
                             </tr>
                         </thead>
                         <tbody>
-        `;
-        
-        // Add table rows
-        if (data.data && data.data.length > 0) {
-            console.log('Table data rows:', data.data.length);
-            data.data.forEach(row => {
-                resultsHTML += '<tr>';
-                data.columns.forEach(column => {
-                    resultsHTML += `<td class="px-4 py-2 border-b border-gray-300">${row[column] || ''}</td>`;
-                });
-                resultsHTML += '</tr>';
-            });
-        } else {
-            console.warn('No data rows found');
-            resultsHTML += `
-                <tr>
-                    <td colspan="${data.columns ? data.columns.length : 1}" class="px-4 py-2 text-center text-gray-500">
-                        No data found
-                    </td>
-                </tr>
             `;
-        }
-        
-        resultsHTML += `
+            
+            // Add table rows
+            if (data.data && data.data.length > 0) {
+                console.log('Table data rows:', data.data.length);
+                data.data.forEach(row => {
+                    resultsHTML += '<tr>';
+                    data.columns.forEach(column => {
+                        resultsHTML += `<td class="px-4 py-2 border-b border-gray-300">${row[column] || ''}</td>`;
+                    });
+                    resultsHTML += '</tr>';
+                });
+            } else {
+                console.warn('No data rows found');
+                resultsHTML += `
+                    <tr>
+                        <td colspan="${data.columns ? data.columns.length : 1}" class="px-4 py-2 text-center text-gray-500">
+                            No data found
+                        </td>
+                    </tr>
+                `;
+            }
+            
+            resultsHTML += `
                         </tbody>
                     </table>
                 </div>
@@ -227,6 +376,64 @@ document.addEventListener('DOMContentLoaded', function() {
         // Add to the page
         queryResultsContainer.innerHTML = resultsHTML;
         console.log('Results HTML added to page');
+    }
+    
+    // Function to select a specific file and get complete results
+    function selectFile(query, fileId) {
+        console.log(`Selecting file with ID: ${fileId} for query: ${query}`);
+        showLoading();
+        
+        // Get the CSRF token for POST requests
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Get the currently selected chart type
+        const chartType = getCurrentChartType();
+        
+        // Send selection to backend
+        fetch('/select_file_source/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'X-CSRFToken': csrfToken,
+            },
+            body: new URLSearchParams({
+                'query': query,
+                'file_id': fileId,
+                'chart_type': chartType
+            })
+        })
+        .then(response => {
+            console.log('Received response with status:', response.status);
+            if (!response.ok) {
+                throw new Error(`Network response was not ok: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Received data after file selection:', data);
+            hideLoading();
+            
+            if (data.status === 'error') {
+                console.error('Error from backend:', data.error);
+                showError(data.error);
+                return;
+            }
+            
+            // Display the complete results for the selected file
+            displayQueryResults(query, data);
+        })
+        .catch(error => {
+            console.error('Error selecting file:', error);
+            hideLoading();
+            showError('An error occurred while processing your selection. Please try again.');
+        });
+    }
+    
+    // Helper function to get the current chart type
+    function getCurrentChartType() {
+        // This is a placeholder - in a real implementation, you would get this from
+        // the currently selected chart button or a variable tracking the current selection
+        return 'line'; // Default to line chart for now
     }
     
     // Function to show loading indicator
@@ -310,7 +517,7 @@ function handleHesaResponse(response) {
         if (Array.isArray(response.file_info)) {
             // Multiple files case
             fileInfo = response.file_info.map(fi => {
-                return `${fi.year}: ${fi.file_name || "Unknown file"}`;
+                return `${fi.year || 'Unknown year'}: ${fi.file_name || "Unknown file"}`;
             }).join("<br>");
         } else {
             // Single file case (legacy)
