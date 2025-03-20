@@ -914,7 +914,7 @@ def extract_provider_data(file_path, he_providers, use_substring_match=False):
     
     Parameters:
     - file_path: Path to the CSV file
-    - he_providers: List of HE provider names to filter by
+    - he_providers: List or comma-separated string of HE provider names to filter by
     - use_substring_match: Use substring matching for institution names instead of exact matches
     """
     logger = logging.getLogger(__name__)
@@ -939,6 +939,11 @@ def extract_provider_data(file_path, he_providers, use_substring_match=False):
         if not provider_column:
             logger.warning(f"No provider column found in file: {file_path}")
             return None
+        
+        # Process provider list from string if needed
+        if isinstance(he_providers, str) and ',' in he_providers:
+            he_providers = [p.strip() for p in he_providers.split(',') if p.strip()]
+            logger.info(f"Split provider string into list: {he_providers}")
         
         # Filter by HE providers
         if he_providers and he_providers[0] != "All":
@@ -994,7 +999,7 @@ def extract_provider_data_preview(file_path, he_providers, max_rows=10, requeste
     
     Parameters:
     - file_path: Path to the CSV file
-    - he_providers: List of HE provider names to filter by
+    - he_providers: List or comma-separated string of HE provider names to filter by
     - max_rows: Maximum number of rows to include in the preview (default 10)
     - requested_years: Optional list of years to filter by
     - use_substring_match: Use substring matching for institution names instead of exact matches
@@ -1017,18 +1022,16 @@ def extract_provider_data_preview(file_path, he_providers, max_rows=10, requeste
             if 'provider' in col.lower() or 'institution' in col.lower():
                 provider_column = col
                 break
-            
+        
         if not provider_column:
             logger.warning(f"No provider column found in file: {file_path}")
             return None
         
-        # Identify year column if available
-        year_column = None
-        for col in df.columns:
-            if 'year' in col.lower() or 'academic' in col.lower():
-                year_column = col
-                break
-            
+        # Process provider list from string if needed
+        if isinstance(he_providers, str) and ',' in he_providers:
+            he_providers = [p.strip() for p in he_providers.split(',') if p.strip()]
+            logger.info(f"Split provider string into list: {he_providers}")
+        
         # Filter by HE providers
         if he_providers and he_providers[0] != "All":
             if use_substring_match:
@@ -1183,7 +1186,7 @@ def get_csv_preview(file_path, max_rows=5, institution=None):
     Args:
         file_path: Path to the CSV file
         max_rows: Maximum number of rows to return
-        institution: Optional institution name to filter by (substring match)
+        institution: Optional institution name(s) to filter by (comma-separated list for multiple)
         
     Returns:
         Dictionary with columns and preview data
@@ -1218,6 +1221,12 @@ def get_csv_preview(file_path, max_rows=5, institution=None):
             total_rows = 0
             matched_rows = 0
             
+            # Split institution names if provided
+            institutions = []
+            if institution:
+                institutions = [inst.strip().lower() for inst in institution.split(',') if inst.strip()]
+                logger.info(f"Filtering by institutions: {institutions}")
+            
             # Process rows
             for row in csv_reader:
                 total_rows += 1
@@ -1227,9 +1236,15 @@ def get_csv_preview(file_path, max_rows=5, institution=None):
                     row.extend([''] * (len(headers) - len(row)))
                 
                 # Filter by institution if provided
-                if institution and len(row) > 0:
-                    # The institution column is typically the first column
-                    if not row[0].lower().find(institution.lower()) >= 0:
+                if institutions and len(row) > 0:
+                    # Check if any of the provided institutions match
+                    institution_matches = False
+                    for inst in institutions:
+                        if row[0].lower().find(inst) >= 0:
+                            institution_matches = True
+                            break
+                    
+                    if not institution_matches:
                         continue
                 
                 matched_rows += 1

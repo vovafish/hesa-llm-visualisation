@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const startYearInput = document.getElementById('startYearInput');
     const endYearInput = document.getElementById('endYearInput');
     const maxMatchesInput = document.getElementById('maxMatches');
+    const allInstitutionsCheckbox = document.getElementById('allInstitutionsCheckbox');
     
     console.log('Elements found:', {
         lineChartBtn: !!lineChartBtn,
@@ -37,7 +38,8 @@ document.addEventListener('DOMContentLoaded', function() {
         institutionInput: !!institutionInput,
         startYearInput: !!startYearInput,
         endYearInput: !!endYearInput,
-        maxMatchesInput: !!maxMatchesInput
+        maxMatchesInput: !!maxMatchesInput,
+        allInstitutionsCheckbox: !!allInstitutionsCheckbox
     });
     
     // Sample Queries Button Click Handler
@@ -130,14 +132,40 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Pie chart functionality not implemented yet');
     });
     
+    // All institutions checkbox handler
+    if (allInstitutionsCheckbox && institutionInput) {
+        allInstitutionsCheckbox.addEventListener('change', function() {
+            institutionInput.disabled = this.checked;
+            if (this.checked) {
+                institutionInput.classList.add('bg-gray-100');
+            } else {
+                institutionInput.classList.remove('bg-gray-100');
+            }
+        });
+    }
+    
     // Function to process the query and fetch data
     function processQuery(chartType) {
         // Get values from all input fields
         const query = queryInput.value.trim();
-        const institution = institutionInput.value.trim();
+        let institution = institutionInput.value.trim();
         const startYear = startYearInput.value.trim();
         const endYear = endYearInput.value.trim();
         const maxMatches = maxMatchesInput.value || 3;
+        const searchAllInstitutions = allInstitutionsCheckbox.checked;
+        
+        // Default to University of Leicester if no institution provided and checkbox is not checked
+        if (!searchAllInstitutions) {
+            if (!institution) {
+                institution = "The University of Leicester";
+            } else if (institution !== "The University of Leicester") {
+                // If another institution is entered, include both it and Leicester
+                institution = `The University of Leicester,${institution}`;
+            }
+        } else {
+            // If checkbox is checked, don't filter by institution
+            institution = "";
+        }
         
         console.log('Processing query:', {
             query,
@@ -145,7 +173,8 @@ document.addEventListener('DOMContentLoaded', function() {
             startYear,
             endYear,
             chartType,
-            maxMatches
+            maxMatches,
+            searchAllInstitutions
         });
         
         // Validate inputs
@@ -155,38 +184,35 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // If start year is provided, end year is required
         if (startYear && !endYear) {
-            alert('If you provide a start year, you must also provide an end year.');
+            alert('Please provide an end year when using a start year.');
             hideLoading();
             return;
         }
         
-        // Get the CSRF token for POST requests
+        // Get CSRF token
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
         console.log('CSRF token found:', !!csrfToken);
         
-        // Build URL parameters
-        const params = new URLSearchParams({
-            'query': query,
-            'chart_type': chartType,
-            'max_matches': maxMatches
-        });
-        
-        // Add optional parameters if they exist
+        // Prepare the request parameters
+        const params = new URLSearchParams();
+        params.append('query', query);
         if (institution) params.append('institution', institution);
         if (startYear) params.append('start_year', startYear);
         if (endYear) params.append('end_year', endYear);
+        params.append('chart_type', chartType);
+        params.append('max_matches', maxMatches);
         
-        // Send the query to the backend
-        console.log('Sending fetch request to /api/process-hesa-query/');
-        console.log('Request URL parameters:', params.toString());
+        // Build the API URL 
+        const apiUrl = `/api/process-hesa-query/?${params.toString()}`;
+        console.log('Fetching data from:', apiUrl);
         
-        fetch(`/api/process-hesa-query/?${params.toString()}`, {
+        // Make the request to the backend
+        fetch(apiUrl, {
             method: 'GET',
             headers: {
-                'Content-Type': 'application/json',
                 'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json'
             }
         })
         .then(response => {
@@ -395,7 +421,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 // Add each file preview
                 if (preview.file_previews && preview.file_previews.length > 0) {
-                    preview.file_previews.forEach((filePreview, index) => {
+                    // Add information about total files and preview limits
+                    const totalFiles = preview.file_previews.length;
+                    const initialFilesToShow = 3;
+                    const hasMoreFiles = totalFiles > initialFilesToShow;
+                    
+                    if (hasMoreFiles) {
+                        groupPreviewHTML += `
+                            <div class="mb-2 text-sm text-gray-700">
+                                <p>Showing ${initialFilesToShow} of ${totalFiles} files</p>
+                            </div>
+                        `;
+                    }
+                    
+                    // Display initial previews (up to 3)
+                    preview.file_previews.slice(0, initialFilesToShow).forEach((filePreview, index) => {
                         // Get filename and year
                         const fileName = filePreview.file_name;
                         const fileYear = filePreview.year || 'Unknown';
@@ -458,6 +498,90 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         `;
                     });
+                    
+                    // Add hidden section for additional files if there are more than 3
+                    if (hasMoreFiles) {
+                        groupPreviewHTML += `<div class="hidden-files hidden">`;
+                        
+                        // Add remaining files (beyond the first 3)
+                        preview.file_previews.slice(initialFilesToShow).forEach((filePreview, index) => {
+                            // Get filename and year
+                            const fileName = filePreview.file_name;
+                            const fileYear = filePreview.year || 'Unknown';
+                            
+                            groupPreviewHTML += `
+                                <div class="mt-2 mb-4 pb-4 border-b border-green-300">
+                                    <h4 class="text-lg font-medium text-green-800">${fileName}</h4>
+                                    <p class="text-sm text-gray-600 mb-2">Year: ${fileYear}</p>
+                                    
+                                    <div class="overflow-x-auto mb-3">
+                                        <table class="min-w-full bg-white border border-gray-300">
+                                            <thead>
+                                                <tr>
+                        `;
+                        
+                        // Add table headers
+                        const columns = filePreview.columns || [];
+                        if (columns && columns.length > 0) {
+                            columns.forEach(column => {
+                                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
+                            });
+                        }
+                        
+                        groupPreviewHTML += `
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                        `;
+                        
+                        // Add table rows
+                        const data = filePreview.data || [];
+                        if (data && data.length > 0) {
+                            // Show up to 3 rows in preview
+                            const displayRows = data.slice(0, 3);
+                            displayRows.forEach(row => {
+                                groupPreviewHTML += `<tr>`;
+                                row.forEach(cell => {
+                                    groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`;
+                                });
+                                groupPreviewHTML += `</tr>`;
+                            });
+                        } else {
+                            groupPreviewHTML += `
+                                <tr>
+                                    <td colspan="${columns.length}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
+                                </tr>
+                            `;
+                        }
+                        
+                        groupPreviewHTML += `
+                                        </tbody>
+                                    </table>
+                                </div>
+                                
+                                <!-- Preview information if there are more rows -->
+                                ${filePreview.matched_rows > 3 ? 
+                                `<div class="text-sm text-gray-600 mb-3">
+                                    <p class="italic">Preview showing ${Math.min(data.length, 3)} rows out of ${filePreview.matched_rows}.</p>
+                                </div>` : ''}
+                            </div>
+                        `;
+                        });
+                        
+                        groupPreviewHTML += `</div>`;
+                        
+                        // Add toggle button for showing/hiding additional files
+                        groupPreviewHTML += `
+                            <div class="mb-4">
+                                <button class="toggle-files-btn text-blue-600 hover:text-blue-800 underline flex items-center">
+                                    <span class="toggle-text">Show ${totalFiles - initialFilesToShow} more files</span>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="toggle-icon h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                            </div>
+                        `;
+                    }
                 } else {
                     groupPreviewHTML += `
                         <div class="mt-2 mb-4">
@@ -479,12 +603,44 @@ document.addEventListener('DOMContentLoaded', function() {
                 queryResultsContainer.innerHTML += groupPreviewHTML;
             });
             
-            // Add event listeners to select file buttons
+            // Set up click handlers for the select file buttons
             const selectFileBtns = document.querySelectorAll('.select-file-btn');
             selectFileBtns.forEach(btn => {
                 btn.addEventListener('click', function() {
                     const groupId = this.getAttribute('data-group-id');
                     selectFileSource(groupId);
+                });
+            });
+
+            // Set up toggle handlers for showing/hiding additional files
+            queryResultsContainer.querySelectorAll('.toggle-files-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    // Find the closest hidden-files div
+                    const hiddenFilesDiv = this.closest('.group-preview').querySelector('.hidden-files');
+                    if (hiddenFilesDiv) {
+                        // Toggle the hidden class
+                        hiddenFilesDiv.classList.toggle('hidden');
+                        
+                        // Update the button text and icon
+                        const toggleText = this.querySelector('.toggle-text');
+                        const toggleIcon = this.querySelector('.toggle-icon');
+                        
+                        // Count the number of file preview containers inside the hidden section
+                        // A better approach than using childElementCount which might count non-file elements
+                        const totalHiddenFiles = hiddenFilesDiv.querySelectorAll('.mt-2.mb-4.pb-4').length;
+                        
+                        if (hiddenFilesDiv.classList.contains('hidden')) {
+                            // Files are hidden, update text to show "Show more"
+                            toggleText.textContent = `Show ${totalHiddenFiles} more files`;
+                            // Rotate icon down
+                            toggleIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />`;
+                        } else {
+                            // Files are shown, update text to show "Hide"
+                            toggleText.textContent = 'Hide additional files';
+                            // Rotate icon up
+                            toggleIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />`;
+                        }
+                    }
                 });
             });
         } else {
