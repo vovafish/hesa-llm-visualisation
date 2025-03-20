@@ -13,4 +13,5 @@ urlpatterns = [
     path('test-charts/', views.test_charts, name='test_charts'),
     path('query-builder/', views.query_builder, name='query_builder'),
     path('api/chart/<str:chart_type>/', views.get_chart_data, name='get_chart_data'),
+    path('api/process-hesa-query/', views.process_hesa_query, name='api_process_hesa_query'),
 ]

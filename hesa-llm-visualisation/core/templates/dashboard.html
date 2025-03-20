@@ -10,41 +10,106 @@
     <!-- Query Input Form -->
     <div class="bg-white shadow-md rounded-lg p-6 mb-8">
         <h2 class="text-xl font-semibold mb-4">Enter Your Query</h2>
-        <div class="mb-4">
-            <label for="dashboardQuery" class="block text-sm font-medium text-gray-700 mb-2">Query:</label>
-            <input
-                type="text"
-                id="dashboardQuery"
-                class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g., Find full-time student enrollment and term-time accommodation for The University of Surrey and The University of Leicester in 2015-2016"
-            >
-            <p class="text-sm text-gray-500 mt-1">
-                Your query should include: the data you're looking for, the university name, and the year.
-            </p>
+        
+        <!-- Query input fields -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+                <label for="queryInput" class="block text-sm font-medium text-gray-700 mb-2">Data type query:</label>
+                <input
+                    type="text"
+                    id="queryInput"
+                    class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., student enrollment, term-time accommodation"
+                >
+                <p class="text-sm text-gray-500 mt-1">
+                    Describe what kind of data you're looking for
+                </p>
+            </div>
+            
+            <div>
+                <label for="institutionInput" class="block text-sm font-medium text-gray-700 mb-2">Institution:</label>
+                <input
+                    type="text"
+                    id="institutionInput"
+                    class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., University of Leicester"
+                >
+                <p class="text-sm text-gray-500 mt-1">
+                    Enter a university or institution name
+                </p>
+            </div>
+            
+            <div>
+                <label for="startYearInput" class="block text-sm font-medium text-gray-700 mb-2">Start Year:</label>
+                <input
+                    type="number"
+                    id="startYearInput"
+                    class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 2015"
+                    min="2000" 
+                    max="2023"
+                >
+                <p class="text-sm text-gray-500 mt-1">
+                    Leave empty for all available years
+                </p>
+            </div>
+            
+            <div>
+                <label for="endYearInput" class="block text-sm font-medium text-gray-700 mb-2">End Year:</label>
+                <input
+                    type="number"
+                    id="endYearInput"
+                    class="w-full px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 2020"
+                    min="2000" 
+                    max="2023"
+                >
+                <p class="text-sm text-gray-500 mt-1">
+                    Required if start year is provided
+                </p>
+            </div>
         </div>
         
-        <!-- Sample Queries Button -->
-        <div class="relative">
-            <button 
-                id="sampleQueriesBtn" 
-                class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm flex items-center"
-            >
-                <span>Sample Queries</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-            </button>
-            
-            <!-- Sample Queries Dropdown -->
-            <div id="sampleQueriesDropdown" class="hidden absolute left-0 mt-2 w-96 bg-white shadow-lg rounded-md z-10 border border-gray-200">
-                <div class="p-2">
-                    <button 
-                        class="sample-query-item block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-100 hover:text-blue-900 rounded"
-                        data-query="Find full-time student enrollment and term-time accommodation for The University of Leicester and The University of Warwick in 2015-2016"
-                    >
-                        Find full-time student enrollment and term-time accommodation for The University of Leicester and The University of Warwick in 2015-2016
-                    </button>
+        <div class="flex items-center space-x-4 mb-4">
+            <!-- Sample Queries Button -->
+            <div class="relative">
+                <button 
+                    id="sampleQueriesBtn" 
+                    class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm flex items-center"
+                >
+                    <span>Sample Queries</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                
+                <!-- Sample Queries Dropdown -->
+                <div id="sampleQueriesDropdown" class="hidden absolute left-0 mt-2 w-96 bg-white shadow-lg rounded-md z-10 border border-gray-200">
+                    <div class="p-2">
+                        <button 
+                            class="sample-query-item block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-blue-100 hover:text-blue-900 rounded"
+                            data-query="student enrollment and term-time accommodation"
+                            data-institution="The University of Leicester"
+                            data-start-year="2015"
+                            data-end-year="2016"
+                        >
+                            Student enrollment and term-time accommodation for The University of Leicester (2015-2016)
+                        </button>
+                    </div>
                 </div>
+            </div>
+            
+            <!-- Max Matches Input -->
+            <div>
+                <label for="maxMatches" class="block text-sm font-medium text-gray-700 mb-1">Number of matches to show:</label>
+                <input 
+                    type="number" 
+                    id="maxMatches" 
+                    name="maxMatches" 
+                    min="1" 
+                    value="3" 
+                    class="w-24 px-2 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
             </div>
         </div>
     </div>

@@ -86,7 +86,7 @@ class CSVProcessor:
             else:
                 return {}
         except Exception as e:
-            self.logger.warning(f"Error extracting metadata from {file_path}: {str(e)}")
+            logger.warning(f"Error extracting metadata from {file_path}: {str(e)}")
             return {}
     
     def find_data_start(self, file_path: Path) -> Tuple[int, List[str]]:
@@ -167,8 +167,8 @@ class CSVProcessor:
                 
             logger.info(f"Reading data from line {data_start} with headers: {headers}")
             
-            # Read the CSV file starting from the data section
             try:
+                # Read the CSV file starting from the data section
                 df = pd.read_csv(file_path, skiprows=data_start, names=headers, header=None)
                 logger.info(f"Successfully read {len(df)} rows with {len(df.columns)} columns")
             except Exception as e:
@@ -242,14 +242,81 @@ class CSVProcessor:
                     results[file_path.name] = False
                     continue
                 
-                # Extract metadata
-                metadata = self.extract_metadata(file_path)
+                # Create new empty metadata
+                metadata = {}
+                
+                # Read the first 20 lines to extract title and academic year
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        lines = [line.strip() for line in f.readlines()[:20]]
+                        
+                    # Extract title from the first line only
+                    first_line = lines[0] if lines else ""
+                    
+                    # Log the raw line for debugging
+                    logger.info(f"Raw first line: [{first_line}]")
+                    
+                    # Check if the line contains the title pattern
+                    if 'Title:' in first_line:
+                        # Get everything after 'Title:'
+                        title_text = first_line.split('Title:')[1].strip()
+                        logger.info(f"After split by 'Title:': [{title_text}]")
+                        
+                        # Remove leading commas and quotes
+                        title_text = title_text.lstrip(',').strip('"')
+                        logger.info(f"After cleaning commas/quotes: [{title_text}]")
+                        
+                        # Find the part after "Table XX - " if it exists
+                        table_match = re.search(r'Table\s+\d+\s*-\s*(.*)', title_text)
+                        if table_match:
+                            # Extract just the part after the dash
+                            extracted_title = table_match.group(1).strip()
+                            # Remove any trailing quotes
+                            extracted_title = extracted_title.rstrip('"')
+                            metadata['title'] = extracted_title
+                            logger.info(f"Extracted title: [{extracted_title}]")
+                        else:
+                            # If no table pattern, just use the whole text
+                            cleaned_title = title_text.strip()
+                            metadata['title'] = cleaned_title
+                            logger.info(f"No table pattern found, using cleaned title: [{cleaned_title}]")
+                    else:
+                        logger.warning(f"First line does not contain 'Title:': [{first_line}]")
+                    
+                    # Extract academic year
+                    for line in lines:
+                        # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
+                        if re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
+                            year_match = re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                            metadata['academic_year'] = year_match.group(1).strip()
+                            logger.info(f"Found exact academic year format: {metadata['academic_year']}")
+                            break
+                except Exception as e:
+                    logger.warning(f"Error extracting title/academic year: {str(e)}")
+                
+                # If title not found, use "Unknown title"
+                if 'title' not in metadata:
+                    logger.warning(f"Could not extract title from file content")
+                    metadata['title'] = "Unknown title"
+                
+                # If academic year not found, use "Unknown"
+                if 'academic_year' not in metadata:
+                    logger.warning(f"Could not extract academic year from file content")
+                    metadata['academic_year'] = "Unknown"
                 
                 # Clean data
                 cleaned_df = self.clean_csv(file_path)
                 if cleaned_df is None:
                     results[file_path.name] = False
                     continue
+                
+                # Extract title-based keywords
+                title_keywords = self.extract_keywords_from_title(metadata['title'])
+                metadata['keywords_title'] = title_keywords
+                
+                # Extract column-based keywords
+                column_keywords = self.extract_keywords_from_columns(cleaned_df.columns)
+                metadata['keywords_columns'] = column_keywords
                 
                 # Create metadata line
                 metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
@@ -266,6 +333,10 @@ class CSVProcessor:
                 
                 results[file_path.name] = True
                 logger.info(f"Successfully processed {file_path.name} with metadata")
+                logger.info(f"Title: {metadata.get('title', 'Not found')}")
+                logger.info(f"Academic Year: {metadata.get('academic_year', 'Not found')}")
+                logger.info(f"Title keywords: {title_keywords}")
+                logger.info(f"Column keywords: {column_keywords}")
                 
             except Exception as e:
                 logger.error(f"Error processing {file_path.name}: {str(e)}")
@@ -292,13 +363,80 @@ class CSVProcessor:
             if not self.validate_csv(file_path):
                 return False
             
-            # Extract metadata
-            metadata = self.extract_metadata(file_path)
+            # Create new empty metadata
+            metadata = {}
+            
+            # Read the first 20 lines to extract title and academic year
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = [line.strip() for line in f.readlines()[:20]]
+                    
+                # Extract title from the first line only
+                first_line = lines[0] if lines else ""
+                
+                # Log the raw line for debugging
+                logger.info(f"Raw first line: [{first_line}]")
+                
+                # Check if the line contains the title pattern
+                if 'Title:' in first_line:
+                    # Get everything after 'Title:'
+                    title_text = first_line.split('Title:')[1].strip()
+                    logger.info(f"After split by 'Title:': [{title_text}]")
+                    
+                    # Remove leading commas and quotes
+                    title_text = title_text.lstrip(',').strip('"')
+                    logger.info(f"After cleaning commas/quotes: [{title_text}]")
+                    
+                    # Find the part after "Table XX - " if it exists
+                    table_match = re.search(r'Table\s+\d+\s*-\s*(.*)', title_text)
+                    if table_match:
+                        # Extract just the part after the dash
+                        extracted_title = table_match.group(1).strip()
+                        # Remove any trailing quotes
+                        extracted_title = extracted_title.rstrip('"')
+                        metadata['title'] = extracted_title
+                        logger.info(f"Extracted title: [{extracted_title}]")
+                    else:
+                        # If no table pattern, just use the whole text
+                        cleaned_title = title_text.strip()
+                        metadata['title'] = cleaned_title
+                        logger.info(f"No table pattern found, using cleaned title: [{cleaned_title}]")
+                else:
+                    logger.warning(f"First line does not contain 'Title:': [{first_line}]")
+                
+                # Extract academic year
+                for line in lines:
+                    # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
+                    if re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
+                        year_match = re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                        metadata['academic_year'] = year_match.group(1).strip()
+                        logger.info(f"Found exact academic year format: {metadata['academic_year']}")
+                        break
+            except Exception as e:
+                logger.warning(f"Error extracting title/academic year: {str(e)}")
+            
+            # If title not found, use "Unknown title"
+            if 'title' not in metadata:
+                logger.warning(f"Could not extract title from file content")
+                metadata['title'] = "Unknown title"
+            
+            # If academic year not found, use "Unknown"
+            if 'academic_year' not in metadata:
+                logger.warning(f"Could not extract academic year from file content")
+                metadata['academic_year'] = "Unknown"
             
             # Clean data
             cleaned_df = self.clean_csv(file_path)
             if cleaned_df is None:
                 return False
+            
+            # Extract title-based keywords
+            title_keywords = self.extract_keywords_from_title(metadata['title'])
+            metadata['keywords_title'] = title_keywords
+            
+            # Extract column-based keywords
+            column_keywords = self.extract_keywords_from_columns(cleaned_df.columns)
+            metadata['keywords_columns'] = column_keywords
             
             # Create metadata line
             metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
@@ -314,8 +452,67 @@ class CSVProcessor:
             cleaned_df.to_csv(cleaned_path, index=False, mode='a')
             
             logger.info(f"Successfully processed {file_name} with metadata")
+            logger.info(f"Title: {metadata.get('title', 'Not found')}")
+            logger.info(f"Academic Year: {metadata.get('academic_year', 'Not found')}")
+            logger.info(f"Title keywords: {title_keywords}")
+            logger.info(f"Column keywords: {column_keywords}")
             return True
             
         except Exception as e:
             logger.error(f"Error processing {file_name}: {str(e)}")
-            return False 
+            return False
+
+    def extract_keywords_from_title(self, title: str) -> List[str]:
+        """Extract meaningful keywords from the title."""
+        # Convert to lowercase
+        title_lower = title.lower()
+        
+        # Remove non-alphanumeric characters (except hyphens for compound words)
+        title_clean = re.sub(r'[^\w\s\-]', ' ', title_lower)
+        
+        # Extract words (including hyphenated words)
+        words = re.findall(r'\b\w+(?:-\w+)*\b', title_clean)
+        
+        # Define stop words to remove
+        stop_words = ["a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "from", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "of", "in", "on", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should", "may", "might", "must", "can", "could"]
+        
+        # Filter out stop words and numbers-only entries
+        meaningful_words = [word for word in words if word not in stop_words and not word.isdigit() and len(word) > 2]
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_keywords = [x for x in meaningful_words if not (x in seen or seen.add(x))]
+        
+        return unique_keywords
+
+    def extract_keywords_from_columns(self, columns: List[str]) -> List[str]:
+        """Extract meaningful keywords from column names."""
+        all_keywords = []
+        
+        for column in columns:
+            if not isinstance(column, str):
+                continue
+            
+            # Convert to lowercase
+            col_lower = column.lower()
+            
+            # Remove non-alphanumeric characters (except hyphens)
+            col_clean = re.sub(r'[^\w\s\-]', ' ', col_lower)
+            
+            # Extract words (including hyphenated words)
+            words = re.findall(r'\b\w+(?:-\w+)*\b', col_clean)
+            
+            # Define stop words to remove
+            stop_words = ["a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "from", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "of", "in", "on", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will", "would", "shall", "should", "may", "might", "must", "can", "could"]
+            
+            # Filter out stop words and short words
+            meaningful_words = [word for word in words if word not in stop_words and len(word) > 2]
+            
+            # Add to keywords list
+            all_keywords.extend(meaningful_words)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_keywords = [x for x in all_keywords if not (x in seen or seen.add(x))]
+        
+        return unique_keywords 
