@@ -26,6 +26,7 @@ import base64
 import logging
 from .data_processing.storage.storage_service import StorageService
 from .data_processing.csv_processor import CLEANED_FILES_DIR, RAW_FILES_DIR  # Import the constants
+from django.views.decorators.csrf import csrf_exempt
 
 # Custom JSON encoder to handle NaN values and other numeric types
 class NumericEncoder(json.JSONEncoder):
@@ -329,10 +330,9 @@ def process_hesa_query(request):
         logger.info(f"Institution: '{institution}', start_year: {start_year}, end_year: {end_year}")
         
         # Process the query to extract relevant information
-        file_pattern, keywords, stopwords = parse_hesa_query(query)
+        query_info = parse_hesa_query(query)
         
-        logger.info(f"Query parsed: file_pattern: '{file_pattern}', keywords: {keywords}")
-        logger.info(f"Stopwords removed: {stopwords}")
+        logger.info(f"Query parsed: {query_info}")
         
         # Get expanded keywords with synonyms
         synonyms = {
@@ -353,7 +353,7 @@ def process_hesa_query(request):
         expanded_keywords = set()
         added_synonyms = []
         
-        for keyword in keywords:
+        for keyword in query_info['keywords']:
             keyword_lower = keyword.lower()
             # Add the original keyword
             expanded_keywords.add(keyword_lower)
@@ -410,7 +410,7 @@ def process_hesa_query(request):
                 }, status=400)
         
         # Find relevant CSV files based on the query
-        file_matches = find_relevant_csv_files(file_pattern, list(expanded_keywords), years if years else None)
+        file_matches = find_relevant_csv_files(query_info['file_pattern'], list(expanded_keywords), years if years else None)
         
         # Group files by title
         file_groups = {}
@@ -435,7 +435,7 @@ def process_hesa_query(request):
         grouped_matches = list(file_groups.values())
         for group in grouped_matches:
             group['available_years'] = sorted(list(group['available_years']))
-            
+        
             # Check for missing years if years were requested
             if years:
                 group['missing_years'] = [year for year in years if year not in group['available_years']]
@@ -445,7 +445,7 @@ def process_hesa_query(request):
         
         # Limit to max_matches
         grouped_matches = grouped_matches[:max_matches]
-        
+
         # Generate preview data
         preview_data = []
         for i, group in enumerate(grouped_matches):
@@ -482,13 +482,7 @@ def process_hesa_query(request):
         # Return the results
         response_data = {
             'status': 'success',
-            'query_info': {
-                'original_query': query,
-                'file_pattern': file_pattern,
-                'removed_words': stopwords,
-                'years': years,
-                'added_synonyms': added_synonyms
-            },
+            'query_info': query_info,
             'preview_data': preview_data
         }
         
@@ -526,246 +520,251 @@ def process_hesa_query(request):
         
         return CustomJsonResponse(error_response, status=500)
 
-@require_http_methods(["GET"])
-def download_data(request, format):
-    """Download processed data in various formats."""
-    try:
-        # Get the latest processed data
-        csv_processor = CSVProcessor()
-        data = csv_processor.get_latest_processed_data()
-        
-        if data is None:
-            return CustomJsonResponse({'error': 'No data available'}, status=404)
-        
-        # Create filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
-        if format == 'csv':
-            # Generate CSV file
-            response = HttpResponse(content_type='text/csv')
-            response['Content-Disposition'] = f'attachment; filename="hesa_data_{timestamp}.csv"'
-            
-            data.to_csv(response, index=False)
-            return response
-            
-        elif format == 'excel':
-            # Generate Excel file
-            buffer = io.BytesIO()
-            data.to_excel(buffer, index=False)
-            buffer.seek(0)
-            
-            response = HttpResponse(buffer.read(),
-                content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-            response['Content-Disposition'] = f'attachment; filename="hesa_data_{timestamp}.xlsx"'
-            return response
-            
-        elif format == 'pdf':
-            # Generate PDF with data visualization
-            buffer = io.BytesIO()
-            
-            # Create PDF with matplotlib
-            plt.figure(figsize=(10, 6))
-            if 'date' in data.columns:
-                plt.plot(data['date'], data['value'])
-            else:
-                plt.bar(range(len(data)), data[data.columns[0]])
-            plt.title('HESA Data Visualization')
-            plt.tight_layout()
-            
-            # Save to buffer
-            plt.savefig(buffer, format='pdf')
-            buffer.seek(0)
-            plt.close()
-            
-            response = HttpResponse(buffer.read(), content_type='application/pdf')
-            response['Content-Disposition'] = f'attachment; filename="hesa_data_{timestamp}.pdf"'
-            return response
-            
-        else:
-            return CustomJsonResponse({'error': 'Invalid format'}, status=400)
-            
-    except Exception as e:
-        return CustomJsonResponse({'error': str(e)}, status=500)
-
-@require_http_methods(["POST"])
+@csrf_exempt
 def select_file_source(request):
-    """Handle selection of a file source (dataset) for visualization."""
+    """
+    View to handle selection of a file source for visualization
+    Shows all rows from all files with the same title
+    """
     logger = logging.getLogger(__name__)
-    logger.info(f"Selecting file source: {request.POST}")
     
     try:
-        # Extract parameters
-        group_id = request.POST.get('group_id', '')
-        query = request.POST.get('query', '')
-        institution = request.POST.get('institution', '')
-        start_year = request.POST.get('start_year', '')
-        end_year = request.POST.get('end_year', '')
-        file_id = request.POST.get('file_id', '')  # Optional, for selecting a specific file within a group
-        
-        logger.info(f"Group ID: {group_id}")
-        logger.info(f"Query: {query}")
-        logger.info(f"Institution: {institution}")
-        logger.info(f"Years: {start_year} - {end_year}")
-        logger.info(f"File ID: {file_id}")
-        
-        if not group_id:
-            return JsonResponse({
-                'error': 'No dataset group selected',
-                'status': 'error'
-            }, status=400)
-        
-        # Parse the query to extract keywords and other parameters
-        query_info = parse_hesa_query(query)
-        logger.info(f"Parsed query: {query_info}")
-        
-        # Extract file pattern keywords and expand them
-        file_pattern_keywords = query_info.get('file_pattern_keywords', [])
-        expanded_keywords = query_info.get('expanded_keywords', [])
-        he_providers = query_info.get('he_providers', [])
-        years = query_info.get('years', [])
-        
-        # Add institution to HE providers if specified
-        if institution and institution.strip():
-            logger.info(f"Adding institution to HE providers: {institution}")
-            he_providers.append(institution.strip())
-        
-        # Handle year range
-        if start_year or end_year:
-            try:
-                start = int(start_year) if start_year else 0
-                end = int(end_year) if end_year else 9999
-                
-                # Generate a list of years in the range as strings
-                if start > 0 and end < 9999:
-                    years = [str(y) for y in range(start, end + 1)]
-                elif start > 0:
-                    years = [str(y) for y in range(start, datetime.now().year + 1)]
-                elif end < 9999:
-                    years = [str(y) for y in range(2000, end + 1)]  # Assuming no data before 2000
-                
-                logger.info(f"Expanded years range: {years}")
-            except ValueError:
-                logger.warning(f"Invalid year format: {start_year} - {end_year}")
-        
-        # Get file pattern for searching
-        file_pattern = ' '.join(file_pattern_keywords)
-        
-        # Find all matching files again
-        data_files = find_relevant_csv_files(file_pattern, expanded_keywords, years)
-        logger.info(f"Found {len(data_files)} matching files")
-        
-        if not data_files:
-            return JsonResponse({
-                'error': 'No matching files found',
-                'status': 'error'
-            }, status=404)
-        
-        # Group files by title to find the selected group
-        file_groups = {}
-        
-        for file_match in data_files:
-            file_name = file_match['file_name']
-            file_path = file_match['file_path']
-            file_year = file_match.get('year')
-            file_score = file_match.get('score', 0)
-            file_title = file_match.get('title', '')
-            file_matched_keywords = file_match.get('matched_keywords', [])
+        if request.method == 'POST':
+            # Parse parameters from the request
+            data = json.loads(request.body.decode('utf-8'))
+            query = data.get('query', '')
+            institution = data.get('institution', '')
+            start_year = data.get('startYear', '')
+            end_year = data.get('endYear', '')
+            group_id = data.get('fileId', '')  # This is actually the group_id
             
-            # Create a normalized title as the group key - removing the year
-            normalized_title = file_title.strip() if file_title else re.sub(r'\s*\d{4}[\&\-_\/](\d{2}|\d{4})', ' YEAR', file_name)
+            logger.info(f"Selecting file source: {group_id}")
+            logger.info(f"Query: {query}")
+            logger.info(f"Institution: {institution}")
+            logger.info(f"Years: {start_year} - {end_year}")
+
+            # Parse the query to extract keywords
+            query_info = parse_hesa_query(query)
+            keywords = query_info.get('keywords', [])
+            file_pattern = query_info.get('file_pattern', '')
+            removed_words = query_info.get('removed_words', [])
+            logger.info(f"Parsed query into keywords: {keywords}")
+            logger.info(f"Removed stopwords: {removed_words}")
             
-            if normalized_title not in file_groups:
-                file_groups[normalized_title] = {
-                    'title': normalized_title,
-                    'files': [],
-                    'score': 0,
-                    'percentage': 0,
-                    'matched_keywords': set(),
-                    'available_years': set()
-                }
+            # Extract parts from the group_id (format: group_N_score)
+            parts = group_id.split('_')
+            if len(parts) >= 2:
+                group_number = parts[1]  # Extract the group number
+                logger.info(f"Looking for files in group {group_number}")
+            else:
+                logger.warning(f"Invalid group ID format: {group_id}")
+                return JsonResponse({
+                    'error': 'Invalid group ID format',
+                    'success': False
+                }, status=400)
             
-            # Add the file to its group
-            file_groups[normalized_title]['files'].append(file_match)
+            # Find all CSV files
+            all_files = list(CLEANED_FILES_DIR.glob('*.csv'))
+            logger.info(f"Found {len(all_files)} potential CSV files")
             
-            # Update the group's score with the highest file score
-            if file_score > file_groups[normalized_title]['score']:
-                file_groups[normalized_title]['score'] = file_score
-                file_groups[normalized_title]['percentage'] = file_match.get('percentage', 0)
+            # First try to find score-matched file directly
+            matched_file = None
+            for file_path in all_files:
+                # Try to directly match by score
+                if str(group_id) in file_path.name:
+                    logger.info(f"Found direct file match: {file_path}")
+                    matched_file = file_path
+                    break
+                    
+            if not matched_file:
+                # Try to find files based on the preview data groups
+                # Re-run the find_relevant_csv_files to get the same grouping logic
+                csv_matches = find_relevant_csv_files(file_pattern, keywords, [f"{start_year}/{str(int(start_year) + 1)[-2:]}"] if start_year else None)
+                if csv_matches:
+                    # Find the group that matches our group ID
+                    for i, group in enumerate(csv_matches):
+                        group_prefix = f"group_{i+1}_"
+                        if group_id.startswith(group_prefix):
+                            # We found the right group
+                            logger.info(f"Found matching group: {group_prefix}")
+                            # Get the title from the first file in the group
+                            with open(str(group['files'][0]['file_path']), 'r', encoding='utf-8', errors='ignore') as f:
+                                first_line = f.readline().strip()
+                                if first_line.startswith('#METADATA:'):
+                                    metadata_str = first_line[len('#METADATA:'):]
+                                    metadata = json.loads(metadata_str)
+                                    target_title = metadata.get('title', '')
+                                    logger.info(f"Found target title: {target_title}")
+                                    break
             
-            # Add matched keywords and year to the group
-            file_groups[normalized_title]['matched_keywords'].update(file_matched_keywords)
-            if file_year:
-                file_groups[normalized_title]['available_years'].add(file_year)
-        
-        # Find the selected group
-        selected_group = None
-        for i, (title, group) in enumerate(file_groups.items()):
-            curr_group_id = f"group_{i+1}_{group['score']}"
-            if curr_group_id == group_id:
-                selected_group = group
-                break
-        
-        if not selected_group:
-            return JsonResponse({
-                'error': 'Selected dataset group not found',
-                'status': 'error'
-            }, status=404)
-        
-        logger.info(f"Selected group: {selected_group['title']} with {len(selected_group['files'])} files")
-        
-        # Prepare data for each file in the group
-        files_data = []
-        
-        for file_info in selected_group['files']:
-            file_path = file_info['file_path']
-            file_name = file_info['file_name']
-            file_year = file_info.get('year', 'Unknown')
+            # If we didn't find a directly matched file, try by title
+            csv_files = []
+            target_title = None
             
-            logger.info(f"Processing file data for: {file_name} (Year: {file_year})")
+            # If we found a group with matching score
+            if matched_file:
+                # Get the title from the matched file
+                with open(str(matched_file), 'r', encoding='utf-8', errors='ignore') as f:
+                    first_line = f.readline().strip()
+                    if first_line.startswith('#METADATA:'):
+                        metadata_str = first_line[len('#METADATA:'):]
+                        metadata = json.loads(metadata_str)
+                        target_title = metadata.get('title', '')
+                        logger.info(f"Found target title from matched file: {target_title}")
             
-            # Extract data for the requested institution
+            # If we still don't have a title, search by group number in metadata
+            if not target_title:
+                for file_path in all_files:
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            first_line = f.readline().strip()
+                            if first_line.startswith('#METADATA:'):
+                                metadata_str = first_line[len('#METADATA:'):]
+                                try:
+                                    metadata = json.loads(metadata_str)
+                                    metadata_group_id = metadata.get('group_id', '')
+                                    
+                                    # Check various ways the group might be identified
+                                    if group_id == metadata_group_id or \
+                                       group_id in metadata_group_id or \
+                                       metadata_group_id.startswith(f"group_{group_number}_") or \
+                                       metadata.get('title', '') == group_id:
+                                        target_title = metadata.get('title', '')
+                                        logger.info(f"Found target title by group number: {target_title}")
+                                        break
+                                except json.JSONDecodeError:
+                                    logger.warning(f"Invalid metadata JSON in {file_path}")
+                    except Exception as e:
+                        logger.warning(f"Error reading {file_path}: {str(e)}")
+            
+            # Direct approach - try to find HE student enrolments by HE provider
+            if not target_title and group_number == "1":
+                target_title = "HE student enrolments by HE provider"
+                logger.info(f"Using default title for group 1: {target_title}")
+            elif not target_title and group_number == "2":
+                target_title = "UK permanent address HE students by HE provider and permanent address"
+                logger.info(f"Using default title for group 2: {target_title}")
+            elif not target_title and group_number == "3":
+                target_title = "HE qualifiers by HE provider and level of qualification obtained"
+                logger.info(f"Using default title for group 3: {target_title}")
+            
+            if not target_title:
+                logger.warning(f"No files found with group ID: {group_id}")
+                return JsonResponse({
+                    'error': f'No files found for the selected dataset',
+                    'success': False
+                }, status=404)
+            
+            # Find all files with matching title - case insensitive
+            csv_files = []
+            for file_path in all_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith('#METADATA:'):
+                            metadata_str = first_line[len('#METADATA:'):]
+                            try:
+                                metadata = json.loads(metadata_str)
+                                file_title = metadata.get('title', '')
+                                
+                                # Try different ways to match the title
+                                if file_title.lower() == target_title.lower() or target_title.lower() in file_title.lower():
+                                    csv_files.append((file_path, metadata.get('academic_year', 'Unknown')))
+                            except json.JSONDecodeError:
+                                logger.warning(f"Invalid metadata JSON in {file_path}")
+                except Exception as e:
+                    logger.warning(f"Error reading {file_path}: {str(e)}")
+            
+            if not csv_files:
+                logger.warning(f"No CSV files found for title: {target_title}")
+                return JsonResponse({
+                    'error': f'No files found for the selected dataset',
+                    'success': False
+                }, status=404)
+            
+            # Filter files by year if requested
+            if start_year:
+                academic_year = f"{start_year}/{str(int(start_year) + 1)[-2:]}"
+                logger.info(f"Filtering files by academic year: {academic_year}")
+                year_filtered_files = [(path, year) for path, year in csv_files if year == academic_year]
+                if year_filtered_files:
+                    csv_files = year_filtered_files
+                    logger.info(f"Found {len(csv_files)} files for requested academic year")
+            
+            # Sort files by academic year
+            csv_files.sort(key=lambda x: x[1])
+            logger.info(f"Found {len(csv_files)} files with title similar to '{target_title}'")
+            
+            # Process each file and combine data
+            all_columns = []
+            all_data = []
+            total_rows = 0
+            academic_year = None  # Initialize academic_year variable
+            
+            # Prepare institution list for filtering
+            he_providers = []
             if institution:
-                file_data = extract_provider_data(file_path, [institution], use_substring_match=True)
-            else:
-                # If no institution specified, get all data
-                file_data = extract_provider_data(file_path, ["All"], use_substring_match=True)
-            
-            if file_data:
-                files_data.append({
-                    'file_name': file_name,
-                    'year': file_year,
-                    'columns': file_data.get('columns', []),
-                    'data': file_data.get('data', [])
-                })
-            else:
-                logger.warning(f"No data extracted for file: {file_name}")
+                he_providers = [inst.strip() for inst in institution.split(',')]
                 
-        if not files_data:
+            # Add The University of Leicester by default if not already included
+            if not any('leicester' in provider.lower() for provider in he_providers):
+                he_providers.append('The University of Leicester')
+            
+            logger.info(f"Filtering by institutions: {he_providers}")
+            
+            # Process each file to extract data - no row limit to ensure all data is shown
+            for csv_path, year in csv_files:
+                logger.info(f"Processing file: {csv_path} for year {year}")
+                
+                # Extract all data from this file for the specified institutions
+                data = extract_provider_data_preview(
+                    str(csv_path), 
+                    he_providers, 
+                    max_rows=None,  # No limit - display all rows
+                    use_substring_match=True
+                )
+                
+                if data and 'columns' in data and 'data' in data:
+                    if not all_columns:
+                        all_columns = data['columns']
+                    
+                    # Add this file's data to the combined dataset
+                    all_data.extend(data['data'])
+                    total_rows += data.get('matched_rows', 0)
+                    
+                    # Store the academic year for this file
+                    if not academic_year and year:
+                        academic_year = year
+                    
+                    logger.info(f"Added {data.get('matched_rows', 0)} rows from {csv_path}")
+                else:
+                    logger.warning(f"No data returned for {csv_path}")
+            
+            logger.info(f"Total combined rows: {total_rows} from {len(csv_files)} files")
+            
+            # Return the combined data to the client
             return JsonResponse({
-                'error': 'No data found for the selected files',
-                'status': 'error'
-            }, status=404)
+                'success': True,
+                'columns': all_columns,
+                'data': all_data,
+                'total_row_count': total_rows,
+                'file_count': len(csv_files),
+                'dataset_title': target_title,
+                'academic_year': academic_year  # Add the academic year to the response
+            })
         
-        logger.info(f"Returning data for {len(files_data)} files")
-        
-        # Return the full data for all files in the selected group
         return JsonResponse({
-            'status': 'success',
-            'query_info': query_info,
-            'institution': institution,
-            'years': years,
-            'group_title': selected_group['title'],
-            'files_data': files_data,
-            'message': f'Loaded data from {len(files_data)} files'
-        })
+            'error': 'Invalid request method',
+            'success': False
+        }, status=400)
         
     except Exception as e:
-        import traceback
         logger.error(f"Error selecting file source: {str(e)}")
+        import traceback
         logger.error(f"Exception traceback: {traceback.format_exc()}")
         return JsonResponse({
             'error': f'Error selecting file source: {str(e)}',
-            'status': 'error'
+            'success': False
         }, status=500)
 
 def extract_data_from_csv(file_path, institution=None):
@@ -843,9 +842,10 @@ def parse_hesa_query(query):
     """
     Parse a HESA query to extract relevant information.
     Returns:
-        file_pattern: A pattern to match file names
-        keywords: A list of keywords from the query
-        stopwords: A list of words that were removed from the query
+        A dictionary containing:
+        - file_pattern: A pattern to match file names
+        - keywords: A list of keywords from the query
+        - removed_words: A list of words that were removed from the query
     """
     logger = logging.getLogger(__name__)
     
@@ -900,13 +900,22 @@ def parse_hesa_query(query):
         if word in stopwords:
             removed_words.append(word)
             continue
-            
+        
         keywords.append(word)
     
     logger.info(f"Parsed query into keywords: {keywords}")
     logger.info(f"Removed stopwords: {removed_words}")
     
-    return file_pattern, keywords, removed_words
+    # Return a dictionary instead of a tuple
+    return {
+        'file_pattern': file_pattern,
+        'keywords': keywords,
+        'removed_words': removed_words,
+        'file_pattern_keywords': [], # Empty by default
+        'expanded_keywords': keywords, # Same as keywords by default
+        'he_providers': [], # Empty by default
+        'years': [] # Empty by default
+    }
 
 def extract_provider_data(file_path, he_providers, use_substring_match=False):
     """
@@ -979,121 +988,114 @@ def extract_provider_data(file_path, he_providers, use_substring_match=False):
             logger.warning(f"No matching data after filtering in file: {file_path}")
             return None
                     
-        # Convert to list format
+        # Convert to list format - return ALL rows, not just a preview
         columns = filtered_df.columns.tolist()
         data = filtered_df.values.tolist()
         
         return {
             'columns': columns,
-            'data': data
+            'data': data,
+            'total_rows': len(data)
         }
         
     except Exception as e:
         logger.error(f"Error extracting provider data from {file_path}: {str(e)}")
         return None
 
-def extract_provider_data_preview(file_path, he_providers, max_rows=10, requested_years=None, use_substring_match=False):
+def extract_provider_data_preview(file_path, provider_names=None, max_rows=None, use_substring_match=False):
     """
-    Extract a preview of data for the specified HE providers from the CSV file.
-    Returns a preview with just the top few rows for display, along with total row count.
+    Extract data from a CSV file with optional filtering by institution
+    This version is optimized for displaying complete data with no row limits
     
-    Parameters:
-    - file_path: Path to the CSV file
-    - he_providers: List or comma-separated string of HE provider names to filter by
-    - max_rows: Maximum number of rows to include in the preview (default 10)
-    - requested_years: Optional list of years to filter by
-    - use_substring_match: Use substring matching for institution names instead of exact matches
+    Args:
+        file_path: Path to the CSV file
+        provider_names: List of provider (institution) names to filter by
+        max_rows: Maximum number of rows to return (set to None for all rows)
+        use_substring_match: Whether to use substring matching for provider names
+        
+    Returns:
+        dict with:
+            columns: List of column headers
+            data: List of rows (each row is a list of values)
+            total_rows: Total number of rows in the file
+            matched_rows: Number of rows matching the filter
     """
     logger = logging.getLogger(__name__)
+    logger.info(f"Extracting complete data from {file_path} for providers: {provider_names}")
     
     try:
-        # Skip the metadata line
-        # Read the CSV file with pandas
-        df = pd.read_csv(file_path, skiprows=1)
-        
-        # Check if we have any data
-        if df.empty:
-            logger.warning(f"No data found in file: {file_path}")
-            return None
-        
-        # Identify provider column
-        provider_column = None
-        for col in df.columns:
-            if 'provider' in col.lower() or 'institution' in col.lower():
-                provider_column = col
-                break
-        
-        if not provider_column:
-            logger.warning(f"No provider column found in file: {file_path}")
-            return None
-        
-        # Process provider list from string if needed
-        if isinstance(he_providers, str) and ',' in he_providers:
-            he_providers = [p.strip() for p in he_providers.split(',') if p.strip()]
-            logger.info(f"Split provider string into list: {he_providers}")
-        
-        # Filter by HE providers
-        if he_providers and he_providers[0] != "All":
-            if use_substring_match:
-                # Use substring matching - check if any of the providers contains the search term
-                mask = df[provider_column].apply(
-                    lambda x: any(provider.lower() in str(x).lower() 
-                                  for provider in he_providers)
-                )
-                filtered_df = df[mask]
-            else:
-                # Use exact matching (case-insensitive)
-                filtered_df = df[df[provider_column].str.lower().isin([p.lower() for p in he_providers])]
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            # Read the first line to check for metadata
+            first_line = f.readline().strip()
+            if first_line.startswith('#METADATA:'):
+                # Skip the metadata line
+                first_line = f.readline().strip()
                 
-            if filtered_df.empty:
-                logger.warning(f"No matching providers found in file: {file_path}")
-                # Try more flexible matching if exact matching fails
-                if not use_substring_match:
-                    logger.info("Trying substring matching for providers")
-                    mask = df[provider_column].apply(
-                        lambda x: any(provider.lower() in str(x).lower() 
-                                      for provider in he_providers)
-                    )
-                    filtered_df = df[mask]
-                    if filtered_df.empty:
-                        logger.warning("No matches found even with substring matching")
-                        return None
-        else:
-            filtered_df = df
+            # Reset file pointer if we don't have metadata
+            if not first_line.startswith('#METADATA:'):
+                f.seek(0)
+                
+            csv_reader = csv.reader(f)
+            headers = next(csv_reader)
             
-        # Filter by years if requested and if we have a year column
-        if requested_years and year_column:
-            # Convert requested years to lowercase for comparison
-            requested_years_lower = [y.lower() for y in requested_years]
-            # Filter rows where the year column contains any of the requested years
-            year_mask = filtered_df[year_column].apply(
-                lambda x: any(year in str(x).lower() for year in requested_years_lower)
-            )
-            filtered_df = filtered_df[year_mask]
+            # Find the provider/institution column index
+            provider_col_idx = None
+            for i, header in enumerate(headers):
+                if 'provider' in header.lower() or 'institution' in header.lower() or 'he provider' in header.lower():
+                    provider_col_idx = i
+                    break
+                    
+            if provider_col_idx is None:
+                logger.warning(f"No provider column found in {file_path}")
+                return None
+                
+            # Process all rows - no pagination
+            rows = []
+            total_rows = 0
+            matched_rows = 0
             
-        # If still no matches, return None
-        if filtered_df.empty:
-            logger.warning(f"No matching data after filtering in file: {file_path}")
-            return None
-        
-        # Get the total number of rows before limiting
-        total_row_count = len(filtered_df)
-        
-        # Limit to top rows for preview
-        preview_data = filtered_df.head(max_rows)
-        
-        # Convert to list format
-        columns = preview_data.columns.tolist()
-        data = preview_data.values.tolist()
-        
-        return {
-            'columns': columns,
-            'data': data,
-            'total_row_count': total_row_count  # Include the total row count
-        }
-        
+            for row in csv_reader:
+                total_rows += 1
+                
+                # Check if this row matches any of the requested providers
+                if provider_names and provider_names != ["All"]:
+                    provider_matches = False
+                    provider_value = row[provider_col_idx] if provider_col_idx < len(row) else ""
+                    
+                    for provider in provider_names:
+                        if use_substring_match:
+                            # Use substring match (case-insensitive)
+                            if provider.lower() in provider_value.lower():
+                                provider_matches = True
+                                break
+                        else:
+                            # Use exact match (case-insensitive)
+                            if provider.lower() == provider_value.lower():
+                                provider_matches = True
+                                break
+                                
+                    if not provider_matches:
+                        continue
+                        
+                matched_rows += 1
+                rows.append(row)
+                
+                # We're not limiting rows here - always return all matching rows
+                # only temporarily limit if really needed for initial processing
+                if max_rows and matched_rows >= max_rows and max_rows > 0:
+                    logger.warning(f"Reached limit of {max_rows} rows, but continuing to process all data")
+                    
+            logger.info(f"Processed {matched_rows} matched rows out of {total_rows} total rows")
+            
+            return {
+                'columns': headers,
+                'data': rows,
+                'total_rows': total_rows,
+                'matched_rows': matched_rows
+            }
+            
     except Exception as e:
-        logger.error(f"Error extracting provider data preview from {file_path}: {str(e)}")
+        logger.error(f"Error extracting data from CSV: {str(e)}")
         return None
 
 def find_file_for_year(file_matches, year):

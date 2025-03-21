@@ -4,6 +4,28 @@
  * Simplified version with basic query handling.
  */
 
+// Add the getCsrfToken function at the top of the file, before document.addEventListener
+function getCsrfToken() {
+    // Django puts the CSRF token in a cookie named csrftoken
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+        
+    if (cookieValue) {
+        return cookieValue;
+    }
+    
+    // If not in cookies, get from the hidden csrf input field that Django provides
+    const csrfElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfElement) {
+        return csrfElement.value;
+    }
+    
+    console.error('CSRF token not found. This may cause API requests to fail.');
+    return '';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard JavaScript loaded');
     
@@ -184,11 +206,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        if (startYear && !endYear) {
-            alert('Please provide an end year when using a start year.');
-            hideLoading();
-            return;
-        }
+        // Note: We're removing the validation that requires end year when start year is provided
+        // This allows searching for a single academic year when only start year is provided
         
         // Get CSRF token
         const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -293,6 +312,8 @@ document.addEventListener('DOMContentLoaded', function() {
             if (institution) queryDescription += ` for ${institution}`;
             if (startYear && endYear) {
                 queryDescription += ` (${startYear}-${endYear})`;
+            } else if (startYear) {
+                queryDescription += ` (${startYear}/${startYear.toString().slice(-2)*1+1})`;  // e.g., 2015/16
             }
             
             // Generate UI regarding removed words and added synonyms
@@ -351,9 +372,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <p class="font-medium">Matched keywords:</p>
                                 <ul class="mt-1 list-disc list-inside text-gray-600">
                                     ${matchInfo.map(keyword => `<li>${keyword}</li>`).join('')}
-                                </ul>
-                            </div>
-                        `;
+                            </ul>
+                        </div>
+                    `;
                     }
                 }
                 
@@ -446,55 +467,60 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <p class="text-sm text-gray-600 mb-2">Year: ${fileYear}</p>
                                 
                                 <div class="overflow-x-auto mb-3">
-                                    <table class="min-w-full bg-white border border-gray-300">
-                                        <thead>
-                                            <tr>
-                        `;
-                        
-                        // Add table headers
+                            <table class="min-w-full bg-white border border-gray-300">
+                                <thead>
+                                    <tr>
+                                `;
+                                
+                // Add table headers
                         const columns = filePreview.columns || [];
-                        if (columns && columns.length > 0) {
-                            columns.forEach(column => {
+                if (columns && columns.length > 0) {
+                    columns.forEach(column => {
                                 groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
-                            });
-                        }
-                        
+                    });
+                }
+                
+                // Add Academic Year header as the last column
+                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
+                
                         groupPreviewHTML += `
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                        `;
-                        
-                        // Add table rows
+                                    </tr>
+                                </thead>
+                                <tbody>
+                            `;
+                
+                // Add table rows
                         const data = filePreview.data || [];
-                        if (data && data.length > 0) {
+                if (data && data.length > 0) {
                             // Show up to 3 rows in preview
-                            const displayRows = data.slice(0, 3);
-                            displayRows.forEach(row => {
+                    const displayRows = data.slice(0, 3);
+                    displayRows.forEach(row => {
                                 groupPreviewHTML += `<tr>`;
-                                row.forEach(cell => {
+                        row.forEach(cell => {
                                     groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`;
                                 });
+                                // Add Academic Year cell to each row
+                                groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${formatAcademicYear(filePreview.year) || ''}</td>`;
                                 groupPreviewHTML += `</tr>`;
                             });
                         } else {
                             groupPreviewHTML += `
                                 <tr>
-                                    <td colspan="${columns.length}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
+                                    <td colspan="${columns.length + 1}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
                                 </tr>
                             `;
                         }
                         
                         groupPreviewHTML += `
-                                        </tbody>
-                                    </table>
-                                </div>
-                                
+                                </tbody>
+                            </table>
+                        </div>
+                        
                                 <!-- Preview information if there are more rows -->
                                 ${filePreview.matched_rows > 3 ? 
-                                `<div class="text-sm text-gray-600 mb-3">
+                        `<div class="text-sm text-gray-600 mb-3">
                                     <p class="italic">Preview showing ${Math.min(data.length, 3)} rows out of ${filePreview.matched_rows}.</p>
-                                </div>` : ''}
+                        </div>` : ''}
                             </div>
                         `;
                     });
@@ -528,6 +554,9 @@ document.addEventListener('DOMContentLoaded', function() {
                             });
                         }
                         
+                        // Add Academic Year header as the last column for hidden files too
+                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
+                        
                         groupPreviewHTML += `
                                             </tr>
                                         </thead>
@@ -544,12 +573,14 @@ document.addEventListener('DOMContentLoaded', function() {
                                 row.forEach(cell => {
                                     groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`;
                                 });
+                                // Add Academic Year cell to each row
+                                groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${formatAcademicYear(filePreview.year) || ''}</td>`;
                                 groupPreviewHTML += `</tr>`;
                             });
                         } else {
                             groupPreviewHTML += `
                                 <tr>
-                                    <td colspan="${columns.length}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
+                                    <td colspan="${columns.length + 1}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
                                 </tr>
                             `;
                         }
@@ -655,169 +686,254 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // Function to select a file source
-    function selectFileSource(groupId) {
-        console.log('Selecting file source with group ID:', groupId);
-        
-        // Get values from all input fields
-        const query = queryInput.value.trim();
-        const institution = institutionInput.value.trim();
-        const startYear = startYearInput.value.trim();
-        const endYear = endYearInput.value.trim();
-        
+    function selectFileSource(fileId) {
         // Show loading state
         showLoading();
         
-        // Get CSRF token
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        // Get the current query parameters
+        const query = document.getElementById('queryInput').value;
+        const institution = document.getElementById('institutionInput').value;
+        const startYear = document.getElementById('startYearInput').value;
+        const endYear = document.getElementById('endYearInput').value;
         
-        // Send the selection to the backend
+        console.log(`Selecting file source: ${fileId} with query: ${query}, institution: ${institution}, years: ${startYear}-${endYear}`);
+        
+        // Prepare the data
+        const data = {
+            query: query,
+            institution: institution,
+            startYear: startYear,
+            endYear: endYear,
+            fileId: fileId
+        };
+        
+        // Get CSRF token - ensure this function is defined
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            showError('CSRF token not found. Please refresh the page and try again.');
+            hideLoading();
+            return;
+        }
+        
+        // Send the request to select the file
         fetch('/select_file_source/', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-                'X-CSRFToken': csrfToken,
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
             },
-            body: new URLSearchParams({
-                'group_id': groupId,
-                'query': query,
-                'institution': institution,
-                'start_year': startYear,
-                'end_year': endYear
-            })
+            body: JSON.stringify(data)
         })
         .then(response => {
-            if (!response.ok) {
-                throw new Error(`Network response was not ok: ${response.status}`);
-            }
-            return response.json();
+            console.log(`Response status: ${response.status}`);
+            console.log(`Response headers:`, Object.fromEntries([...response.headers]));
+            
+            // Try to read the response as both JSON and text
+            return response.text().then(text => {
+                // Log the full response text for debugging
+                console.log(`Response text (first 100 chars): ${text.substring(0, 100)}`);
+                
+                if (!response.ok) {
+                    try {
+                        // Try to parse as JSON first
+                        const errorData = JSON.parse(text);
+                        throw new Error(errorData.error || 'Error selecting file source');
+                    } catch (e) {
+                        // If parsing fails, return the raw text
+                        throw new Error(`Server error: ${text}`);
+                    }
+                }
+                
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    console.error("Error parsing JSON response:", e);
+                    throw new Error(`Invalid response format: ${text.substring(0, 100)}...`);
+                }
+            });
         })
         .then(data => {
-            console.log('Received data from file selection:', data);
-            hideLoading();
+            // Hide the query results panel
+            document.getElementById('queryResultsPanel').style.display = 'none';
             
-            if (data.status === 'error') {
-                console.error('Error from backend:', data.error);
-                showError(data.error);
-                return;
+            if (data.success) {
+                console.log(`Received data with ${data.data.length} rows out of total ${data.total_row_count}`);
+                
+                // Display the full data in the visualization panel
+                displayFullData(data);
+                
+                // Show the visualization panel
+                document.getElementById('visualizationPanel').style.display = 'block';
+                
+                // Scroll to the visualization panel
+                document.getElementById('visualizationPanel').scrollIntoView({
+                    behavior: 'smooth'
+                });
+            } else {
+                showError(`Error: ${data.error || 'Unknown error'}`);
+                // Show query results panel again
+                document.getElementById('queryResultsPanel').style.display = 'block';
             }
             
-            // Display the full data
-            displayFullData(data);
+            hideLoading();
         })
         .catch(error => {
-            console.error('Fetch error:', error);
+            console.error('Error selecting file source:', error);
+            showError(`Error selecting file source: ${error.message}`, [
+                'Check that the server is running',
+                'Verify that the selected dataset exists',
+                'Try refreshing the page and trying again',
+                'Try selecting a different dataset from the results'
+            ]);
+            // Show query results panel again
+            document.getElementById('queryResultsPanel').style.display = 'block';
             hideLoading();
-            showError('An error occurred while selecting the data source. Please try again.');
         });
     }
     
     // Function to display the full data with visualization
     function displayFullData(data) {
+        const visualizationPanel = document.getElementById('visualizationPanel');
+        const dataContainer = document.getElementById('dataContainer');
+        
         console.log('Displaying full data:', data);
         
-        // Clear previous results
-        queryResultsContainer.innerHTML = '';
+        // Clear previous content
+        dataContainer.innerHTML = '';
         
-        // Get group title and other info
-        const groupTitle = data.group_title || 'Dataset';
-        const institution = data.institution || 'All institutions';
-        const filesData = data.files_data || [];
-        
-        if (filesData.length === 0) {
-            queryResultsContainer.innerHTML = `
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4" role="alert">
-                    <p class="font-bold">No data found</p>
-                    <p>No data could be extracted from the selected dataset.</p>
+        // Check if we have valid data
+        if (!data || !data.success) {
+            dataContainer.innerHTML = `
+                <div class="alert alert-danger">
+                    <p class="font-bold">Error Loading Data</p>
+                    <p>${data && data.error ? data.error : 'No data received from server'}</p>
                 </div>
             `;
             return;
         }
         
-        // Create header with dataset info
-        let headerHTML = `
-            <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-6" role="alert">
-                <p class="font-bold">Dataset: ${groupTitle}</p>
-                <p>Showing data for ${institution}</p>
-                <p class="mt-2 text-sm">Files: ${filesData.length}</p>
-            </div>
-        `;
-        
-        // Add file data sections
-        let filesHTML = '';
-        
-        filesData.forEach(fileData => {
-            const fileName = fileData.file_name;
-            const fileYear = fileData.year || 'Unknown';
-            const columns = fileData.columns || [];
-            const data = fileData.data || [];
-            
-            filesHTML += `
-                <div class="bg-white shadow-md rounded-lg p-4 mb-6">
-                    <h3 class="text-lg font-semibold mb-2">${fileName}</h3>
-                    <p class="text-sm text-gray-600 mb-4">Year: ${fileYear}</p>
-                    
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full bg-white border border-gray-300">
-                            <thead>
-                                <tr>
-            `;
-            
-            // Add table headers
-            columns.forEach(column => {
-                filesHTML += `<th class="px-4 py-2 border-b border-gray-300 bg-gray-100 text-left">${column}</th>`;
-            });
-            
-            filesHTML += `
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            
-            // Add table rows
-            if (data.length > 0) {
-                data.forEach(row => {
-                    filesHTML += `<tr>`;
-                    row.forEach(cell => {
-                        filesHTML += `<td class="px-4 py-2 border-b border-gray-300">${cell}</td>`;
-                    });
-                    filesHTML += `</tr>`;
-                });
-            } else {
-                filesHTML += `
-                    <tr>
-                        <td colspan="${columns.length}" class="px-4 py-2 text-center text-gray-500">No data available</td>
-                    </tr>
-                `;
-            }
-            
-            filesHTML += `
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="mt-4 flex justify-end">
-                        <button class="download-csv-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" 
-                                data-filename="${fileName}" data-year="${fileYear}">
-                            Download CSV
-                        </button>
-                    </div>
+        // Check if we have data
+        if (!data.columns || !data.data || data.data.length === 0) {
+            dataContainer.innerHTML = `
+                <div class="alert alert-warning">
+                    <p class="font-bold">No Data Available</p>
+                    <p>No data available for the selected criteria. Try selecting a different dataset or modifying your search criteria.</p>
                 </div>
             `;
+            return;
+        }
+        
+        // Create title with dataset title and row count information
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'mb-4';
+        
+        // Include dataset title if available
+        const datasetTitle = data.dataset_title || 'Selected Dataset';
+        
+        // Include file count information if available
+        const fileInfoText = data.file_count ? ` from ${data.file_count} file(s)` : '';
+        
+        titleDiv.innerHTML = `
+            <h3 class="text-xl font-bold text-blue-800">${datasetTitle}</h3>
+            <div class="mt-2">
+                <span class="badge bg-primary px-2 py-1 rounded bg-blue-600 text-white">${data.total_row_count} rows${fileInfoText}</span>
+                <p class="text-sm text-gray-600 mt-1">
+                    Showing all matched data based on your query criteria.
+                </p>
+            </div>
+        `;
+        dataContainer.appendChild(titleDiv);
+        
+        // Create a responsive table container with maximum height and scrolling
+        const tableContainer = document.createElement('div');
+        tableContainer.className = 'overflow-auto max-h-[600px] border border-gray-300 rounded';
+        
+        // Create the table
+        const table = document.createElement('table');
+        table.className = 'min-w-full divide-y divide-gray-200';
+        table.id = 'dataTable';
+        
+        // Create the table header with sticky position
+        const thead = document.createElement('thead');
+        thead.className = 'bg-gray-50 sticky top-0';
+        const headerRow = document.createElement('tr');
+        
+        // Add headers
+        data.columns.forEach(column => {
+            const th = document.createElement('th');
+            th.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+            th.textContent = column;
+            headerRow.appendChild(th);
         });
         
-        // Combine all HTML
-        queryResultsContainer.innerHTML = headerHTML + filesHTML;
+        // Add Academic Year header
+        const academicYearHeader = document.createElement('th');
+        academicYearHeader.className = 'px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider';
+        academicYearHeader.textContent = 'Academic Year';
+        headerRow.appendChild(academicYearHeader);
         
-        // Add event listeners for download buttons
-        const downloadBtns = document.querySelectorAll('.download-csv-btn');
-        downloadBtns.forEach(btn => {
-            btn.addEventListener('click', function() {
-                const fileName = this.getAttribute('data-filename');
-                const fileYear = this.getAttribute('data-year');
-                // Implement download functionality
-                alert(`Download functionality for ${fileName} (${fileYear}) will be implemented soon.`);
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+        
+        // Create the table body
+        const tbody = document.createElement('tbody');
+        tbody.className = 'bg-white divide-y divide-gray-200';
+        
+        // Add table rows
+        if (data.data && data.data.length > 0) {
+            data.data.forEach((row, rowIndex) => {
+                const tr = document.createElement('tr');
+                tr.className = rowIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+                
+                // Add cells for each column
+                row.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+                    td.textContent = cell;
+                    tr.appendChild(td);
+                });
+                
+                // Add academic year cell
+                const academicYearCell = document.createElement('td');
+                academicYearCell.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900';
+                academicYearCell.textContent = formatAcademicYear(data.academic_year) || '';
+                tr.appendChild(academicYearCell);
+                
+                tbody.appendChild(tr);
             });
+        } else {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.className = 'px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center';
+            td.colSpan = data.columns.length + 1; // +1 for the academic year column
+            td.textContent = 'No data available';
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+        }
+        
+        table.appendChild(tbody);
+        tableContainer.appendChild(table);
+        dataContainer.appendChild(tableContainer);
+        
+        // Show navigation/action buttons
+        const actionDiv = document.createElement('div');
+        actionDiv.className = 'mt-4 flex justify-between';
+        
+        const backButton = document.createElement('button');
+        backButton.className = 'bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded';
+        backButton.textContent = 'Back to Search Results';
+        backButton.addEventListener('click', function() {
+            // Hide visualization panel and show query results
+            visualizationPanel.classList.add('hidden');
+            document.getElementById('queryResultsPanel').classList.remove('hidden');
         });
+        
+        actionDiv.appendChild(backButton);
+        dataContainer.appendChild(actionDiv);
+        
+        // Show the visualization panel
+        visualizationPanel.classList.remove('hidden');
+        document.getElementById('queryResultsPanel').classList.add('hidden');
     }
     
     // Function to show loading indicator
@@ -1060,4 +1176,34 @@ function handleHesaResponse(response) {
         // Show error message
         showAlert('error', `Error: ${response.error}`);
     }
+}
+
+// Format academic year to ensure YYYY/YY format
+function formatAcademicYear(year) {
+    if (!year) return '';
+    
+    // If already in YYYY/YY format, return as is
+    if (/^\d{4}\/\d{2}$/.test(year)) {
+        return year;
+    }
+    
+    // Handle YYYY&YY format
+    if (/^\d{4}&\d{2}$/.test(year)) {
+        return year.replace('&', '/');
+    }
+    
+    // Handle YYYY-YY format
+    if (/^\d{4}-\d{2}$/.test(year)) {
+        return year.replace('-', '/');
+    }
+    
+    // Handle YYYY format - convert to YYYY/YY
+    if (/^\d{4}$/.test(year)) {
+        const startYear = parseInt(year);
+        const endYearSuffix = String((startYear + 1) % 100).padStart(2, '0');
+        return `${startYear}/${endYearSuffix}`;
+    }
+    
+    // Return original if no pattern matches
+    return year;
 } 
