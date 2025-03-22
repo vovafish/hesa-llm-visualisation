@@ -50,7 +50,7 @@
                         <span class="font-medium">Files:</span> {{ dataset.file_count }}
                     </p>
                     <p class="text-sm text-gray-600">
-                        <span class="font-medium">Match score:</span> {{ dataset.score }} ({{ dataset.match_percentage }}%)
+                        <span class="font-medium">Match score:</span> {{ dataset.score|floatformat:2 }} ({{ dataset.match_percentage }}%)
                     </p>
                 </div>
                 <div>
@@ -79,14 +79,14 @@
                     <h5 class="text-lg font-medium text-green-800">{{ file_preview.file_name }}</h5>
                     <p class="text-sm text-gray-600 mb-2">Year: {{ file_preview.year }}</p>
                     
-                    <div class="overflow-x-auto mb-3">
+                    <div class="overflow-x-auto mb-3 {% if file_preview.data|length > 10 %}max-h-[600px] overflow-y-auto{% endif %}">
                         <table class="min-w-full border-collapse table-auto text-sm">
                             <thead>
                                 <tr>
                                     {% for column in file_preview.columns %}
-                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm">{{ column }}</th>
+                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">{{ column }}</th>
                                     {% endfor %}
-                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>
+                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">Academic Year</th>
                                 </tr>
                             </thead>
                             <tbody>

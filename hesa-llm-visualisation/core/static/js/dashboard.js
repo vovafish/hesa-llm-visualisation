@@ -440,7 +440,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <h3 class="text-xl font-semibold mb-2">${groupTitle}</h3>
                         <div class="grid grid-cols-2 gap-4 mb-3">
                             <p class="text-sm text-gray-700"><span class="font-medium">Files:</span> ${preview.file_count}</p>
-                            <p class="text-sm ${matchScoreColor} ${matchScoreClass}"><span class="font-medium">Match score:</span> ${Math.round(preview.score * 10) / 10} (${preview.match_percentage}%)</p>
+                            <p class="text-sm ${matchScoreColor} ${matchScoreClass}"><span class="font-medium">Match score:</span> ${parseFloat(preview.score).toFixed(2)} (${preview.match_percentage}%)</p>
                             <p class="text-sm text-gray-700"><span class="font-medium">${yearsText}</span></p>
                         </div>
                         ${matchInfoHtml}
@@ -477,7 +477,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <h4 class="text-lg font-medium text-green-800">${filePreview.file_name}</h4>
                                 <p class="text-sm text-gray-600 mb-2">Year: ${filePreview.year || 'Unknown'}</p>
                                 
-                                <div class="overflow-x-auto mb-3">
+                                <div class="overflow-x-auto mb-3${displayRows.length > 10 ? ' max-h-[600px] overflow-y-auto' : ''}">
                             <table class="min-w-full bg-white border border-gray-300">
                                 <thead>
                                     <tr>
@@ -486,12 +486,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add table headers
                         if (columns && columns.length > 0) {
                             columns.forEach(column => {
-                                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
+                                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">${column}</th>`;
                             });
                         }
                         
                         // Add Academic Year header as the last column
-                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
+                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">Academic Year</th>`;
                         
                         groupPreviewHTML += `
                                     </tr>
@@ -552,7 +552,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <h4 class="text-lg font-medium text-green-800">${filePreview.file_name}</h4>
                                     <p class="text-sm text-gray-600 mb-2">Year: ${filePreview.year || 'Unknown'}</p>
                                     
-                                    <div class="overflow-x-auto mb-3">
+                                    <div class="overflow-x-auto mb-3${displayRows.length > 10 ? ' max-h-[600px] overflow-y-auto' : ''}">
                                         <table class="min-w-full bg-white border border-gray-300">
                                             <thead>
                                                 <tr>
@@ -561,12 +561,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         // Add table headers
                         if (columns && columns.length > 0) {
                             columns.forEach(column => {
-                                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
+                                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">${column}</th>`;
                             });
                         }
                         
                         // Add Academic Year header as the last column for hidden files too
-                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
+                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm sticky top-0 bg-white z-10">Academic Year</th>`;
                         
                         groupPreviewHTML += `
                                             </tr>

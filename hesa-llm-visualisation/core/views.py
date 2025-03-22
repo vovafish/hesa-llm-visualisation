@@ -471,8 +471,8 @@ def process_hesa_query(request):
             group_summary = {
                 'group_id': group_id,
                 'title': group['title'],
-                'score': group['score'],
-                'match_percentage': str(group['percentage']),
+                'score': float(group['score']),
+                'match_percentage': f"{group['percentage']:.2f}",
                 'matched_keywords': group['matched_keywords'],
                 'available_years': group['available_years'],
                 'missing_years': group['missing_years'],
@@ -1738,7 +1738,7 @@ def dataset_details(request, group_id):
         group_summary = {
             'group_id': group_id,
             'title': target_title,
-            'score': score,
+            'score': float(score) if score else None,
             'match_percentage': f"{percentage:.2f}" if percentage else None,
             'matched_keywords': list(set([keyword for file in csv_files for keyword in file['matched_keywords']])),
             'available_years': sorted(list(set([file['year'] for file in csv_files if file['year']]))),
