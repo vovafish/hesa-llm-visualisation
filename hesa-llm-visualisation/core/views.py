@@ -28,6 +28,9 @@ from .data_processing.storage.storage_service import StorageService
 from .data_processing.csv_processor import CLEANED_FILES_DIR, RAW_FILES_DIR  # Import the constants
 from django.views.decorators.csrf import csrf_exempt
 
+# Configuration constants
+MAX_PREVIEW_ROWS = getattr(settings, 'DASHBOARD_SETTINGS', {}).get('MAX_PREVIEW_ROWS', 3)  # Get from settings with fallback
+
 # Custom JSON encoder to handle NaN values and other numeric types
 class NumericEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -483,6 +486,7 @@ def process_hesa_query(request):
         response_data = {
             'status': 'success',
             'query_info': query_info,
+            'max_preview_rows': MAX_PREVIEW_ROWS,
             'preview_data': preview_data
         }
         
@@ -1181,13 +1185,13 @@ def find_file_for_year(file_matches, year):
     
     return None
 
-def get_csv_preview(file_path, max_rows=5, institution=None):
+def get_csv_preview(file_path, max_rows=MAX_PREVIEW_ROWS, institution=None):
     """
     Extract a preview of CSV data, optionally filtered by institution.
     
     Args:
         file_path: Path to the CSV file
-        max_rows: Maximum number of rows to return
+        max_rows: Maximum number of rows to return (defaults to MAX_PREVIEW_ROWS). If None, return all rows.
         institution: Optional institution name(s) to filter by (comma-separated list for multiple)
         
     Returns:
@@ -1251,8 +1255,9 @@ def get_csv_preview(file_path, max_rows=5, institution=None):
                 
                 matched_rows += 1
                 
-                # Only add up to max_rows
-                if len(data) < max_rows:
+                # If max_rows is None, add all rows
+                # Otherwise, only add up to max_rows
+                if max_rows is None or len(data) < max_rows:
                     data.append(row)
             
             # Create result
@@ -1261,7 +1266,7 @@ def get_csv_preview(file_path, max_rows=5, institution=None):
                 'data': data,
                 'total_rows': total_rows,
                 'matched_rows': matched_rows,
-                'has_more': matched_rows > len(data)
+                'has_more': max_rows is not None and matched_rows > len(data)
             }
             
             return result
@@ -1551,3 +1556,217 @@ def find_relevant_csv_files(file_pattern, keywords, requested_years=None):
                 logger.warning(f"Year {year} does not exist in any of the files")
     
     return file_matches
+
+def dataset_details(request, group_id):
+    """
+    View a specific dataset with all its details.
+    Shows only the selected dataset instead of all matching datasets.
+    """
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get query parameters from the request
+        query = request.GET.get('query', '')
+        institution = request.GET.get('institution', '')
+        start_year = request.GET.get('start_year', '')
+        end_year = request.GET.get('end_year', '')
+        
+        logger.info(f"Viewing dataset details for group: {group_id}")
+        logger.info(f"Query: {query}")
+        logger.info(f"Institution: {institution}")
+        logger.info(f"Years: {start_year} - {end_year}")
+        
+        # Parse the query to extract query information
+        query_info = parse_hesa_query(query)
+        keywords = query_info.get('keywords', [])
+        file_pattern = query_info.get('file_pattern', '')
+        filtered_terms = query_info.get('filtered_terms', [])
+        removed_words = query_info.get('removed_words', [])
+        
+        # Get years in academic year format
+        years = []
+        if start_year:
+            try:
+                start = int(start_year)
+                if end_year:
+                    # Range of years
+                    end = int(end_year)
+                    for year in range(start, end + 1):
+                        academic_year = f"{year}/{str(year+1)[2:4]}"
+                        years.append(academic_year)
+                else:
+                    # Single year provided
+                    academic_year = f"{start}/{str(start+1)[2:4]}"
+                    years.append(academic_year)
+            except ValueError:
+                logger.warning(f"Invalid year format: start_year={start_year}, end_year={end_year}")
+                
+        # Find all CSV files
+        all_files = list(CLEANED_FILES_DIR.glob('*.csv'))
+        
+        # Extract target title and group number from group_id
+        parts = group_id.split('_')
+        target_title = None
+        
+        if len(parts) >= 2:
+            group_number = parts[1]  # Extract the group number
+            
+            # Find the target title from matching files
+            for file_path in all_files:
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        first_line = f.readline().strip()
+                        if first_line.startswith('#METADATA:'):
+                            metadata_str = first_line[len('#METADATA:'):]
+                            try:
+                                metadata = json.loads(metadata_str)
+                                metadata_group_id = metadata.get('group_id', '')
+                                
+                                # Check if this file belongs to our group
+                                if group_id == metadata_group_id or \
+                                   group_id in metadata_group_id or \
+                                   metadata_group_id.startswith(f"group_{group_number}_"):
+                                    target_title = metadata.get('title', '')
+                                    logger.info(f"Found target title: {target_title}")
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+                except Exception:
+                    continue
+            
+            # Direct approach for common datasets if we still don't have a title
+            if not target_title:
+                # Recreate the file search process to match the original search
+                file_matches = find_relevant_csv_files(file_pattern, keywords, years if years else None)
+                
+                # Group files by title, just like in process_hesa_query
+                file_groups = {}
+                for file_match in file_matches:
+                    title = file_match['title']
+                    if title not in file_groups:
+                        file_groups[title] = {
+                            'title': title,
+                            'files': [],
+                            'score': file_match['score'],
+                            'percentage': file_match['percentage'],
+                            'matched_keywords': file_match['matched_keywords'],
+                            'available_years': set(),
+                            'missing_years': []
+                        }
+                    
+                    file_groups[title]['files'].append(file_match)
+                    if file_match['year']:
+                        file_groups[title]['available_years'].add(file_match['year'])
+                
+                # Convert to list and sort by score
+                grouped_matches = list(file_groups.values())
+                for group in grouped_matches:
+                    group['available_years'] = sorted(list(group['available_years']))
+                
+                # Sort by score (descending)
+                grouped_matches.sort(key=lambda x: x['score'], reverse=True)
+                
+                # Try to find the group that matches our group number
+                if len(grouped_matches) >= int(group_number):
+                    target_group = grouped_matches[int(group_number) - 1]
+                    target_title = target_group['title']
+                    logger.info(f"Found target title from recreated search: {target_title}")
+        
+        if not target_title:
+            return render(request, 'dashboard.html', {
+                'error': 'Dataset not found',
+                'query': query,
+                'institution': institution,
+                'start_year': start_year,
+                'end_year': end_year,
+            })
+        
+        # Find files that match the target title
+        csv_files = []
+        for file_path in all_files:
+            try:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    first_line = f.readline().strip()
+                    if first_line.startswith('#METADATA:'):
+                        metadata_str = first_line[len('#METADATA:'):]
+                        try:
+                            metadata = json.loads(metadata_str)
+                            file_title = metadata.get('title', '')
+                            file_year = metadata.get('academic_year', '')
+                            
+                            # Match by title
+                            if file_title.lower() == target_title.lower():
+                                # Check year filter if provided
+                                if not years or file_year in years:
+                                    csv_files.append({
+                                        'file_path': str(file_path),
+                                        'file_name': file_path.name,
+                                        'title': file_title,
+                                        'year': file_year,
+                                        'score': parts[2] if len(parts) > 2 else None,
+                                        'matched_keywords': metadata.get('keywords_title', []) + metadata.get('keywords_columns', [])
+                                    })
+                        except json.JSONDecodeError:
+                            continue
+            except Exception:
+                continue
+        
+        if not csv_files:
+            return render(request, 'dashboard.html', {
+                'error': 'No files found for the selected dataset',
+                'query': query,
+                'institution': institution,
+                'start_year': start_year,
+                'end_year': end_year,
+            })
+        
+        # Generate file previews for each file - WITHOUT row limits for dataset details
+        file_previews = []
+        for file_match in csv_files:
+            file_path = file_match['file_path']
+            
+            # Call get_csv_preview with None for max_rows to get all rows
+            preview = get_csv_preview(file_path, max_rows=None, institution=institution)
+            if preview:
+                preview['year'] = file_match['year']
+                preview['file_name'] = file_match['file_name']
+                file_previews.append(preview)
+        
+        # Create a summary of this single group
+        score = parts[2] if len(parts) > 2 else None
+        percentage = float(score) / 30 * 100 if score else None
+        group_summary = {
+            'group_id': group_id,
+            'title': target_title,
+            'score': score,
+            'match_percentage': f"{percentage:.2f}" if percentage else None,
+            'matched_keywords': list(set([keyword for file in csv_files for keyword in file['matched_keywords']])),
+            'available_years': sorted(list(set([file['year'] for file in csv_files if file['year']]))),
+            'file_count': len(csv_files),
+            'file_previews': file_previews
+        }
+        
+        # Set max_preview_rows to None to indicate we're showing all rows
+        return render(request, 'core/dataset_details.html', {
+            'query': query,
+            'institution': institution,
+            'start_year': start_year,
+            'end_year': end_year,
+            'filtered_terms': filtered_terms,
+            'removed_words': removed_words,
+            'max_preview_rows': None,  # Set to None to indicate no limit
+            'dataset': group_summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in dataset details: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        return render(request, 'dashboard.html', {
+            'error': f'Error viewing dataset: {str(e)}',
+            'query': query,
+            'institution': institution,
+            'start_year': start_year,
+            'end_year': end_year,
+        })

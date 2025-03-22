@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dataset Details{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-4">HESA Data Visualization Dashboard</h1>
+    
+    <div class="mb-4">
+        <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800">
+            &larr; Back to search results
+        </a>
+    </div>
+    
+    <!-- Result Info -->
+    <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Your dataset results</h2>
+        
+        <div class="mb-4">
+            <p class="text-gray-700">
+                <span class="font-medium">Search query:</span> "{{ query }}" {% if institution %}for {{ institution }}{% endif %} {% if start_year %}({{ start_year }}{% if end_year %}-{{ end_year }}{% endif %}){% endif %}
+            </p>
+            
+            {% if filtered_terms %}
+            <p class="text-gray-600 text-sm mt-2">
+                <span class="font-medium">Years:</span> 
+                {% if dataset.available_years %}
+                    {{ dataset.available_years|join:", " }}
+                {% else %}
+                    All available years
+                {% endif %}
+            </p>
+            {% endif %}
+            
+            {% if removed_words %}
+            <p class="text-gray-600 text-sm mt-1">
+                <span class="font-medium">Words removed from query:</span> 
+                {{ removed_words|join:", " }}
+            </p>
+            {% endif %}
+        </div>
+        
+        <!-- Dataset Information -->
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <h3 class="text-lg font-semibold text-green-800 mb-2">{{ dataset.title }}</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                    <p class="text-sm text-gray-600">
+                        <span class="font-medium">Files:</span> {{ dataset.file_count }}
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        <span class="font-medium">Match score:</span> {{ dataset.score }} ({{ dataset.match_percentage }}%)
+                    </p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">
+                        <span class="font-medium">Available years:</span> {{ dataset.available_years|join:", " }}
+                    </p>
+                    <p class="text-sm text-gray-600">
+                        <span class="font-medium">Matched keywords:</span>
+                    </p>
+                    <div class="flex flex-wrap gap-1 mt-1">
+                        {% for keyword in dataset.matched_keywords %}
+                        <span class="inline-block bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                            {{ keyword }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- File Previews -->
+            <div class="mt-4">
+                <h4 class="font-medium text-green-800 mb-2">File previews:</h4>
+                
+                {% for file_preview in dataset.file_previews %}
+                <div class="mt-2 mb-4 pb-4 border-b border-green-300">
+                    <h5 class="text-lg font-medium text-green-800">{{ file_preview.file_name }}</h5>
+                    <p class="text-sm text-gray-600 mb-2">Year: {{ file_preview.year }}</p>
+                    
+                    <div class="overflow-x-auto mb-3">
+                        <table class="min-w-full border-collapse table-auto text-sm">
+                            <thead>
+                                <tr>
+                                    {% for column in file_preview.columns %}
+                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm">{{ column }}</th>
+                                    {% endfor %}
+                                    <th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if file_preview.data %}
+                                    {% for row in file_preview.data %}
+                                    <tr>
+                                        {% for cell in row %}
+                                        <td class="px-4 py-2 border-b border-gray-300 text-sm">{{ cell }}</td>
+                                        {% endfor %}
+                                        <td class="px-4 py-2 border-b border-gray-300 text-sm">{{ file_preview.year }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="{{ file_preview.columns|length|add:1 }}" class="px-4 py-2 text-center text-gray-500">No matching rows found</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Analysis Actions -->
+        <div class="mt-6">
+            <h3 class="text-lg font-semibold mb-2">Analyze this data</h3>
+            <div class="flex flex-wrap gap-2">
+                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
+                    Export Data
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Removed dashboard.js reference to fix JavaScript errors -->
+{% endblock %} 

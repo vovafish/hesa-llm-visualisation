@@ -292,6 +292,15 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to display query results
     function displayQueryResults(data) {
+        // Check if we have valid response data
+        if (!data || !data.status || data.status !== 'success') {
+            showError("Invalid response from server", ["Try a different query", "Contact system administrator"]);
+            return;
+        }
+        
+        // Store max preview rows value
+        const maxPreviewRows = data.max_preview_rows || 3; // Default to 3 if not provided
+
         console.log('Displaying query results');
         
         // Clear previous results
@@ -457,14 +466,16 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     // Display initial previews (up to 3)
                     preview.file_previews.slice(0, initialFilesToShow).forEach((filePreview, index) => {
-                        // Get filename and year
-                        const fileName = filePreview.file_name;
-                        const fileYear = filePreview.year || 'Unknown';
+                        const columns = filePreview.columns;
+                        const data = filePreview.data;
+                        
+                        // Show up to maxPreviewRows rows in preview
+                        const displayRows = data.slice(0, maxPreviewRows);
                         
                         groupPreviewHTML += `
                             <div class="mt-2 mb-4 pb-4 border-b border-green-300">
-                                <h4 class="text-lg font-medium text-green-800">${fileName}</h4>
-                                <p class="text-sm text-gray-600 mb-2">Year: ${fileYear}</p>
+                                <h4 class="text-lg font-medium text-green-800">${filePreview.file_name}</h4>
+                                <p class="text-sm text-gray-600 mb-2">Year: ${filePreview.year || 'Unknown'}</p>
                                 
                                 <div class="overflow-x-auto mb-3">
                             <table class="min-w-full bg-white border border-gray-300">
@@ -473,16 +484,15 @@ document.addEventListener('DOMContentLoaded', function() {
                                 `;
                                 
                 // Add table headers
-                        const columns = filePreview.columns || [];
-                if (columns && columns.length > 0) {
-                    columns.forEach(column => {
+                        if (columns && columns.length > 0) {
+                            columns.forEach(column => {
                                 groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
-                    });
-                }
-                
-                // Add Academic Year header as the last column
-                groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
-                
+                            });
+                        }
+                        
+                        // Add Academic Year header as the last column
+                        groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">Academic Year</th>`;
+                        
                         groupPreviewHTML += `
                                     </tr>
                                 </thead>
@@ -490,13 +500,13 @@ document.addEventListener('DOMContentLoaded', function() {
                             `;
                 
                 // Add table rows
-                        const data = filePreview.data || [];
-                if (data && data.length > 0) {
-                            // Show up to 3 rows in preview
-                    const displayRows = data.slice(0, 3);
-                    displayRows.forEach(row => {
+                        if (data && data.length > 0) {
+                            // Show up to maxPreviewRows rows in preview
+                            const displayRows = data.slice(0, maxPreviewRows);
+                            
+                            displayRows.forEach(row => {
                                 groupPreviewHTML += `<tr>`;
-                        row.forEach(cell => {
+                                row.forEach(cell => {
                                     groupPreviewHTML += `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`;
                                 });
                                 // Add Academic Year cell to each row
@@ -516,10 +526,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             </table>
                         </div>
                         
-                                <!-- Preview information if there are more rows -->
-                                ${filePreview.matched_rows > 3 ? 
+                        <!-- Preview information if there are more rows -->
+                        ${filePreview.matched_rows > maxPreviewRows ? 
                         `<div class="text-sm text-gray-600 mb-3">
-                                    <p class="italic">Preview showing ${Math.min(data.length, 3)} rows out of ${filePreview.matched_rows}.</p>
+                            <p class="italic">Preview showing ${Math.min(data.length, maxPreviewRows)} rows out of ${filePreview.matched_rows}.</p>
                         </div>` : ''}
                             </div>
                         `;
@@ -531,14 +541,16 @@ document.addEventListener('DOMContentLoaded', function() {
                         
                         // Add remaining files (beyond the first 3)
                         preview.file_previews.slice(initialFilesToShow).forEach((filePreview, index) => {
-                            // Get filename and year
-                            const fileName = filePreview.file_name;
-                            const fileYear = filePreview.year || 'Unknown';
+                            const columns = filePreview.columns;
+                            const data = filePreview.data;
+                            
+                            // Show up to maxPreviewRows rows in preview
+                            const displayRows = data.slice(0, maxPreviewRows);
                             
                             groupPreviewHTML += `
                                 <div class="mt-2 mb-4 pb-4 border-b border-green-300">
-                                    <h4 class="text-lg font-medium text-green-800">${fileName}</h4>
-                                    <p class="text-sm text-gray-600 mb-2">Year: ${fileYear}</p>
+                                    <h4 class="text-lg font-medium text-green-800">${filePreview.file_name}</h4>
+                                    <p class="text-sm text-gray-600 mb-2">Year: ${filePreview.year || 'Unknown'}</p>
                                     
                                     <div class="overflow-x-auto mb-3">
                                         <table class="min-w-full bg-white border border-gray-300">
@@ -547,7 +559,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         `;
                         
                         // Add table headers
-                        const columns = filePreview.columns || [];
                         if (columns && columns.length > 0) {
                             columns.forEach(column => {
                                 groupPreviewHTML += `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm">${column}</th>`;
@@ -564,10 +575,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         `;
                         
                         // Add table rows
-                        const data = filePreview.data || [];
                         if (data && data.length > 0) {
-                            // Show up to 3 rows in preview
-                            const displayRows = data.slice(0, 3);
+                            // Show up to maxPreviewRows rows in preview
+                            const displayRows = data.slice(0, maxPreviewRows);
+                            
                             displayRows.forEach(row => {
                                 groupPreviewHTML += `<tr>`;
                                 row.forEach(cell => {
@@ -591,9 +602,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </div>
                                 
                                 <!-- Preview information if there are more rows -->
-                                ${filePreview.matched_rows > 3 ? 
+                                ${filePreview.matched_rows > maxPreviewRows ? 
                                 `<div class="text-sm text-gray-600 mb-3">
-                                    <p class="italic">Preview showing ${Math.min(data.length, 3)} rows out of ${filePreview.matched_rows}.</p>
+                                    <p class="italic">Preview showing ${Math.min(data.length, maxPreviewRows)} rows out of ${filePreview.matched_rows}.</p>
                                 </div>` : ''}
                             </div>
                         `;
@@ -639,7 +650,22 @@ document.addEventListener('DOMContentLoaded', function() {
             selectFileBtns.forEach(btn => {
                 btn.addEventListener('click', function() {
                     const groupId = this.getAttribute('data-group-id');
-                    selectFileSource(groupId);
+                    
+                    // Get query parameters
+                    const query = document.getElementById('queryInput').value;
+                    const institution = document.getElementById('institutionInput').value;
+                    const startYear = document.getElementById('startYearInput').value;
+                    const endYear = document.getElementById('endYearInput').value;
+                    
+                    // Build redirect URL with query parameters
+                    const url = new URL(`${window.location.origin}/dataset_details/${groupId}/`);
+                    url.searchParams.append('query', query);
+                    url.searchParams.append('institution', institution);
+                    url.searchParams.append('start_year', startYear);
+                    url.searchParams.append('end_year', endYear);
+                    
+                    // Redirect to the dataset details page
+                    window.location.href = url.toString();
                 });
             });
 
