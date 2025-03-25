@@ -29,6 +29,20 @@ function getCsrfToken() {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Dashboard JavaScript loaded');
     
+    // Hide any existing loading indicators on page load
+    hideLoading();
+    
+    // Check if returning from dataset details page
+    if (sessionStorage.getItem('returningFromDetails') === 'true' || 
+        sessionStorage.getItem('clearLoading') === 'true') {
+        console.log('Returning from dataset details page, cleaning up loading state');
+        hideLoading();
+        
+        // Clear the flags
+        sessionStorage.removeItem('returningFromDetails');
+        sessionStorage.removeItem('clearLoading');
+    }
+    
     // Get chart buttons
     const lineChartBtn = document.getElementById('lineChartBtn');
     const barChartBtn = document.getElementById('barChartBtn');
@@ -48,6 +62,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const endYearInput = document.getElementById('endYearInput');
     const maxMatchesInput = document.getElementById('maxMatches');
     const allInstitutionsCheckbox = document.getElementById('allInstitutionsCheckbox');
+    
+    // Mission group radio buttons
+    const missionGroupRadios = document.querySelectorAll('input[name="missionGroup"]');
     
     console.log('Elements found:', {
         lineChartBtn: !!lineChartBtn,
@@ -154,14 +171,36 @@ document.addEventListener('DOMContentLoaded', function() {
         alert('Pie chart functionality not implemented yet');
     });
     
+    // Mission group radio buttons
+    missionGroupRadios.forEach(radio => {
+        radio.addEventListener('change', function() {
+            if (this.value) {
+                // If a mission group is selected, disable institution input and checkbox
+                institutionInput.disabled = true;
+                institutionInput.classList.add('bg-gray-100');
+                allInstitutionsCheckbox.disabled = true;
+                allInstitutionsCheckbox.checked = false;
+            } else {
+                // If 'None' is selected, enable institution input and checkbox
+                institutionInput.disabled = false;
+                institutionInput.classList.remove('bg-gray-100');
+                allInstitutionsCheckbox.disabled = false;
+            }
+        });
+    });
+    
     // All institutions checkbox handler
     if (allInstitutionsCheckbox && institutionInput) {
         allInstitutionsCheckbox.addEventListener('change', function() {
-            institutionInput.disabled = this.checked;
-            if (this.checked) {
-                institutionInput.classList.add('bg-gray-100');
-            } else {
-                institutionInput.classList.remove('bg-gray-100');
+            // Only apply if no mission group is selected
+            const missionSelected = Array.from(missionGroupRadios).some(radio => radio.checked && radio.value !== '');
+            if (!missionSelected) {
+                institutionInput.disabled = this.checked;
+                if (this.checked) {
+                    institutionInput.classList.add('bg-gray-100');
+                } else {
+                    institutionInput.classList.remove('bg-gray-100');
+                }
             }
         });
     }
@@ -176,17 +215,26 @@ document.addEventListener('DOMContentLoaded', function() {
         const maxMatches = maxMatchesInput.value || 3;
         const searchAllInstitutions = allInstitutionsCheckbox.checked;
         
-        // Default to University of Leicester if no institution provided and checkbox is not checked
-        if (!searchAllInstitutions) {
-            if (!institution) {
-                institution = "The University of Leicester";
-            } else if (institution !== "The University of Leicester") {
-                // If another institution is entered, include both it and Leicester
-                institution = `The University of Leicester,${institution}`;
-            }
+        // Get selected mission group, if any
+        const selectedMissionGroup = document.querySelector('input[name="missionGroup"]:checked')?.value || '';
+        
+        // If mission group is selected, it overrides institution selection
+        if (selectedMissionGroup) {
+            // When mission group is selected, institution field is ignored
+            institution = '';
         } else {
-            // If checkbox is checked, don't filter by institution
-            institution = "";
+            // Default to University of Leicester if no institution provided and checkbox is not checked
+            if (!searchAllInstitutions) {
+                if (!institution) {
+                    institution = "The University of Leicester";
+                } else if (institution !== "The University of Leicester") {
+                    // If another institution is entered, include both it and Leicester
+                    institution = `The University of Leicester,${institution}`;
+                }
+            } else {
+                // If checkbox is checked, don't filter by institution
+                institution = "";
+            }
         }
         
         console.log('Processing query:', {
@@ -196,7 +244,8 @@ document.addEventListener('DOMContentLoaded', function() {
             endYear,
             chartType,
             maxMatches,
-            searchAllInstitutions
+            searchAllInstitutions,
+            missionGroup: selectedMissionGroup
         });
         
         // Validate inputs
@@ -221,10 +270,14 @@ document.addEventListener('DOMContentLoaded', function() {
         if (endYear) params.append('end_year', endYear);
         params.append('chart_type', chartType);
         params.append('max_matches', maxMatches);
+        if (selectedMissionGroup) params.append('mission_group', selectedMissionGroup);
         
         // Build the API URL 
         const apiUrl = `/api/process-hesa-query/?${params.toString()}`;
         console.log('Fetching data from:', apiUrl);
+        
+        // Show loading indicator
+        showLoading();
         
         // Make the request to the backend
         fetch(apiUrl, {
@@ -632,45 +685,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;
                 }
                 
-                // Add select button for the group
+                // Add select dataset button and functionality
                 groupPreviewHTML += `
-                        <div class="flex justify-end mt-4">
-                            <button class="select-file-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded" data-group-id="${preview.group_id}">
-                                Select this dataset
-                            </button>
-                        </div>
+                    <div class="mt-4 flex gap-2">
+                        <button 
+                            class="select-dataset-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                            data-file-id="${preview.group_id}"
+                        >
+                            Use this dataset
+                        </button>
                     </div>
                 `;
                 
                 queryResultsContainer.innerHTML += groupPreviewHTML;
             });
             
-            // Set up click handlers for the select file buttons
-            const selectFileBtns = document.querySelectorAll('.select-file-btn');
-            selectFileBtns.forEach(btn => {
-                btn.addEventListener('click', function() {
-                    const groupId = this.getAttribute('data-group-id');
-                    
-                    // Get query parameters
-                    const query = document.getElementById('queryInput').value;
-                    const institution = document.getElementById('institutionInput').value;
-                    const startYear = document.getElementById('startYearInput').value;
-                    const endYear = document.getElementById('endYearInput').value;
-                    
-                    // Build redirect URL with query parameters
-                    const url = new URL(`${window.location.origin}/dataset_details/${groupId}/`);
-                    url.searchParams.append('query', query);
-                    url.searchParams.append('institution', institution);
-                    url.searchParams.append('start_year', startYear);
-                    url.searchParams.append('end_year', endYear);
-                    
-                    // Redirect to the dataset details page
-                    window.location.href = url.toString();
+            // Add event listeners to the select dataset buttons
+            const selectButtons = document.querySelectorAll('.select-dataset-btn');
+            selectButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    const fileId = this.getAttribute('data-file-id');
+                    selectDataset(fileId);
                 });
             });
-
-            // Set up toggle handlers for showing/hiding additional files
-            queryResultsContainer.querySelectorAll('.toggle-files-btn').forEach(button => {
+            
+            // Add toggle functionality for hidden files
+            const toggleButtons = document.querySelectorAll('.toggle-files-btn');
+            toggleButtons.forEach(button => {
                 button.addEventListener('click', function() {
                     // Find the closest hidden-files div
                     const hiddenFilesDiv = this.closest('.group-preview').querySelector('.hidden-files');
@@ -711,110 +752,54 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    // Function to select a file source
-    function selectFileSource(fileId) {
-        // Show loading state
-        showLoading();
+    // Function to handle dataset selection
+    function selectDataset(fileId) {
+        // Get current query parameters
+        const query = queryInput.value.trim();
+        let institution = institutionInput.value.trim();
+        const startYear = startYearInput.value.trim();
+        const endYear = endYearInput.value.trim();
+        const searchAllInstitutions = allInstitutionsCheckbox.checked;
         
-        // Get the current query parameters
-        const query = document.getElementById('queryInput').value;
-        const institution = document.getElementById('institutionInput').value;
-        const startYear = document.getElementById('startYearInput').value;
-        const endYear = document.getElementById('endYearInput').value;
+        // Get selected mission group, if any
+        const selectedMissionGroup = document.querySelector('input[name="missionGroup"]:checked')?.value || '';
         
-        console.log(`Selecting file source: ${fileId} with query: ${query}, institution: ${institution}, years: ${startYear}-${endYear}`);
-        
-        // Prepare the data
-        const data = {
-            query: query,
-            institution: institution,
-            startYear: startYear,
-            endYear: endYear,
-            fileId: fileId
-        };
-        
-        // Get CSRF token - ensure this function is defined
-        const csrfToken = getCsrfToken();
-        if (!csrfToken) {
-            showError('CSRF token not found. Please refresh the page and try again.');
-            hideLoading();
-            return;
+        // If mission group is selected, it overrides institution selection
+        if (selectedMissionGroup) {
+            // When mission group is selected, institution field is ignored
+            institution = '';
+        } else if (!searchAllInstitutions) {
+            // Default to University of Leicester if no institution provided
+            if (!institution) {
+                institution = "The University of Leicester";
+            }
+        } else {
+            // If checkbox is checked, don't filter by institution
+            institution = "";
         }
         
-        // Send the request to select the file
-        fetch('/select_file_source/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            body: JSON.stringify(data)
-        })
-        .then(response => {
-            console.log(`Response status: ${response.status}`);
-            console.log(`Response headers:`, Object.fromEntries([...response.headers]));
-            
-            // Try to read the response as both JSON and text
-            return response.text().then(text => {
-                // Log the full response text for debugging
-                console.log(`Response text (first 100 chars): ${text.substring(0, 100)}`);
-                
-                if (!response.ok) {
-                    try {
-                        // Try to parse as JSON first
-                        const errorData = JSON.parse(text);
-                        throw new Error(errorData.error || 'Error selecting file source');
-                    } catch (e) {
-                        // If parsing fails, return the raw text
-                        throw new Error(`Server error: ${text}`);
-                    }
-                }
-                
-                try {
-                    return JSON.parse(text);
-                } catch (e) {
-                    console.error("Error parsing JSON response:", e);
-                    throw new Error(`Invalid response format: ${text.substring(0, 100)}...`);
-                }
-            });
-        })
-        .then(data => {
-            // Hide the query results panel
-            document.getElementById('queryResultsPanel').style.display = 'none';
-            
-            if (data.success) {
-                console.log(`Received data with ${data.data.length} rows out of total ${data.total_row_count}`);
-                
-                // Display the full data in the visualization panel
-                displayFullData(data);
-                
-                // Show the visualization panel
-                document.getElementById('visualizationPanel').style.display = 'block';
-                
-                // Scroll to the visualization panel
-                document.getElementById('visualizationPanel').scrollIntoView({
-                    behavior: 'smooth'
-                });
-            } else {
-                showError(`Error: ${data.error || 'Unknown error'}`);
-                // Show query results panel again
-                document.getElementById('queryResultsPanel').style.display = 'block';
-            }
-            
-            hideLoading();
-        })
-        .catch(error => {
-            console.error('Error selecting file source:', error);
-            showError(`Error selecting file source: ${error.message}`, [
-                'Check that the server is running',
-                'Verify that the selected dataset exists',
-                'Try refreshing the page and trying again',
-                'Try selecting a different dataset from the results'
-            ]);
-            // Show query results panel again
-            document.getElementById('queryResultsPanel').style.display = 'block';
-            hideLoading();
+        console.log('Selecting dataset:', fileId);
+        console.log('With parameters:', {
+            query,
+            institution,
+            startYear,
+            endYear,
+            missionGroup: selectedMissionGroup
         });
+        
+        // Show loading indicator
+        showLoading();
+        
+        // Build the URL for the dataset details page
+        const detailsUrl = new URL(`${window.location.origin}/dataset_details/${fileId}/`);
+        detailsUrl.searchParams.append('query', query);
+        if (institution) detailsUrl.searchParams.append('institution', institution);
+        if (startYear) detailsUrl.searchParams.append('start_year', startYear);
+        if (endYear) detailsUrl.searchParams.append('end_year', endYear);
+        if (selectedMissionGroup) detailsUrl.searchParams.append('mission_group', selectedMissionGroup);
+        
+        // Navigate to the dataset details page in the current tab
+        window.location.href = detailsUrl.toString();
     }
     
     // Function to display the full data with visualization
@@ -998,6 +983,13 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingIndicator.remove();
             console.log('Loading indicator removed');
         }
+        
+        // Also check for any other elements with loading-related classes
+        const additionalLoaders = document.querySelectorAll('.loading-overlay, .loader');
+        if (additionalLoaders.length > 0) {
+            additionalLoaders.forEach(loader => loader.remove());
+            console.log(`Removed ${additionalLoaders.length} additional loaders`);
+        }
     }
     
     // Function to show error message
@@ -1022,6 +1014,15 @@ document.addEventListener('DOMContentLoaded', function() {
             queryResultsContainer.appendChild(suggestionsList);
         }
     }
+
+    // Add event listener for when the page is shown (including when navigating back)
+    window.addEventListener('pageshow', function(event) {
+        // Also hide loading when navigating back (using back/forward cache)
+        if (event.persisted) {
+            console.log('Page restored from back/forward cache');
+            hideLoading();
+        }
+    });
 });
 
 function handleHesaResponse(response) {

@@ -3,12 +3,34 @@
 
 {% block title %}Dataset Details{% endblock %}
 
+{% block extra_css %}
+<style>
+    .table-container {
+        /* Set a fixed height that shows approximately 10 rows */
+        max-height: 400px;
+        overflow-y: auto;
+        /* Ensure scrollbar is always visible if content overflows */
+        scrollbar-width: thin;
+    }
+    .table-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .table-container::-webkit-scrollbar-thumb {
+        background-color: #cbd5e0;
+        border-radius: 4px;
+    }
+    .table-container::-webkit-scrollbar-track {
+        background-color: #f1f5f9;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
     <h1 class="text-3xl font-bold mb-4">HESA Data Visualization Dashboard</h1>
     
     <div class="mb-4">
-        <a href="javascript:history.back()" class="text-blue-600 hover:text-blue-800">
+        <a href="javascript:history.back();" onclick="sessionStorage.setItem('clearLoading', 'true');" class="text-blue-600 hover:text-blue-800">
             &larr; Back to search results
         </a>
     </div>
@@ -79,7 +101,7 @@
                     <h5 class="text-lg font-medium text-green-800">{{ file_preview.file_name }}</h5>
                     <p class="text-sm text-gray-600 mb-2">Year: {{ file_preview.year }}</p>
                     
-                    <div class="overflow-x-auto mb-3 {% if file_preview.data|length > 10 %}max-h-[600px] overflow-y-auto{% endif %}">
+                    <div class="overflow-x-auto mb-3 table-container">
                         <table class="min-w-full border-collapse table-auto text-sm">
                             <thead>
                                 <tr>
@@ -116,13 +138,26 @@
         <div class="mt-6">
             <h3 class="text-lg font-semibold mb-2">Analyze this data</h3>
             <div class="flex flex-wrap gap-2">
-                <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">
-                    Export Data
+                <button class="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded">
+                    Export CSV
+                </button>
+                <button class="bg-red-700 hover:bg-red-800 text-white font-bold px-4 py-2 rounded shadow">
+                    Export PDF
+                </button>
+                <button class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded">
+                    Export Excel
                 </button>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set a flag in session storage to indicate we're returning from dataset details
+        sessionStorage.setItem('returningFromDetails', 'true');
+    });
+</script>
 {% endblock %}
 
 {% block extra_js %}

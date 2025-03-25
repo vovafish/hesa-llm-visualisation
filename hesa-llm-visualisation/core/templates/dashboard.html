@@ -27,6 +27,64 @@
             </div>
             
             <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Mission Group Comparison:</label>
+                <div class="space-y-2">
+                    <div class="flex items-center">
+                        <input 
+                            type="radio" 
+                            id="missionNone" 
+                            name="missionGroup" 
+                            value="" 
+                            checked 
+                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        >
+                        <label for="missionNone" class="ml-2 block text-sm text-gray-700">
+                            None (regular search)
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        <input 
+                            type="radio" 
+                            id="missionRussell" 
+                            name="missionGroup" 
+                            value="Russell Group" 
+                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        >
+                        <label for="missionRussell" class="ml-2 block text-sm text-gray-700">
+                            Russell Group
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        <input 
+                            type="radio" 
+                            id="missionMillionPlus" 
+                            name="missionGroup" 
+                            value="Million+" 
+                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        >
+                        <label for="missionMillionPlus" class="ml-2 block text-sm text-gray-700">
+                            Million+
+                        </label>
+                    </div>
+                    <div class="flex items-center">
+                        <input 
+                            type="radio" 
+                            id="missionAlliance" 
+                            name="missionGroup" 
+                            value="University Alliance" 
+                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                        >
+                        <label for="missionAlliance" class="ml-2 block text-sm text-gray-700">
+                            University Alliance
+                        </label>
+                    </div>
+                </div>
+                <p class="text-sm text-gray-500 mt-1">
+                    Compare University of Leicester against a mission group
+                </p>
+            </div>
+            
+            <div>
                 <label for="institutionInput" class="block text-sm font-medium text-gray-700 mb-2">Institution:</label>
                 <input
                     type="text"
