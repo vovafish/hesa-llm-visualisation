@@ -32,7 +32,7 @@ documentation.txt
 project_info
 testing_plan.md
 db.sqlite3
-.env
+data.env
 node_modules/
 *.log
 *.pyc
