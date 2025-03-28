@@ -11,16 +11,30 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
+from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
+
+# Load environment variables from data.env file
+env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data.env')
+if os.path.exists(env_file):
+    load_dotenv(env_file)
+else:
+    print("WARNING: data.env file not found. Environment variables will not be loaded.")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from data.env
+data_env_path = os.path.join(BASE_DIR, "data.env")
+if os.path.exists(data_env_path):
+    load_dotenv(data_env_path)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-4jwv#4tk$d!-2)4g8swm5m&v*7%8#a57a10xjintgx6^bpnd@&'
+SECRET_KEY = 'django-insecure-k6n)66=z-i&^oum(s7*w@+3@f5c*5a$uv%$$o0nmc88xdnw#)t'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -130,4 +144,13 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Dashboard configuration
 DASHBOARD_SETTINGS = {
     'MAX_PREVIEW_ROWS': 5,  # Default number of rows to show in previews
+    'DEFAULT_MAX_MATCHES': 3,
 }
+
+# Google Gemini API settings
+# Set your API key in environment variable: GEMINI_API_KEY
+# Or override it here (not recommended for production)
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# If you need to specify a Gemini API key directly (not recommended for production):
+# GEMINI_API_KEY = 'your-api-key-here'

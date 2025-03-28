@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Dataset Details{% endblock %}
+{% block title %}Dataset Details - Traditional Dashboard{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -27,11 +27,14 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold mb-4">HESA Data Visualization Dashboard</h1>
+    <h1 class="text-3xl font-bold mb-4">HESA Data Visualization - Traditional Dashboard</h1>
     
     <div class="mb-4">
         <a href="javascript:history.back();" onclick="sessionStorage.setItem('clearLoading', 'true');" class="text-blue-600 hover:text-blue-800">
             &larr; Back to search results
+        </a>
+        <a href="/ai-dashboard/" class="ml-4 bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded">
+            Switch to AI Dashboard
         </a>
     </div>
     

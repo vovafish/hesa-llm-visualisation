@@ -27,6 +27,12 @@ import logging
 from .data_processing.storage.storage_service import StorageService
 from .data_processing.csv_processor import CLEANED_FILES_DIR, RAW_FILES_DIR  # Import the constants
 from django.views.decorators.csrf import csrf_exempt
+import re
+import json
+import glob
+from .gemini_client import GeminiClient
+from .mock_ai_client import MockAIClient
+import fnmatch
 
 # Mission groups for institution filtering
 MISSION_GROUPS = {
@@ -136,6 +142,13 @@ def dashboard(request):
     # Add a random number for cache busting
     random_cache_buster = random.randint(10000, 99999)
     return render(request, 'dashboard.html', {'random_cache_buster': random_cache_buster})
+
+def ai_dashboard(request):
+    """Render the AI-powered dashboard page."""
+    import random
+    # Add a random number for cache busting
+    random_cache_buster = random.randint(10000, 99999)
+    return render(request, 'ai_dashboard.html', {'random_cache_buster': random_cache_buster})
 
 @require_http_methods(["POST"])
 def process_query(request):
@@ -529,6 +542,9 @@ def process_hesa_query(request):
             for file_match in group['files']:
                 file_path = file_match['file_path']
                 
+                # Get the filename from the path
+                file_name = os.path.basename(file_path)
+                
                 # Generate preview data for this file, filtered by mission group if provided
                 preview = get_csv_preview(
                     file_path, 
@@ -536,8 +552,8 @@ def process_hesa_query(request):
                     mission_group=mission_group
                 )
                 if preview:
-                    preview['year'] = file_match['year']
-                    preview['file_name'] = file_match['file_name']
+                    preview['year'] = file_match.get('year', 'Unknown')
+                    preview['file_name'] = file_name
                     file_previews.append(preview)
             
             # Create a summary of this group
@@ -545,10 +561,10 @@ def process_hesa_query(request):
                 'group_id': group_id,
                 'title': group['title'],
                 'score': float(group['score']),
-                'match_percentage': f"{group['percentage']:.2f}",
+                'match_percentage': group.get('match_percentage', group.get('percentage', 0)),
                 'matched_keywords': group['matched_keywords'],
-                'available_years': group['available_years'],
-                'missing_years': [year for year in years if year not in group['available_years']] if years else [],
+                'available_years': group.get('available_years', group.get('years', [])),
+                'missing_years': [year for year in years if year not in group.get('available_years', group.get('years', []))] if years else [],
                 'file_count': len(group['files']),
                 'file_previews': file_previews
             }
@@ -607,7 +623,7 @@ def select_file_source(request):
             mission_group = data.get('missionGroup', '')
             start_year = data.get('startYear', '')
             end_year = data.get('endYear', '')
-            group_id = data.get('fileId', '')  # This is actually the group_id
+            group_id = data.get('fileId', '')  # This is the group_id from the client
             
             logger.info(f"Selecting file source: {group_id}")
             logger.info(f"Query: {query}")
@@ -624,67 +640,64 @@ def select_file_source(request):
             logger.info(f"Parsed query into keywords: {keywords}")
             logger.info(f"Removed stopwords: {removed_words}")
             
-            # Extract parts from the group_id (format: group_N_score)
+            # Find all CSV files
+            all_files = list(CLEANED_FILES_DIR.glob('*.csv'))
+            logger.info(f"Found {len(all_files)} potential CSV files")
+            
+            # Get years to search if provided
+            years_to_search = None
+            if start_year:
+                if end_year:
+                    years_to_search = []
+                    try:
+                        for year in range(int(start_year), int(end_year) + 1):
+                            academic_year = f"{year}/{str(year+1)[2:4]}"
+                            years_to_search.append(academic_year)
+                    except ValueError:
+                        logger.warning(f"Invalid year format: {start_year}-{end_year}")
+                else:
+                    academic_year = f"{start_year}/{str(int(start_year) + 1)[2:4]}"
+                    years_to_search = [academic_year]
+            
+            # Extract parts from the group_id (format varies: group_N or group_N_score)
             parts = group_id.split('_')
+            group_number = None
+            score = None
+            
             if len(parts) >= 2:
-                group_number = parts[1]  # Extract the group number
-                logger.info(f"Looking for files in group {group_number}")
-            else:
+                try:
+                    group_number = int(parts[1])  # Extract the group number
+                    if len(parts) >= 3:
+                        score = parts[2]  # Extract the score if available
+                    logger.info(f"Looking for files in group {group_number} with score {score}")
+                except ValueError:
+                    logger.warning(f"Could not parse group number from {group_id}")
+            
+            if group_number is None:
                 logger.warning(f"Invalid group ID format: {group_id}")
                 return JsonResponse({
                     'error': 'Invalid group ID format',
                     'success': False
                 }, status=400)
             
-            # Find all CSV files
-            all_files = list(CLEANED_FILES_DIR.glob('*.csv'))
-            logger.info(f"Found {len(all_files)} potential CSV files")
-            
-            # First try to find score-matched file directly
-            matched_file = None
-            for file_path in all_files:
-                # Try to directly match by score
-                if str(group_id) in file_path.name:
-                    logger.info(f"Found direct file match: {file_path}")
-                    matched_file = file_path
-                    break
+            # Try to find the matching group based on group number
+            csv_matches = find_relevant_csv_files(file_pattern, keywords, years_to_search)
             
             target_title = None
             csv_files = []
             
-            # If we found a direct matched file
-            if matched_file:
-                # Get the title from the matched file
-                with open(str(matched_file), 'r', encoding='utf-8', errors='ignore') as f:
-                    first_line = f.readline().strip()
-                    if first_line.startswith('#METADATA:'):
-                        metadata_str = first_line[len('#METADATA:'):]
-                        metadata = json.loads(metadata_str)
-                        target_title = metadata.get('title', '')
-                        logger.info(f"Found target title from matched file: {target_title}")
-            
-            # If we still don't have a target title, use the find_relevant_csv_files method
-            if not target_title:
-                # Try to find files based on the preview data groups
-                # Re-run the find_relevant_csv_files to get the same grouping logic
-                years_to_search = [f"{start_year}/{str(int(start_year) + 1)[-2:]}"] if start_year else None
-                csv_matches = find_relevant_csv_files(file_pattern, keywords, years_to_search)
+            # Find the group that matches our group number
+            if csv_matches and 0 < group_number <= len(csv_matches):
+                matching_group = csv_matches[group_number - 1]  # Convert to 0-based index
+                target_title = matching_group['title']
+                logger.info(f"Found matching group {group_number} with title: {target_title}")
                 
-                # Check if we have matches and if the group_id matches one of them
-                if csv_matches:
-                    # The group_id has the format "group_N_score" where N is the 1-based index
-                    try:
-                        group_index = int(group_number) - 1
-                        if 0 <= group_index < len(csv_matches):
-                            # We found the matching group
-                            matching_group = csv_matches[group_index]
-                            target_title = matching_group['title']
-                            logger.info(f"Found target title from matching group: {target_title}")
-                    except ValueError:
-                        logger.warning(f"Could not parse group number from group_id: {group_id}")
+                # Directly use the file paths from the matching group
+                csv_files = [(file_match['file_path'], file_match.get('academic_year', file_match.get('year', 'Unknown'))) 
+                             for file_match in matching_group['files']]
             
-            # If we still don't have a title, search by group number in metadata
-            if not target_title:
+            # If we still don't have a target title, try to find by title from metadata
+            if not csv_files and not target_title:
                 for file_path in all_files:
                     try:
                         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -696,57 +709,100 @@ def select_file_source(request):
                                     metadata_group_id = metadata.get('group_id', '')
                                     
                                     # Check various ways the group might be identified
-                                    if group_id == metadata_group_id or \
-                                       group_id in metadata_group_id or \
-                                       metadata_group_id.startswith(f"group_{group_number}_") or \
-                                       metadata.get('title', '') == group_id:
+                                    if (group_id == metadata_group_id or 
+                                        f"group_{group_number}" in metadata_group_id):
                                         target_title = metadata.get('title', '')
-                                        logger.info(f"Found target title by group number: {target_title}")
+                                        logger.info(f"Found target title by group number in metadata: {target_title}")
                                         break
                                 except json.JSONDecodeError:
                                     logger.warning(f"Invalid metadata JSON in {file_path}")
                     except Exception as e:
                         logger.warning(f"Error reading {file_path}: {str(e)}")
             
-            # Direct approach - try to find HE student enrolments by HE provider
-            if not target_title and group_number == "1":
-                target_title = "HE student enrolments by HE provider"
-                logger.info(f"Using default title for group 1: {target_title}")
-            elif not target_title and group_number == "2":
-                target_title = "UK permanent address HE students by HE provider and permanent address"
-                logger.info(f"Using default title for group 2: {target_title}")
-            elif not target_title and group_number == "3":
-                target_title = "HE qualifiers by HE provider and level of qualification obtained"
-                logger.info(f"Using default title for group 3: {target_title}")
+            # Direct approach - try some common defaults based on group number
+            if not target_title:
+                # These are common dataset titles that we can fall back to
+                default_titles = {
+                    1: "HE student enrolments by HE provider",
+                    2: "UK permanent address HE students by HE provider and permanent address",
+                    3: "HE qualifiers by HE provider and level of qualification obtained"
+                }
+                
+                if group_number in default_titles:
+                    target_title = default_titles[group_number]
+                    logger.info(f"Using default title for group {group_number}: {target_title}")
+                else:
+                    # Last attempt - use any file with a title containing keywords
+                    if keywords:
+                        for file_path in all_files:
+                            try:
+                                file_name = os.path.basename(str(file_path))
+                                # Check if any keyword is in the filename
+                                if any(keyword.lower() in file_name.lower() for keyword in keywords):
+                                    # Construct a title from the filename
+                                    target_title = file_name.replace('.csv', '').replace('_', ' ').title()
+                                    logger.info(f"Using filename-derived title as fallback: {target_title}")
+                                    break
+                            except Exception:
+                                continue
             
             if not target_title:
-                logger.warning(f"No files found with group ID: {group_id}")
+                logger.warning(f"No matching title found for group ID: {group_id}")
                 return JsonResponse({
                     'error': f'No files found for the selected dataset',
                     'success': False
                 }, status=404)
             
-            # Find all files with matching title - case insensitive
-            csv_files = []
-            for file_path in all_files:
-                try:
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        first_line = f.readline().strip()
-                        if first_line.startswith('#METADATA:'):
-                            metadata_str = first_line[len('#METADATA:'):]
-                            try:
-                                metadata = json.loads(metadata_str)
-                                file_title = metadata.get('title', '')
-                                
-                                # Case-insensitive substring matching in both directions
-                                if (file_title.lower() == target_title.lower() or 
-                                    target_title.lower() in file_title.lower() or 
-                                    file_title.lower() in target_title.lower()):
-                                    csv_files.append((file_path, metadata.get('academic_year', 'Unknown')))
-                            except json.JSONDecodeError:
-                                logger.warning(f"Invalid metadata JSON in {file_path}")
-                except Exception as e:
-                    logger.warning(f"Error reading {file_path}: {str(e)}")
+            # Find all files with matching title
+            if not csv_files:
+                for file_path in all_files:
+                    file_name = os.path.basename(str(file_path))
+                    
+                    # First try using metadata if available
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            first_line = f.readline().strip()
+                            if first_line.startswith('#METADATA:'):
+                                metadata_str = first_line[len('#METADATA:'):]
+                                try:
+                                    metadata = json.loads(metadata_str)
+                                    file_title = metadata.get('title', '')
+                                    academic_year = metadata.get('academic_year', '')
+                                    
+                                    # Case-insensitive substring matching in both directions
+                                    if (file_title.lower() == target_title.lower() or 
+                                        target_title.lower() in file_title.lower() or 
+                                        file_title.lower() in target_title.lower()):
+                                        csv_files.append((str(file_path), academic_year or 'Unknown'))
+                                except json.JSONDecodeError:
+                                    # Fall back to using filename
+                                    derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
+                                    # Extract year from filename if possible
+                                    year_match = re.search(r'(20\d{2})', file_name)
+                                    if year_match:
+                                        year = year_match.group(1)
+                                        academic_year = f"{year}/{str(int(year)+1)[2:4]}"
+                                    else:
+                                        academic_year = 'Unknown'
+                                        
+                                    # Check if derived title matches target
+                                    if (derived_title.lower() == target_title.lower() or 
+                                        target_title.lower() in derived_title.lower() or 
+                                        derived_title.lower() in target_title.lower()):
+                                        csv_files.append((str(file_path), academic_year))
+                    except Exception as e:
+                        logger.warning(f"Error reading metadata from {file_path}: {str(e)}")
+                        # Fall back to filename matching
+                        derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
+                        # Extract year from filename if possible
+                        year_match = re.search(r'(20\d{2})', file_name)
+                        academic_year = f"{year_match.group(1)}/{str(int(year_match.group(1))+1)[2:]}" if year_match else 'Unknown'
+                        
+                        # Check if derived title matches target
+                        if (derived_title.lower() == target_title.lower() or 
+                            target_title.lower() in derived_title.lower() or 
+                            derived_title.lower() in target_title.lower()):
+                            csv_files.append((str(file_path), academic_year))
             
             if not csv_files:
                 logger.warning(f"No CSV files found for title: {target_title}")
@@ -1362,292 +1418,264 @@ def get_csv_preview(file_path, max_rows=MAX_PREVIEW_ROWS, institution=None, miss
             'error': str(e)
         }
 
-def find_relevant_csv_files(file_pattern, keywords, requested_years=None):
+def find_relevant_csv_files(file_pattern, keywords=None, requested_years=None):
+    """Find relevant CSV files based on keywords and years.
+    
+    Args:
+        file_pattern: Pattern to match CSV files (e.g., 'hesa_*.csv')
+        keywords: List of keywords to match in the file content
+        requested_years: Optional list of years to filter by
+        
+    Returns:
+        List of matching files with metadata, grouped by title/dataset
     """
-    Find CSV files that match the given pattern and keywords.
-    Returns a list of relevant files with scores based on keyword matches.
-    Uses Density-Based Weighting to prioritize files with focused matches.
-    """
-    logger = logging.getLogger(__name__)
-    
-    # List all CSV files in the directory
-    all_csv_files = list(CLEANED_FILES_DIR.glob('*.csv'))
-    logger.info(f"Found {len(all_csv_files)} CSV files in directory")
-    
-    # Log all CSV files for debugging when there's a year filter issue
-    if requested_years:
-        logger.info(f"Filtering files for years: {requested_years}")
-        sample_files = [f.name for f in all_csv_files[:5]]
-        logger.info(f"Sample files in directory: {sample_files}")
+    try:
+        # Log parameters for debugging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Looking for CSVs with pattern: {file_pattern}, keywords: {keywords}, years: {requested_years}")
         
-        # Log files containing year strings in their names for debugging
-        year_pattern_files = []
-        for file in all_csv_files:
-            for year_str in requested_years:
-                year_simple = year_str.split('/')[0]  # Get the first part (e.g., "2015" from "2015/16")
-                if year_simple in file.name:
-                    year_pattern_files.append(file.name)
-                    break
+        # Check if index file exists
+        index_path = os.path.join(CLEANED_FILES_DIR, "hesa_files_index.json")
+        if not os.path.exists(index_path):
+            logger.warning(f"Index file not found: {index_path}")
+            # Fallback to older method if index not available
+            return find_relevant_csv_files_fallback(file_pattern, keywords, requested_years)
         
-        logger.info(f"Files with requested years in filename: {year_pattern_files[:10]}")
-    else:
-        logger.info("No year filtering applied, considering all files")
-    
-    # Define synonyms dictionary for keyword expansion
-    synonyms = {
-        'student': ['students', 'learner', 'learners'],
-        'enrollment': ['enrolment', 'enrolments', 'enrollments', 'enroll', 'enrol'],
-        'accommodation': ['housing', 'residence', 'living', 'accommodation'],
-        'university': ['universities', 'college', 'colleges'],
-        'graduate': ['graduates', 'graduation'],
-        'undergraduate': ['undergraduates'],
-        'postgraduate': ['postgraduates'],
-        'degree': ['degrees', 'qualification', 'qualifications'],
-        'term-time': ['term time', 'termtime'],
-        'full-time': ['full time', 'fulltime'],
-        'part-time': ['part time', 'parttime']
-    }
-    
-    # Expand keywords with synonyms
-    expanded_keywords = set()
-    for keyword in keywords:
-        keyword_lower = keyword.lower()
-        # Add the original keyword
-        expanded_keywords.add(keyword_lower)
-        
-        # Add synonyms for this keyword if available
-        for base_word, syn_list in synonyms.items():
-            if keyword_lower == base_word or keyword_lower in syn_list:
-                expanded_keywords.add(base_word)
-                expanded_keywords.update(syn_list)
-    
-    logger.info(f"Original keywords: {keywords}")
-    logger.info(f"Expanded keywords with synonyms: {expanded_keywords}")
-    
-    # Create a list to store matching files and their scores
-    file_matches = []
-    
-    # Track academic years found in files for better error messages
-    academic_years_found = set()
-    
-    # Process each CSV file
-    for file_path in all_csv_files:
+        # Load the index file
         try:
-            file_name = file_path.name
-            logger.debug(f"Checking file: {file_name}")
+            with open(index_path, 'r', encoding='utf-8') as f:
+                index_data = json.load(f)
             
-            # Try to extract metadata from the first line
-            metadata = {}
-            title = ""
-            academic_year = ""
-            keywords_title = []
-            keywords_columns = []
+            logger.info(f"Loaded index with {index_data.get('total_files', 0)} files")
+        except Exception as e:
+            logger.error(f"Error loading index file: {str(e)}")
+            # Fallback to older method if there's an error
+            return find_relevant_csv_files_fallback(file_pattern, keywords, requested_years)
+        
+        # Extract the files from the index
+        all_files = index_data.get("hesa_files", [])
+        if not all_files:
+            logger.warning("No files found in the index")
+            return []
+        
+        # Create a map to group files by title
+        grouped_files = {}
+        
+        # Process each file from the index
+        for file_info in all_files:
+            file_path = file_info.get("file_path")
+            title = file_info.get("title", "Unknown title")
+            academic_year = file_info.get("academic_year", "Unknown")
+            keywords_title = file_info.get("keywords_title", [])
+            keywords_columns = file_info.get("keywords_columns", [])
             
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                first_line = f.readline().strip()
-                
-                # Check if the line starts with #METADATA:
-                if first_line.startswith('#METADATA:'):
-                    try:
-                        # Extract the JSON part
-                        metadata_str = first_line[len('#METADATA:'):]
-                        metadata = json.loads(metadata_str)
-                        
-                        # Extract relevant fields
-                        title = metadata.get('title', '')
-                        academic_year = metadata.get('academic_year', '')
-                        keywords_title = metadata.get('keywords_title', [])
-                        keywords_columns = metadata.get('keywords_columns', [])
-                        
-                        # Track all academic years found
-                        if academic_year:
-                            academic_years_found.add(academic_year)
-                        
-                        logger.debug(f"Extracted metadata from {file_name}:")
-                        logger.debug(f"  Title: [{title}]")
-                        logger.debug(f"  Academic Year: [{academic_year}]")
-                        logger.debug(f"  Title keywords: {keywords_title}")
-                        logger.debug(f"  Column keywords: {keywords_columns}")
-                        
-                    except json.JSONDecodeError as e:
-                        logger.error(f"Error parsing metadata JSON in {file_name}: {str(e)}")
-                        # Continue to fallback method
-                    
-                # If metadata parsing failed or no structured metadata found, 
-                # try to read the file line by line to find metadata
-                if not title or not academic_year:
-                    # Reopen the file and try to extract metadata from unstructured content
-                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                        lines = [line.strip() for line in f.readlines()[:20]]
-                        
-                    # Look for title
-                    for line in lines:
-                        if 'Title:' in line:
-                            # Extract text after 'Title:'
-                            title_match = re.search(r'Title:,\s*\"?(.*?)\"?$', line)
-                            if title_match:
-                                title = title_match.group(1).strip('\"')
-                                # If title contains "Table XX - ", extract only what comes after
-                                table_match = re.search(r'Table \d+ - (.*)', title)
-                                if table_match:
-                                    title = table_match.group(1).strip()
-                        
-                        # Look for academic year
-                        year_match = re.search(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
-                        if year_match:
-                            academic_year = year_match.group(1).strip()
-                            academic_years_found.add(academic_year)
-                            logger.debug(f"Found academic year: [{academic_year}]")
+            # Normalize academic year for comparison
+            year = academic_year.split('/')[0] if '/' in academic_year else academic_year
             
-            # Skip this file if the year doesn't match requested years
-            if requested_years and (not academic_year or academic_year not in requested_years):
-                logger.debug(f"Skipping {file_name} as year {academic_year} does not match requested years: {requested_years}")
+            # Skip if the file doesn't match the file pattern
+            if file_pattern and not fnmatch.fnmatch(os.path.basename(file_path), file_pattern):
                 continue
             
-            # If no keywords extracted from metadata, derive them from the title
-            if not keywords_title and title:
-                title_lower = title.lower()
-                # Extract words from title, including hyphenated terms
-                title_keywords = re.findall(r'\b\w+(?:-\w+)*\b', title_lower)
-                # Filter out short words
-                keywords_title = [w for w in title_keywords if len(w) > 2]
-                logger.debug(f"Derived title keywords from title: {keywords_title}")
+            # If years are specified and this file doesn't match, skip it
+            if requested_years and not any(year.startswith(req_year) for req_year in requested_years):
+                continue
             
-            # Track which specific keywords were matched
-            matched_keywords = set()
+            # Calculate relevance score
+            # Start with base score
+            score = 0.5
+            match_percentage = 50
+            matched_keywords = []
             
-            # Count matches in title and title keywords
-            title_matches = 0
-            title_lower = title.lower()
-            
-            # First check for matches in the full title
-            for query_keyword in expanded_keywords:
-                query_keyword_lower = query_keyword.lower()
-                # Check if keyword is in the complete title
-                if query_keyword_lower in title_lower:
-                    title_matches += 1
-                    matched_keywords.add(query_keyword)
-                    logger.debug(f"  Matched '{query_keyword}' in title: {title}")
-            
-            # Then check for matches in individual title keywords
-            for query_keyword in expanded_keywords:
-                query_keyword_lower = query_keyword.lower()
-                found_in_title_keywords = False
-                
-                for title_keyword in keywords_title:
-                    title_keyword_lower = title_keyword.lower()
-                    # Check for substring match in either direction
-                    if (query_keyword_lower in title_keyword_lower or 
-                        title_keyword_lower in query_keyword_lower):
-                        # Only count this match if we didn't already count it in the full title
-                        if query_keyword_lower not in matched_keywords:
-                            title_matches += 1
-                            matched_keywords.add(query_keyword)
-                            found_in_title_keywords = True
-                            logger.debug(f"  Matched '{query_keyword}' with title keyword '{title_keyword}'")
+            # If keywords are provided, calculate match score
+            if keywords:
+                # Combine all available keywords
+                all_file_keywords = keywords_title + keywords_columns
+                # Count matching keywords
+                for keyword in keywords:
+                    keyword_lower = keyword.lower()
+                    for file_keyword in all_file_keywords:
+                        file_keyword_lower = file_keyword.lower()
+                        # Direct match or substring match
+                        if keyword_lower == file_keyword_lower or keyword_lower in file_keyword_lower or file_keyword_lower in keyword_lower:
+                            score += 0.1
+                            matched_keywords.append(keyword)
                             break
-                
-                if found_in_title_keywords:
-                    continue
+                            
+                # Adjust percentage based on matches
+                if len(keywords) > 0:
+                    match_percentage = min(100, int((len(matched_keywords) / len(keywords)) * 100))
+                    # Boost score based on match percentage
+                    score = min(1.0, 0.5 + (match_percentage / 200))
             
-            # Count matches in column keywords
-            column_matches = 0
-            for query_keyword in expanded_keywords:
-                query_keyword_lower = query_keyword.lower()
-                # Skip if already matched in title
-                if query_keyword_lower in matched_keywords:
-                    continue
-                    
-                for column_keyword in keywords_columns:
-                    column_keyword_lower = column_keyword.lower()
-                    # Check for substring match in either direction
-                    if (query_keyword_lower in column_keyword_lower or 
-                        column_keyword_lower in query_keyword_lower):
-                        column_matches += 1
-                        matched_keywords.add(query_keyword)
-                        logger.debug(f"  Matched '{query_keyword}' with column keyword '{column_keyword}'")
-                        break
+            # Create a match object
+            match = {
+                'file_path': str(file_path),
+                'title': title, 
+                'year': year,
+                'academic_year': academic_year,
+                'score': score,
+                'match_percentage': match_percentage,
+                'matched_keywords': list(set(matched_keywords))  # Remove duplicates
+            }
             
-            # Only include files with at least one keyword match, unless no keywords were provided
-            if not expanded_keywords or matched_keywords:
-                # Calculate score based on density of matches
-                # We give more weight to title matches (title words often have more relevance)
-                # This also prioritizes more focused datasets
-                
-                # Title density: Matches per title word
-                title_words = max(len(keywords_title), 1)  # Avoid division by zero
-                title_density = title_matches / title_words if title_words > 0 else 0
-                
-                # Column density: Matches per column
-                column_count = max(len(keywords_columns), 1)  # Avoid division by zero
-                column_density = column_matches / column_count if column_count > 0 else 0
-                
-                # Weighted score: Title matches are worth 20x column matches
-                score = (title_density * 20) + column_density
-                
-                # Calculate match percentage
-                total_keywords = len(expanded_keywords)
-                matched_count = len(matched_keywords)
-                match_percentage = (matched_count / total_keywords * 100) if total_keywords > 0 else 0
-                
-                if keywords and score > 0:
-                    logger.info(f"Keyword match found for {file_name} with score {score:.2f} ({match_percentage:.2f}%)")
-                    logger.info(f"  Title density: {title_density:.3f} ({title_matches}/{title_words}) → {title_density * 20:.2f} points")
-                    logger.info(f"  Column density: {column_density:.3f} ({column_matches}/{column_count}) → {column_density:.2f} points")
-                    logger.info(f"  Matched keywords: {matched_keywords}")
-                elif requested_years and academic_year in requested_years:
-                    logger.info(f"Year match only for {file_name}")
-                
-                # Create a match record
-                match = {
-                    'file_path': str(file_path),
-                    'file_name': file_name,
+            # Group by title
+            if title not in grouped_files:
+                grouped_files[title] = {
                     'title': title,
-                    'year': academic_year,
+                    'group_id': f"group_{len(grouped_files) + 1}",
+                    'score': score,
+                    'match_percentage': match_percentage,
+                    'matched_keywords': matched_keywords,
+                    'years': [academic_year],
+                    'files': [match]
+                }
+            else:
+                # Update existing group
+                group = grouped_files[title]
+                # Add this file
+                group['files'].append(match)
+                # Add unique academic year
+                if academic_year not in group['years']:
+                    group['years'].append(academic_year)
+                # Update score if this file has a better score
+                if score > group['score']:
+                    group['score'] = score
+                    group['match_percentage'] = match_percentage
+                    group['matched_keywords'] = matched_keywords
+        
+        # Convert the grouped files dictionary to a list and sort by score
+        file_groups = list(grouped_files.values())
+        file_groups.sort(key=lambda x: (-x['score'], x['title']))
+        
+        logger.info(f"Found {len(file_groups)} file groups from index")
+        return file_groups
+        
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in find_relevant_csv_files: {str(e)}")
+        return []
+
+def find_relevant_csv_files_fallback(file_pattern, keywords=None, requested_years=None):
+    """Legacy method to find relevant CSV files without using the index."""
+    try:
+        # Log parameters for debugging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Using fallback to find CSVs with pattern: {file_pattern}, keywords: {keywords}, years: {requested_years}")
+        
+        # Get all CSV files from cleaned directory
+        csv_dir = CLEANED_FILES_DIR
+        file_paths = []
+        
+        if os.path.exists(csv_dir):
+            # Get all CSV files that match the pattern if provided, otherwise get all CSVs
+            if file_pattern:
+                pattern_path = os.path.join(csv_dir, file_pattern)
+                file_paths = glob.glob(pattern_path)
+                logger.info(f"Found {len(file_paths)} files matching pattern: {pattern_path}")
+            else:
+                # If no pattern, get all CSV files
+                file_paths = list(Path(csv_dir).glob('*.csv'))
+                logger.info(f"Found {len(file_paths)} total CSV files in {csv_dir}")
+        else:
+            logger.warning(f"CSV directory not found: {csv_dir}")
+            return []
+        
+        # No files found
+        if not file_paths:
+            logger.warning("No CSV files found matching the pattern. Using all available CSV files.")
+            # Fallback to all CSV files
+            file_paths = list(Path(csv_dir).glob('*.csv'))
+            if not file_paths:
+                logger.error("No CSV files found at all in the directory.")
+                return []
+        
+        # Create a map to group files by title
+        grouped_files = {}
+        
+        # Process each file
+        for file_path in file_paths:
+            # Extract filename without path and extension
+            file_name = os.path.basename(str(file_path))
+            file_title = file_name.replace('.csv', '').replace('_', ' ').title()
+            
+            # Try to extract year from filename
+            year_match = re.search(r'(\d{4})', file_name)
+            year = year_match.group(1) if year_match else 'Unknown'
+            academic_year = f"{year}/{str(int(year)+1)[2:4]}" if year != 'Unknown' else 'Unknown'
+            
+            # If years are specified and this file doesn't match, skip it
+            if requested_years and year not in requested_years:
+                # Also try to match academic year format
+                if academic_year not in requested_years:
+                    continue
+            
+            # Calculate a simple relevance score based on keyword matches
+            score = 0.5  # Default base score
+            match_percentage = 50  # Default match percentage
+            matched_keywords = []
+            
+            # If we have keywords, calculate matches
+            if keywords:
+                # Try to find each keyword in the file name
+                for keyword in keywords:
+                    if keyword.lower() in file_name.lower():
+                        score += 0.1
+                        matched_keywords.append(keyword)
+                
+                # Adjust percentage based on matches
+                if len(keywords) > 0:
+                    match_percentage = min(100, int((len(matched_keywords) / len(keywords)) * 100))
+                    # Boost score based on match percentage
+                    score = min(1.0, 0.5 + (match_percentage / 200))
+            
+            # Create a match object
+            match = {
+                'file_path': str(file_path),
+                'file_name': file_name,
+                'title': file_title, 
+                'year': year,
+                'academic_year': academic_year,
+                'score': score,
+                'match_percentage': match_percentage,
+                'matched_keywords': matched_keywords
+            }
+            
+            # Group by title
+            if file_title not in grouped_files:
+                grouped_files[file_title] = {
+                    'title': file_title,
+                    'group_id': f"group_{len(grouped_files) + 1}",
                     'score': score,
                     'percentage': match_percentage,
-                    'matched_keywords': list(matched_keywords)
+                    'matched_keywords': matched_keywords,
+                    'available_years': [academic_year],
+                    'files': [match]
                 }
-                file_matches.append(match)
-                
-        except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}")
-    
-    # Sort matches by score (highest first)
-    file_matches.sort(key=lambda x: x['score'], reverse=True)
-    
-    # Log the number of matches found
-    logger.info(f"Found {len(file_matches)} matches in total")
-    
-    # Group files by title for better organization
-    grouped_matches = []
-    file_groups = {}
-    
-    for file_match in file_matches:
-        title = file_match['title']
-        if title not in file_groups:
-            file_groups[title] = {
-                'title': title,
-                'files': [],
-                'score': file_match['score'],
-                'percentage': file_match['percentage'],
-                'matched_keywords': file_match['matched_keywords'],
-                'available_years': set(),
-            }
+            else:
+                # Add this file to existing group
+                grouped_files[file_title]['files'].append(match)
+                # Add unique year
+                if academic_year not in grouped_files[file_title]['available_years']:
+                    grouped_files[file_title]['available_years'].append(academic_year)
+                # Update score if higher
+                if score > grouped_files[file_title]['score']:
+                    grouped_files[file_title]['score'] = score
+                    grouped_files[file_title]['percentage'] = match_percentage
+                    grouped_files[file_title]['matched_keywords'] = matched_keywords
         
-        file_groups[title]['files'].append(file_match)
-        if file_match['year']:
-            file_groups[title]['available_years'].add(file_match['year'])
-    
-    # Convert the dictionary to a list and sort by score
-    for title, group in file_groups.items():
-        group['available_years'] = sorted(list(group['available_years']))
-        grouped_matches.append(group)
-    
-    # Sort by score (highest first)
-    grouped_matches.sort(key=lambda x: x['score'], reverse=True)
-    
-    return grouped_matches
+        # Convert the grouped files dictionary to a list and sort by score
+        file_groups = list(grouped_files.values())
+        file_groups.sort(key=lambda x: x['score'], reverse=True)
+        
+        logger.info(f"Found {len(file_groups)} file groups using fallback method")
+        return file_groups
+        
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in find_relevant_csv_files_fallback: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return []
 
 def dataset_details(request, group_id):
     """
@@ -1698,14 +1726,32 @@ def dataset_details(request, group_id):
         # Find all CSV files
         all_files = list(CLEANED_FILES_DIR.glob('*.csv'))
         
-        # Extract target title and group number from group_id
+        # Extract parts from the group_id (format varies: group_N or group_N_score)
         parts = group_id.split('_')
+        group_number = None
         target_title = None
         
         if len(parts) >= 2:
-            group_number = parts[1]  # Extract the group number
-            
-            # Find the target title from matching files
+            try:
+                group_number = int(parts[1])  # Extract the group number
+                score = parts[2] if len(parts) > 2 else None
+                logger.info(f"Looking for dataset with group number {group_number} and score {score}")
+                
+                # Find the target title by recreating the search
+                grouped_matches = find_relevant_csv_files(file_pattern, keywords, years if years else None)
+                
+                # Try to find the group that matches our group number
+                if grouped_matches and 0 < group_number <= len(grouped_matches):
+                    target_group = grouped_matches[group_number - 1]
+                    target_title = target_group['title']
+                    logger.info(f"Found target title from recreated search: {target_title}")
+                else:
+                    logger.warning(f"Group number {group_number} not found in search results")
+            except (ValueError, IndexError) as e:
+                logger.warning(f"Error parsing group ID: {str(e)}")
+        
+        # If we couldn't find the title through search, try direct file lookups
+        if not target_title:
             for file_path in all_files:
                 try:
                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
@@ -1727,17 +1773,19 @@ def dataset_details(request, group_id):
                                 continue
                 except Exception:
                     continue
+        
+        # Direct approach for common datasets if we still don't have a title
+        if not target_title:
+            # These are common dataset titles that we can fall back to
+            default_titles = {
+                1: "HE student enrolments by HE provider",
+                2: "UK permanent address HE students by HE provider and permanent address",
+                3: "HE qualifiers by HE provider and level of qualification obtained"
+            }
             
-            # Direct approach for common datasets if we still don't have a title
-            if not target_title:
-                # Recreate the file search process to match the original search
-                grouped_matches = find_relevant_csv_files(file_pattern, keywords, years if years else None)
-                
-                # Try to find the group that matches our group number
-                if len(grouped_matches) >= int(group_number):
-                    target_group = grouped_matches[int(group_number) - 1]
-                    target_title = target_group['title']
-                    logger.info(f"Found target title from recreated search: {target_title}")
+            if group_number in default_titles:
+                target_title = default_titles[group_number]
+                logger.info(f"Using default title for group {group_number}: {target_title}")
         
         if not target_title:
             return render(request, 'dashboard.html', {
@@ -1751,6 +1799,7 @@ def dataset_details(request, group_id):
         # Find files that match the target title
         csv_files = []
         for file_path in all_files:
+            # First try to extract title from metadata
             try:
                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
                     first_line = f.readline().strip()
@@ -1762,23 +1811,51 @@ def dataset_details(request, group_id):
                             file_year = metadata.get('academic_year', '')
                             
                             # Match by title
-                            if file_title.lower() == target_title.lower():
+                            if file_title.lower() == target_title.lower() or \
+                               target_title.lower() in file_title.lower() or \
+                               file_title.lower() in target_title.lower():
                                 # Check year filter if provided
                                 if not years or file_year in years:
                                     csv_files.append({
                                         'file_path': str(file_path),
-                                        'file_name': file_path.name,
+                                        'file_name': os.path.basename(file_path),
                                         'title': file_title,
                                         'year': file_year,
                                         'score': parts[2] if len(parts) > 2 else None,
                                         'matched_keywords': metadata.get('keywords_title', []) + metadata.get('keywords_columns', [])
                                     })
                         except json.JSONDecodeError:
-                            continue
-            except Exception:
-                continue
+                            logger.warning(f"Invalid metadata JSON in {file_path}")
+            except Exception as e:
+                logger.warning(f"Error reading metadata from {file_path}: {str(e)}")
+            
+            # If no title from metadata, try from filename
+            if not csv_files:
+                file_name = os.path.basename(file_path)
+                derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
+                
+                # Check if the derived title matches the target title
+                if derived_title.lower() == target_title.lower() or \
+                   target_title.lower() in derived_title.lower() or \
+                   derived_title.lower() in target_title.lower():
+                    # Extract year from filename if possible
+                    year_match = re.search(r'(20\d{2})', file_name)
+                    file_year = year_match.group(1) if year_match else 'Unknown'
+                    academic_year = f"{file_year}/{str(int(file_year)+1)[2:4]}" if file_year.isdigit() else 'Unknown'
+                    
+                    # Check year filter if provided
+                    if not years or academic_year in years:
+                        csv_files.append({
+                            'file_path': str(file_path),
+                            'file_name': file_name,
+                            'title': derived_title,
+                            'year': academic_year,
+                            'score': parts[2] if len(parts) > 2 else None,
+                            'matched_keywords': []
+                        })
         
         if not csv_files:
+            logger.warning(f"No files found for title: {target_title}")
             return render(request, 'dashboard.html', {
                 'error': 'No files found for the selected dataset',
                 'query': query,
@@ -1806,19 +1883,19 @@ def dataset_details(request, group_id):
         
         # Create a summary of this single group
         score = parts[2] if len(parts) > 2 else None
-        percentage = float(score) / 30 * 100 if score else None
+        percentage = float(score) * 100 / 1.0 if score else None
         group_summary = {
             'group_id': group_id,
             'title': target_title,
             'score': float(score) if score else None,
             'match_percentage': f"{percentage:.2f}" if percentage else None,
-            'matched_keywords': list(set([keyword for file in csv_files for keyword in file['matched_keywords']])),
+            'matched_keywords': list(set([keyword for file in csv_files for keyword in file.get('matched_keywords', [])])),
             'available_years': sorted(list(set([file['year'] for file in csv_files if file['year']]))),
             'file_count': len(csv_files),
             'file_previews': file_previews
         }
         
-        # Set max_preview_rows to None to indicate we're showing all rows
+        # Return the dataset_details template with the dataset information
         return render(request, 'core/dataset_details.html', {
             'query': query,
             'institution': institution,
@@ -1844,3 +1921,143 @@ def dataset_details(request, group_id):
             'start_year': start_year,
             'end_year': end_year,
         })
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def process_gemini_query(request):
+    """Process a natural language query using AI and return analysis."""
+    try:
+        query = request.POST.get('query', '').strip()
+        max_matches = int(request.POST.get('max_matches', '3'))
+        
+        if not query:
+            return JsonResponse({
+                'status': 'error',
+                'error': 'No query provided'
+            }, status=400)
+        
+        # Log the query for debugging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Processing query: {query}")
+        
+        # First try to use the Gemini API client
+        gemini_client = GeminiClient()
+        
+        # Check if we have a valid API key
+        if gemini_client.api_key:
+            logger.info("Using Gemini API for entity extraction")
+            try:
+                # Use Gemini to analyze the query for entities
+                analysis = gemini_client.analyze_query(query)
+                
+                # If there's an API error, fall back to mock client
+                if "api_error" in analysis:
+                    logger.warning(f"Gemini API error: {analysis['api_error']}. Falling back to mock client.")
+                    mock_client = MockAIClient()
+                    analysis = mock_client.analyze_query(query)
+                    analysis["using_mock"] = True
+                else:
+                    analysis["using_mock"] = False
+                    
+            except Exception as e:
+                logger.error(f"Error using Gemini API: {str(e)}. Falling back to mock client.")
+                mock_client = MockAIClient()
+                analysis = mock_client.analyze_query(query)
+                analysis["using_mock"] = True
+                analysis["api_error"] = f"Gemini API error: {str(e)}"
+        else:
+            # No API key available, use the mock client
+            logger.warning("No Gemini API key available. Using mock AI client instead.")
+            mock_client = MockAIClient()
+            analysis = mock_client.analyze_query(query)
+            analysis["using_mock"] = True
+            analysis["api_error"] = "Gemini API key not configured"
+        
+        # Extract information from the analysis
+        institutions = analysis.get('institutions', [])
+        years = analysis.get('years', [])
+        start_year = analysis.get('start_year')
+        end_year = analysis.get('end_year')
+        data_request = analysis.get('data_request', ["general_data"])
+        
+        # Ensure data_request is a list
+        if isinstance(data_request, str):
+            data_request = [data_request]
+        
+        # Always include Leicester if specifically requested
+        leicester_included = False
+        for inst in institutions:
+            if 'leicester' in inst.lower():
+                leicester_included = True
+                break
+                
+        if not leicester_included:
+            institutions.append('University of Leicester')
+        
+        # For logging/debugging only - find matching files but don't include in response
+        requested_years = None
+        if years:
+            requested_years = years
+        elif start_year and end_year:
+            # Create a list of years from start to end
+            try:
+                start = int(start_year)
+                end = int(end_year)
+                requested_years = [str(y) for y in range(start, end + 1)]
+            except (ValueError, TypeError):
+                logger.warning("Invalid year range values, using None")
+                
+        # Find matching files, but only for logging purposes
+        file_matches = find_relevant_csv_files(
+            'hesa_*.csv',  # Pattern to match CSV files
+            query.split(),  # Split query into keywords
+            requested_years=requested_years
+        )
+        
+        # Log the full results including file matches (for debugging)
+        full_results = {
+            'status': 'success',
+            'query': query,
+            'institutions': institutions,
+            'years': years,
+            'start_year': start_year,
+            'end_year': end_year,
+            'data_request': data_request,
+            'file_matches': file_matches[:max_matches] if file_matches else []
+        }
+        
+        # Add the mock/API info
+        if "using_mock" in analysis:
+            full_results["using_mock"] = analysis["using_mock"]
+        if "api_error" in analysis:
+            full_results["api_error"] = analysis["api_error"]
+        
+        logger.info(f"Query analysis results: {json.dumps(full_results)}")
+        
+        # For the AI approach, return only the entity analysis, not the matching files
+        response_data = {
+            'status': 'success',
+            'query': query,
+            'institutions': institutions,
+            'years': years,
+            'start_year': start_year,
+            'end_year': end_year,
+            'data_request': data_request
+        }
+        
+        # Add the mock/API info to the response
+        if "using_mock" in analysis:
+            response_data["using_mock"] = analysis["using_mock"]
+        if "api_error" in analysis:
+            response_data["api_error"] = analysis["api_error"]
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in process_gemini_query: {str(e)}")
+        
+        return JsonResponse({
+            'status': 'error',
+            'error': f"An error occurred while processing your query: {str(e)}"
+        }, status=500)
