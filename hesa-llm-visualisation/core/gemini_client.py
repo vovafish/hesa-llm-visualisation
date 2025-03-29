@@ -59,7 +59,12 @@ class GeminiClient:
         3. If a year range is given, identify the start_year and end_year
         4. The type of data being requested (e.g., "student numbers", "enrollment", "graduates")
         
-        If the query mentions "past X years", calculate the years based on the current year (2025).
+        Be careful about interpreting years in academic context:
+        - If the query contains phrases like "starting in [YEAR]" or "beginning in [YEAR]", interpret [YEAR] as the start of an academic year.
+        - If the query contains phrases like "end of [YEAR]" or "ending in [YEAR]", interpret [YEAR] as the end of an academic year.
+        - For ranges like "2016 to 2017", treat both as starting years of academic years.
+        - If there's no clarification, assume a year refers to the starting year of an academic year.
+        - For "past X years", calculate the years based on the current year (2025).
         
         Output format:
         {
@@ -81,7 +86,7 @@ class GeminiClient:
         """
         
         # The actual user query
-        user_prompt = f"Extract information from this query: '{query}'"
+        user_prompt = f"Extract information from this query, paying special attention to academic year conventions: '{query}'"
         
         try:
             # Gemini API endpoint - Updated to use the most current endpoint
@@ -180,12 +185,114 @@ class GeminiClient:
                             result['years'].append(str(year))
                             result['years'].append(f"{year}/{str(year+1)[2:4]}")
             
+            # Apply our academic year logic for special cases if Gemini didn't handle it well
+            self._process_academic_year_logic(query, result)
+            
             logger.info(f"Extracted information: {result}")
             return result
             
         except Exception as e:
             logger.error(f"Error analyzing query with Gemini API: {str(e)}")
             raise
+    
+    def _process_academic_year_logic(self, query, result):
+        """
+        Process academic year logic based on context clues in the query.
+        This handles cases like:
+        - "starting in 2017" → 2017/18
+        - "end of 2017" → 2016/17
+        - "2016 to 2017" → 2016/17 - 2017/18 (both as starting years)
+        
+        Args:
+            query: The original query string
+            result: The result dictionary to modify
+        """
+        import re
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        query_lower = query.lower()
+        
+        # Extract years with context
+        start_patterns = [
+            r'start(?:ing|s|ed)?\s+(?:in|from|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
+            r'begin(?:ning|s)?\s+(?:in|from|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
+            r'from\s+(?:the\s+)?(?:year\s+)?(\d{4})'
+        ]
+        
+        end_patterns = [
+            r'end(?:ing|s|ed)?\s+(?:in|at|of)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
+            r'finish(?:ing|es|ed)?\s+(?:in|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
+            r'(?:in|at)\s+(?:the\s+)?end\s+of\s+(?:the\s+)?(?:year\s+)?(\d{4})'
+        ]
+        
+        # Handle range logic for years without context
+        if 'start_year' in result and 'end_year' in result:
+            # Range years should be treated as starting years of academic years
+            start_year = result['start_year']
+            end_year = result['end_year']
+            
+            # Clear existing years array to rebuild it with correct academic years
+            result['years'] = []
+            
+            # Add academic years for the range
+            for year in range(int(start_year), int(end_year) + 1):
+                academic_year = f"{year}/{str(year+1)[2:4]}"
+                result['years'].append(academic_year)
+            
+            logger.info(f"Processed year range: {start_year}-{end_year} as academic years: {', '.join(result['years'])}")
+            return
+        
+        # Explicitly defined start years
+        for pattern in start_patterns:
+            start_match = re.search(pattern, query_lower)
+            if start_match:
+                year = start_match.group(1)
+                academic_year = f"{year}/{str(int(year)+1)[2:4]}"
+                
+                if academic_year not in result['years']:
+                    result['years'].append(academic_year)
+                    result['start_year'] = year
+                    logger.info(f"Processed starting year {year} as academic year {academic_year}")
+        
+        # Explicitly defined end years
+        for pattern in end_patterns:
+            end_match = re.search(pattern, query_lower)
+            if end_match:
+                year = end_match.group(1)
+                previous_year = str(int(year) - 1)
+                academic_year = f"{previous_year}/{year[2:4]}"
+                
+                if academic_year not in result['years']:
+                    result['years'].append(academic_year)
+                    result['end_year'] = year
+                    logger.info(f"Processed ending year {year} as academic year {academic_year}")
+        
+        # For single years without context, treat as starting years
+        plain_year_pattern = r'\b(20\d{2})\b'
+        years_mentioned = re.findall(plain_year_pattern, query)
+        
+        # Skip years that were already processed with context
+        for year in years_mentioned:
+            # Check if this year was already handled as start/end year
+            already_processed = False
+            for pattern in start_patterns + end_patterns:
+                if re.search(pattern, query_lower) and re.search(pattern, query_lower).group(1) == year:
+                    already_processed = True
+                    break
+            
+            if not already_processed:
+                # No context, treat as starting year
+                academic_year = f"{year}/{str(int(year)+1)[2:4]}"
+                if academic_year not in result['years']:
+                    result['years'].append(academic_year)
+                    # If no explicit start_year is set, use this as default
+                    if 'start_year' not in result:
+                        result['start_year'] = year
+                    logger.info(f"Processed plain year {year} as academic year {academic_year}")
+                
+        # Make sure years are unique
+        result['years'] = list(set(result['years']))
     
     def get_completion(self, prompt):
         """

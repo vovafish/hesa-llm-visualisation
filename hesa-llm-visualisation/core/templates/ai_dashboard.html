@@ -110,6 +110,18 @@
         </div>
     </div>
     
+    <!-- Add a note under the search input explaining academic year handling -->
+    <div class="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+        <p class="font-medium mb-1">💡 How Academic Years Are Interpreted:</p>
+        <ul class="list-disc list-inside space-y-1">
+            <li>"Starting in 2017" or "from 2017" → Matches 2017/18 academic year</li>
+            <li>"End of 2017" or "ending in 2017" → Matches 2016/17 academic year</li>
+            <li>Plain years (e.g., "in 2017") → Treated as starting year (2017/18)</li>
+            <li>Year ranges (e.g., "2016 to 2017") → Matches 2016/17-2017/18 academic years</li>
+            <li>"Past 5 years" → Matches the last 5 academic years from the current year</li>
+        </ul>
+    </div>
+    
     <!-- Hidden CSRF token for AJAX requests -->
     {% csrf_token %}
     

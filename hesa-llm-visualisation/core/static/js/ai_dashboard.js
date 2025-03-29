@@ -241,12 +241,12 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
-        // If matching datasets are available, display them
-        if (data.matching_datasets && data.matching_datasets.length > 0) {
+        // If matching grouped datasets are available, display them
+        if (data.grouped_datasets && data.grouped_datasets.length > 0) {
             resultsHTML += `
                 <div class="bg-white shadow-md rounded-lg p-6 mt-8">
                     <h3 class="text-lg font-semibold mb-4">
-                        Matching Datasets <span class="text-blue-600">(${data.matching_datasets.length})</span>
+                        Matching Datasets <span class="text-blue-600">(${data.grouped_datasets.length})</span>
                         <span class="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2">
                             Semantically matched by ${data.using_mock ? 'Regex' : 'Gemini AI'}
                         </span>
@@ -255,8 +255,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="space-y-4">
             `;
             
-            // Add each matching dataset
-            data.matching_datasets.forEach((dataset, index) => {
+            // Add each grouped dataset
+            data.grouped_datasets.forEach((dataset, index) => {
                 // Handle score display
                 const matchScore = dataset.score !== undefined ? parseFloat(dataset.score).toFixed(2) : 'N/A';
                 const matchPercentage = dataset.match_percentage || Math.round(parseFloat(matchScore) * 100) || 'N/A';
@@ -276,6 +276,21 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
+                // Format academic years for display
+                const academicYearsDisplay = dataset.academic_years ? 
+                    dataset.academic_years.join(', ') : 
+                    (dataset.academic_year || 'Unknown');
+                
+                // Format reference files for display
+                const referencesDisplay = dataset.references ? 
+                    dataset.references.map(ref => `<div class="text-xs bg-gray-50 p-1 my-1 rounded border">${ref}</div>`).join('') : 
+                    (dataset.reference || 'Unknown');
+                
+                // Combine all descriptions
+                const combinedDescription = dataset.descriptions ? 
+                    dataset.descriptions.join('<br><br>') : 
+                    (dataset.description || '');
+                
                 resultsHTML += `
                     <div class="border rounded-lg p-4 hover:bg-blue-50 transition-colors">
                         <div class="flex justify-between items-start">
@@ -285,13 +300,15 @@ document.addEventListener('DOMContentLoaded', function() {
                             </span>
                         </div>
                         
-                        <div class="mt-2 text-gray-600 text-sm flex flex-wrap gap-2">
-                            <span class="px-2 py-1 bg-gray-100 rounded-full">
-                                Academic Year: ${dataset.academic_year || 'Unknown'}
-                            </span>
-                            <span class="px-2 py-1 bg-gray-100 rounded-full">
-                                Reference: ${dataset.reference || 'Unknown'}
-                            </span>
+                        <div class="mt-2 text-gray-600 text-sm">
+                            <div class="px-2 py-1 bg-gray-100 rounded mb-2">
+                                <span class="font-medium">Academic Years:</span> ${academicYearsDisplay}
+                            </div>
+                            
+                            <div class="px-2 py-1 bg-gray-100 rounded">
+                                <span class="font-medium">References:</span>
+                                <div class="mt-1">${referencesDisplay}</div>
+                            </div>
                         </div>
                         
                         ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
@@ -305,25 +322,32 @@ document.addEventListener('DOMContentLoaded', function() {
                             </div>
                         ` : ''}
                         
-                        ${dataset.description ? `
+                        ${combinedDescription ? `
                             <div class="mt-3 text-sm text-gray-700 bg-gray-50 p-2 rounded">
                                 <span class="font-medium">Why this matches:</span>
-                                <p class="mt-1">${dataset.description}</p>
+                                <div class="mt-1">${combinedDescription}</div>
                             </div>
                         ` : ''}
                         
-                        <div class="mt-3 flex justify-between items-center">
-                            <a href="/dataset/${dataset.reference}" 
-                               class="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded flex items-center">
-                                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                </svg>
-                                View Dataset
-                            </a>
-                            
-                            <div class="text-xs text-gray-500">
-                                Columns: ${dataset.columns?.length || 0}
+                        <div class="mt-3">
+                            <div class="border-t pt-3">
+                                <span class="font-medium text-sm">Available Files:</span>
+                                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                    ${dataset.matches ? dataset.matches.map(match => `
+                                        <div class="border rounded p-2 bg-white">
+                                            <div class="text-sm font-medium">${match.academic_year}</div>
+                                            <div class="text-xs text-gray-600 mb-2">${match.reference}</div>
+                                            <a href="/dataset/${encodeURIComponent(match.reference)}" 
+                                               class="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded inline-flex items-center">
+                                                <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                                </svg>
+                                                View
+                                            </a>
+                                        </div>
+                                    `).join('') : ''}
+                                </div>
                             </div>
                         </div>
                     </div>
