@@ -106,12 +106,12 @@ document.addEventListener('DOMContentLoaded', function() {
             fetch('/process_gemini_query/', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Content-Type': 'application/json',
                     'X-CSRFToken': getCsrfToken(),
                 },
-                body: new URLSearchParams({
-                    'query': query,
-                    'max_matches': maxMatches
+                body: JSON.stringify({
+                    query: query,
+                    max_matches: maxMatches
                 })
             })
             .then(response => {
@@ -240,6 +240,119 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         `;
+        
+        // If matching datasets are available, display them
+        if (data.matching_datasets && data.matching_datasets.length > 0) {
+            resultsHTML += `
+                <div class="bg-white shadow-md rounded-lg p-6 mt-8">
+                    <h3 class="text-lg font-semibold mb-4">
+                        Matching Datasets <span class="text-blue-600">(${data.matching_datasets.length})</span>
+                        <span class="text-xs font-normal bg-blue-100 text-blue-800 px-2 py-1 rounded ml-2">
+                            Semantically matched by ${data.using_mock ? 'Regex' : 'Gemini AI'}
+                        </span>
+                    </h3>
+                    <p class="text-sm text-gray-600 mb-4">The following datasets were found to be relevant to your query:</p>
+                    <div class="space-y-4">
+            `;
+            
+            // Add each matching dataset
+            data.matching_datasets.forEach((dataset, index) => {
+                // Handle score display
+                const matchScore = dataset.score !== undefined ? parseFloat(dataset.score).toFixed(2) : 'N/A';
+                const matchPercentage = dataset.match_percentage || Math.round(parseFloat(matchScore) * 100) || 'N/A';
+                
+                // Determine score color based on match quality
+                let scoreColorClass = 'bg-gray-100 text-gray-800';
+                if (matchScore !== 'N/A') {
+                    const score = parseFloat(matchScore);
+                    if (score >= 0.8) {
+                        scoreColorClass = 'bg-green-100 text-green-800';
+                    } else if (score >= 0.5) {
+                        scoreColorClass = 'bg-blue-100 text-blue-800';
+                    } else if (score >= 0.3) {
+                        scoreColorClass = 'bg-yellow-100 text-yellow-800';
+                    } else {
+                        scoreColorClass = 'bg-orange-100 text-orange-800';
+                    }
+                }
+                
+                resultsHTML += `
+                    <div class="border rounded-lg p-4 hover:bg-blue-50 transition-colors">
+                        <div class="flex justify-between items-start">
+                            <h4 class="font-semibold text-blue-800 text-lg">${index + 1}. ${dataset.title || 'Untitled Dataset'}</h4>
+                            <span class="text-sm px-2 py-1 rounded-full ${scoreColorClass}">
+                                Match: ${matchScore} (${matchPercentage}%)
+                            </span>
+                        </div>
+                        
+                        <div class="mt-2 text-gray-600 text-sm flex flex-wrap gap-2">
+                            <span class="px-2 py-1 bg-gray-100 rounded-full">
+                                Academic Year: ${dataset.academic_year || 'Unknown'}
+                            </span>
+                            <span class="px-2 py-1 bg-gray-100 rounded-full">
+                                Reference: ${dataset.reference || 'Unknown'}
+                            </span>
+                        </div>
+                        
+                        ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
+                            <div class="mt-3">
+                                <span class="font-medium text-sm text-gray-700">Matched Terms:</span>
+                                <div class="flex flex-wrap gap-1 mt-1">
+                                    ${dataset.matched_terms.map(term => 
+                                        `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        ${dataset.description ? `
+                            <div class="mt-3 text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                <span class="font-medium">Why this matches:</span>
+                                <p class="mt-1">${dataset.description}</p>
+                            </div>
+                        ` : ''}
+                        
+                        <div class="mt-3 flex justify-between items-center">
+                            <a href="/dataset/${dataset.reference}" 
+                               class="text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded flex items-center">
+                                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                </svg>
+                                View Dataset
+                            </a>
+                            
+                            <div class="text-xs text-gray-500">
+                                Columns: ${dataset.columns?.length || 0}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            resultsHTML += `
+                    </div>
+                </div>
+            `;
+        } else if (data.matching_datasets && data.matching_datasets.length === 0) {
+            // No matching datasets found
+            resultsHTML += `
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-8">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                No matching datasets found for your query. Try adjusting your search terms or time period.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         
         // Update the query results container
         aiQueryResults.innerHTML = resultsHTML;

@@ -128,14 +128,58 @@ def create_index_file(processor, results):
                         metadata['title'] = file_name.replace('.csv', '').split(' 20')[0]
                         logger.warning(f"Raw file not found, using fallback title from filename: {metadata['title']}")
                 
-                # If academic year is missing, extract it from filename
+                # If academic year is missing, extract it from the raw file first, then try filename
                 if 'academic_year' not in metadata:
-                    import re
-                    year_match = re.search(r'(\d{4})&(\d{2})', file_name)
-                    if year_match:
-                        metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                    raw_file_path = processor.raw_dir / file_name
+                    
+                    if raw_file_path.exists():
+                        try:
+                            # Read the first 20 lines to look for academic year
+                            with open(raw_file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                                lines = [line.strip() for line in f.readlines()[:20]]
+                            
+                            # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
+                            academic_year_found = False
+                            for line in lines:
+                                # Skip lines with "Subtitle:" that might contain "Academic years" text
+                                if "Subtitle:" in line:
+                                    continue
+                                    
+                                # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
+                                if re.search(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
+                                    year_match = re.search(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                                    metadata['academic_year'] = year_match.group(1).strip()
+                                    logger.info(f"Found exact academic year format in raw file: {metadata['academic_year']}")
+                                    academic_year_found = True
+                                    break
+                            
+                            # If not found in raw file, try filename pattern
+                            if not academic_year_found:
+                                import re
+                                year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                                if year_match:
+                                    metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                                    logger.info(f"Extracted academic year from filename: {metadata['academic_year']}")
+                                else:
+                                    metadata['academic_year'] = "Unknown"
+                                    logger.warning(f"Could not extract academic year from filename: {file_name}")
+                        except Exception as e:
+                            logger.warning(f"Error extracting academic year from raw file: {str(e)}")
+                            # Fall back to filename pattern
+                            import re
+                            year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                            if year_match:
+                                metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                            else:
+                                metadata['academic_year'] = "Unknown"
                     else:
-                        metadata['academic_year'] = "Unknown"
+                        # Fall back to filename pattern
+                        import re
+                        year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                        if year_match:
+                            metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                        else:
+                            metadata['academic_year'] = "Unknown"
                 
                 # If columns are missing, add minimal columns from the file
                 if 'columns' not in metadata or not metadata['columns']:
@@ -158,6 +202,7 @@ def create_index_file(processor, results):
             # Add metadata to index
             index_data["hesa_files"].append(metadata)
             logger.info(f"Added metadata for {file_name} to index with title: '{metadata.get('title', 'No title')}'")
+            logger.info(f"Academic Year: {metadata.get('academic_year', 'Unknown')}")
             
         except Exception as e:
             logger.error(f"Error processing {file_name} for index: {str(e)}")

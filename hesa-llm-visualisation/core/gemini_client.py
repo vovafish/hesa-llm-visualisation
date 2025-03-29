@@ -24,142 +24,244 @@ class GeminiClient:
     
     def analyze_query(self, query: str) -> Dict[str, Any]:
         """
-        Analyze a HESA data query using Gemini to extract important entities.
+        Analyze a natural language query using the Gemini API.
         
         Args:
-            query: The natural language query to analyze
+            query: The natural language query string
             
         Returns:
-            Dictionary containing extracted information (institutions, years, data_request)
+            dict: Dictionary containing extracted entities:
+                - institutions: List of institution names
+                - years: List of years mentioned
+                - start_year: Start year of range (if applicable)
+                - end_year: End year of range (if applicable)
+                - data_request: List of data categories requested
         """
+        import requests
+        import json
+        import re
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"Analyzing query with Gemini API: {query}")
+        
         if not self.api_key:
-            logger.error("Cannot analyze query: No API key provided")
-            return self._fallback_analysis(query, error="API key not configured")
+            logger.error("No Gemini API key provided")
+            raise ValueError("Gemini API key is required")
+            
+        # Construct the prompt
+        system_prompt = """
+        You are a helpful assistant that extracts structured information from a user's query about higher education statistics.
         
-        current_year = datetime.now().year
+        Extract the following information and output it in JSON format:
+        1. Institutions mentioned (e.g., "University of Oxford", "University of Leicester")
+        2. Years mentioned (e.g., "2020", "2020/21")
+        3. If a year range is given, identify the start_year and end_year
+        4. The type of data being requested (e.g., "student numbers", "enrollment", "graduates")
         
-        prompt = f"""
-        Analyze the following query about HESA (Higher Education Statistics Agency) data and extract the relevant information.
+        If the query mentions "past X years", calculate the years based on the current year (2025).
         
-        Query: "{query}"
+        Output format:
+        {
+          "institutions": ["University X", "University Y"],
+          "years": ["2019/20", "2020/21"],
+          "start_year": "2019",
+          "end_year": "2020",
+          "data_request": ["student_enrollment", "graduation_rates"]
+        }
         
-        Extract and format the following details:
-        1. Institutions: List only the specific institution names mentioned (e.g., "University of Leicester", "University of London")
-        2. Years: Extract any years mentioned (individual years or ranges in format YYYY)
-        3. Start year and end year:
-           - If a specific year like "2017" is mentioned, use it as start_year with no end_year
-           - If a year range like "2018-2020" is mentioned, use 2018 as start_year and 2020 as end_year
-           - If "past X years" is mentioned, calculate from current year ({current_year}) backwards
-             For example, "past 2 years" = start_year: {current_year-2}, end_year: {current_year}
-        4. Data request: List specific categories of data requested (e.g., "student", "enrollment", "postgraduates", etc.)
-        
-        Current year is {current_year}.
-        
-        VERY IMPORTANT INSTRUCTIONS:
-        - Be extremely precise with institution names - extract ONLY proper university names without additional text
-        - University of Leicester MUST ALWAYS be included in the institutions list, even if not mentioned in the query
-        - NEVER include phrases like "for the past X years" as part of institution names
-        - For "past X years", calculate years correctly by subtracting X-1 from current year for start_year
-        - If a specific data category is mentioned, include it in data_request as a list of terms
-        - List individual data request terms as separate items (e.g., ["student", "enrollment"] not ["student enrollment"])
-        - ONLY return the JSON object without ANY additional text
-        
-        Return your analysis as JSON with the following structure:
-        {{
-            "institutions": ["University Name 1", "University Name 2"],
-            "years": ["2015", "2016"],
-            "start_year": "2015",
-            "end_year": "2016",
-            "data_request": ["student", "enrollment"]
-        }}
+        If no specific institutions are mentioned, return an empty list.
+        For the data_request field, categorize the request into one of these categories:
+        - student_enrollment
+        - student_demographics
+        - graduation_rates
+        - staff_data
+        - research_data
+        - general_data (default if no specific category is identified)
         """
+        
+        # The actual user query
+        user_prompt = f"Extract information from this query: '{query}'"
         
         try:
-            logger.info(f"Sending query to Gemini API: {query}")
+            # Gemini API endpoint - Updated to use the most current endpoint
+            url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent"
             
-            # Initialize the Gemini client
-            client = genai.Client(api_key=self.api_key)
+            # Request payload
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": system_prompt},
+                            {"text": user_prompt}
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.1,
+                    "topP": 0.95,
+                    "topK": 40,
+                    "maxOutputTokens": 2048
+                }
+            }
             
-            # Send the prompt to Gemini
-            response = client.models.generate_content(
-                model='gemini-1.5-pro',  # Updated to 1.5 version to fix 404 error
-                contents=prompt
-            )
+            # Headers with API key
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key
+            }
             
-            # Extract the text content from the response
-            if hasattr(response, 'text') and response.text:
-                content = response.text
-                logger.info(f"Received Gemini response: {content}")
+            # Make the request
+            response = requests.post(url, json=payload, headers=headers)
+            
+            # Check for successful response
+            if response.status_code != 200:
+                logger.error(f"Gemini API error: {response.status_code} - {response.text}")
+                raise Exception(f"Gemini API returned status code {response.status_code}: {response.text}")
                 
-                # Parse the JSON from the response
-                try:
-                    # Find JSON within the response if it's wrapped in text
-                    json_start = content.find('{')
-                    json_end = content.rfind('}') + 1
-                    if json_start >= 0 and json_end > json_start:
-                        json_content = content[json_start:json_end]
-                        result = json.loads(json_content)
-                    else:
-                        result = json.loads(content)
-                    
-                    # Ensure University of Leicester is in the institutions list
-                    if "institutions" in result:
-                        # Clean up institution names to remove phrases like "For The Past 2 Years"
-                        cleaned_institutions = []
-                        for inst in result["institutions"]:
-                            # Only keep the actual institution name
-                            # Extract just the university name part
-                            if "university of" in inst.lower():
-                                match = re.match(r'(University of \w+)', inst, re.IGNORECASE)
-                                if match:
-                                    cleaned_institutions.append(match.group(1))
-                            elif "university" in inst.lower():
-                                match = re.match(r'(\w+ University)', inst, re.IGNORECASE)
-                                if match:
-                                    cleaned_institutions.append(match.group(1))
-                            else:
-                                cleaned_institutions.append(inst)
-                        
-                        # Remove duplicates
-                        cleaned_institutions = list(set(cleaned_institutions))
-                        
-                        # Check if Leicester is included
-                        leicester_included = False
-                        for inst in cleaned_institutions:
-                            if "leicester" in inst.lower():
-                                leicester_included = True
-                                break
-                        
-                        if not leicester_included:
-                            cleaned_institutions.append("University of Leicester")
-                            
-                        result["institutions"] = cleaned_institutions
-                    
-                    # Ensure years and start/end years are properly set
-                    if "years" in result and result["years"]:
-                        # Keep the years as provided
-                        pass
-                        
-                    # Make sure data_request is a list
-                    if "data_request" in result and isinstance(result["data_request"], str):
-                        result["data_request"] = [result["data_request"]]
-                    
-                    logger.info(f"Gemini parsed entities: {result}")
-                    return result
-                except json.JSONDecodeError as e:
-                    error_msg = f"Error parsing JSON from Gemini response: {str(e)}"
-                    logger.error(f"{error_msg} - Response: {content}")
-                    return self._fallback_analysis(query, error=error_msg)
+            # Parse the response
+            response_data = response.json()
+            
+            # Extract text from response
+            if 'candidates' in response_data and len(response_data['candidates']) > 0:
+                if 'content' in response_data['candidates'][0]:
+                    response_text = response_data['candidates'][0]['content']['parts'][0]['text']
+                else:
+                    logger.error("No content in Gemini API response")
+                    raise Exception("No content in Gemini API response")
             else:
-                error_msg = "Empty or invalid response from Gemini API"
-                logger.error(error_msg)
-                return self._fallback_analysis(query, error=error_msg)
+                logger.error("No candidates in Gemini API response")
+                raise Exception("No candidates in Gemini API response")
+                
+            # Find the JSON response within the text
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if not json_match:
+                logger.error(f"Failed to extract JSON from response: {response_text}")
+                raise Exception("Failed to extract JSON from the Gemini API response")
+                
+            # Parse the JSON data
+            result = json.loads(json_match.group(0))
+            
+            # Default values for missing fields
+            result.setdefault('institutions', [])
+            result.setdefault('years', [])
+            result.setdefault('data_request', ['general_data'])
+            
+            # Always ensure University of Leicester is included if any institution is mentioned
+            if result['institutions'] and 'University of Leicester' not in result['institutions']:
+                result['institutions'].append('University of Leicester')
+                
+            # Fix "in University" issue by filtering out partial names
+            result['institutions'] = [
+                inst for inst in result['institutions'] 
+                if len(inst.split()) > 1  # Must be at least two words
+                and inst.lower() != "in university"  # Explicitly exclude "in university"
+            ]
+                
+            # Handle special case for "past X years"
+            if 'start_year' not in result or 'end_year' not in result:
+                # Check if the query contains "past X years"
+                past_years_match = re.search(r'past\s+(\d+)\s+years?', query.lower())
+                if past_years_match:
+                    num_years = int(past_years_match.group(1))
+                    # Use current year from datetime
+                    current_year = datetime.now().year
+                    end_year = current_year
+                    start_year = current_year - num_years
+                    
+                    result['end_year'] = str(end_year)
+                    result['start_year'] = str(start_year)
+                    
+                    # Expand years array to include all years in the range
+                    if not result['years']:
+                        for year in range(start_year, end_year + 1):
+                            # Add both plain year and academic year format
+                            result['years'].append(str(year))
+                            result['years'].append(f"{year}/{str(year+1)[2:4]}")
+            
+            logger.info(f"Extracted information: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error analyzing query with Gemini API: {str(e)}")
+            raise
+    
+    def get_completion(self, prompt):
+        """
+        Get a completion from the Gemini API based on the provided prompt.
+        
+        Args:
+            prompt: The prompt to send to Gemini
+            
+        Returns:
+            str: The completion text from Gemini
+        """
+        import requests
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        logger.info("Sending completion request to Gemini API")
+        
+        if not self.api_key:
+            logger.error("No Gemini API key provided")
+            raise ValueError("Gemini API key is required")
+        
+        try:
+            # Updated Gemini API endpoint
+            url = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent"
+            
+            # Request payload
+            payload = {
+                "contents": [
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": prompt}
+                        ]
+                    }
+                ],
+                "generationConfig": {
+                    "temperature": 0.2,
+                    "topP": 0.95,
+                    "topK": 40,
+                    "maxOutputTokens": 4096
+                }
+            }
+            
+            # Headers with API key
+            headers = {
+                "Content-Type": "application/json",
+                "x-goog-api-key": self.api_key
+            }
+            
+            # Make the request
+            response = requests.post(url, json=payload, headers=headers)
+            
+            # Check for successful response
+            if response.status_code != 200:
+                logger.error(f"Gemini API error: {response.status_code} - {response.text}")
+                raise Exception(f"Gemini API returned status code {response.status_code}: {response.text}")
+                
+            # Parse the response
+            response_data = response.json()
+            
+            # Extract text from response
+            if 'candidates' in response_data and len(response_data['candidates']) > 0:
+                if 'content' in response_data['candidates'][0]:
+                    response_text = response_data['candidates'][0]['content']['parts'][0]['text']
+                    return response_text
+                else:
+                    logger.error("No content in Gemini API response")
+                    raise Exception("No content in Gemini API response")
+            else:
+                logger.error("No candidates in Gemini API response")
+                raise Exception("No candidates in Gemini API response")
                 
         except Exception as e:
-            error_msg = f"Error calling Gemini API: {str(e)}"
-            logger.error(error_msg)
-            return self._fallback_analysis(query, error=error_msg)
-    
+            logger.error(f"Error getting completion from Gemini API: {str(e)}")
+            raise
+
     def _fallback_analysis(self, query: str, error: str = None) -> Dict[str, Any]:
         """Basic fallback analysis if the API call fails."""
         logger.warning(f"Using fallback analysis for query. Error: {error}")

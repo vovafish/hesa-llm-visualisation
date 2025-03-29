@@ -1922,142 +1922,451 @@ def dataset_details(request, group_id):
             'end_year': end_year,
         })
 
+def find_matching_datasets(query, data_request, start_year=None, end_year=None):
+    """
+    Find datasets that match the AI-extracted query entities.
+    First filter by year range using regex, then use Gemini AI for semantic matching.
+    
+    Args:
+        query (str): The original query
+        data_request (list): Categories of data requested
+        start_year (str): Start year of the query range (if available)
+        end_year (str): End year of the query range (if available)
+    
+    Returns:
+        list: Matched datasets sorted by relevance
+    """
+    # Import necessary modules
+    import re
+    import json
+    import logging
+    import os
+    
+    # Get the logger for this module
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Finding matching datasets for query: '{query}', data_request: {data_request}, years: {start_year}-{end_year}")
+    
+    # Load the index file
+    index_file_path = os.path.join(settings.BASE_DIR, 'hesa_files_index.json')
+    if not os.path.exists(index_file_path):
+        logger.error(f"Index file not found at {index_file_path}")
+        return []
+    
+    try:
+        with open(index_file_path, 'r') as f:
+            index_data = json.load(f)
+            datasets = index_data.get('hesa_files', [])
+            logger.info(f"Loaded {len(datasets)} datasets from index file")
+    except Exception as e:
+        logger.error(f"Error loading index file: {str(e)}")
+        return []
+    
+    # Filter datasets by year range if specified (keep this regex filtering for efficiency)
+    if start_year or end_year:
+        filtered_datasets = []
+        for dataset in datasets:
+            academic_year = dataset.get('academic_year', '')
+            if not academic_year:
+                continue
+                
+            # Extract the first year from academic year (e.g. 2020/21 -> 2020)
+            year_match = re.match(r'(\d{4})', academic_year)
+            if not year_match:
+                continue
+                
+            dataset_year = year_match.group(1)
+            
+            # Check if the dataset's year is within the requested range
+            if start_year and end_year:
+                if int(start_year) <= int(dataset_year) <= int(end_year):
+                    filtered_datasets.append(dataset)
+            elif start_year:
+                if int(start_year) <= int(dataset_year):
+                    filtered_datasets.append(dataset)
+            elif end_year:
+                if int(dataset_year) <= int(end_year):
+                    filtered_datasets.append(dataset)
+        
+        logger.info(f"Filtered down to {len(filtered_datasets)} datasets based on year range")
+        datasets = filtered_datasets
+    
+    # If no datasets after filtering, return empty list
+    if not datasets:
+        logger.warning("No datasets found after year filtering")
+        return []
+    
+    try:
+        # Use Gemini API for semantic matching
+        gemini_client = GeminiClient(settings.GEMINI_API_KEY)
+        
+        # Prepare prompt for Gemini to match datasets based on semantic understanding
+        prompt = f"""
+        I need to find the most relevant datasets based on a user query. 
+
+        USER QUERY: "{query}"
+
+        EXTRACTED INFORMATION:
+        - Data requested: {data_request}
+        {f"- Start year: {start_year}" if start_year else ""}
+        {f"- End year: {end_year}" if end_year else ""}
+
+        I have the following datasets (already filtered by year if specified):
+
+        {json.dumps([{
+            "title": d.get("title", ""),
+            "columns": d.get("columns", []),
+            "academic_year": d.get("academic_year", ""),
+            "reference": d.get("reference", "")
+        } for d in datasets[:30]], indent=2)}
+
+        For each dataset, analyze how well it matches the user query semantically. 
+        Consider variations in terminology (e.g., "enrollment" vs "enrolment", "registration") 
+        and related concepts (e.g., if user asks for "postgraduates", datasets about "graduates" or "masters students" may be relevant).
+
+        Return a JSON array with the following format for each matching dataset:
+        [
+          {{
+            "reference": "filename.csv",
+            "score": 0.95,
+            "matched_terms": ["term1", "term2", "term3"],
+            "description": "Brief explanation of why this dataset matches"
+          }}
+        ]
+
+        Only include datasets with a score > 0.1. Sort the results by score in descending order.
+        """
+        
+        # Call Gemini API for semantic matching
+        logger.info("Calling Gemini API for semantic dataset matching")
+        ai_response = gemini_client.get_completion(prompt)
+        
+        # Extract JSON response from Gemini
+        json_match = re.search(r'\[\s*\{.*\}\s*\]', ai_response, re.DOTALL)
+        
+        if json_match:
+            matches_json = json_match.group(0)
+            matches = json.loads(matches_json)
+            
+            # Enhance matches with full dataset information
+            enhanced_matches = []
+            for match in matches:
+                reference = match.get("reference")
+                # Find the complete dataset info
+                for dataset in datasets:
+                    if dataset.get("reference") == reference:
+                        enhanced_match = {
+                            "title": dataset.get("title", "Untitled Dataset"),
+                            "reference": reference,
+                            "academic_year": dataset.get("academic_year", "Unknown"),
+                            "columns": dataset.get("columns", []),
+                            "score": match.get("score", 0),
+                            "match_percentage": int(match.get("score", 0) * 100),
+                            "matched_terms": match.get("matched_terms", []),
+                            "description": match.get("description", "")
+                        }
+                        enhanced_matches.append(enhanced_match)
+                        break
+            
+            logger.info(f"Found {len(enhanced_matches)} matching datasets using Gemini AI")
+            return enhanced_matches
+        else:
+            logger.error("Failed to parse JSON response from Gemini API")
+            # Fallback to regex matching
+            return regex_matching_fallback(query, data_request, datasets)
+            
+    except Exception as e:
+        logger.error(f"Error using Gemini API for semantic matching: {str(e)}")
+        # Fallback to regex matching
+        return regex_matching_fallback(query, data_request, datasets)
+
 @csrf_exempt
 @require_http_methods(["POST"])
 def process_gemini_query(request):
-    """Process a natural language query using AI and return analysis."""
-    try:
-        query = request.POST.get('query', '').strip()
-        max_matches = int(request.POST.get('max_matches', '3'))
+    """Process a natural language query using the Gemini API"""
+    # Get the logger for this module
+    logger = logging.getLogger(__name__)
+    
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        query = data.get('query', '')
+        max_matches = int(data.get('max_matches', 5))
         
-        if not query:
-            return JsonResponse({
-                'status': 'error',
-                'error': 'No query provided'
-            }, status=400)
+        logger.info(f"Processing Gemini query: {query}")
         
-        # Log the query for debugging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Processing query: {query}")
+        try:
+            # Attempt to analyze the query using the GeminiClient
+            gemini_client = GeminiClient(settings.GEMINI_API_KEY)
+            analysis_results = gemini_client.analyze_query(query)
+            using_mock = False
+        except Exception as e:
+            logger.error(f"Error using Gemini API: {str(e)}")
+            # Fallback to local analysis if API fails
+            analysis_results = local_analyze_query(query)
+            using_mock = True
         
-        # First try to use the Gemini API client
-        gemini_client = GeminiClient()
+        # Extract entities from the analysis results
+        institutions = analysis_results.get('institutions', [])
+        years = analysis_results.get('years', [])
+        start_year = analysis_results.get('start_year', None)
+        end_year = analysis_results.get('end_year', None)
+        data_request = analysis_results.get('data_request', ['general_data'])
         
-        # Check if we have a valid API key
-        if gemini_client.api_key:
-            logger.info("Using Gemini API for entity extraction")
-            try:
-                # Use Gemini to analyze the query for entities
-                analysis = gemini_client.analyze_query(query)
-                
-                # If there's an API error, fall back to mock client
-                if "api_error" in analysis:
-                    logger.warning(f"Gemini API error: {analysis['api_error']}. Falling back to mock client.")
-                    mock_client = MockAIClient()
-                    analysis = mock_client.analyze_query(query)
-                    analysis["using_mock"] = True
-                else:
-                    analysis["using_mock"] = False
-                    
-            except Exception as e:
-                logger.error(f"Error using Gemini API: {str(e)}. Falling back to mock client.")
-                mock_client = MockAIClient()
-                analysis = mock_client.analyze_query(query)
-                analysis["using_mock"] = True
-                analysis["api_error"] = f"Gemini API error: {str(e)}"
-        else:
-            # No API key available, use the mock client
-            logger.warning("No Gemini API key available. Using mock AI client instead.")
-            mock_client = MockAIClient()
-            analysis = mock_client.analyze_query(query)
-            analysis["using_mock"] = True
-            analysis["api_error"] = "Gemini API key not configured"
-        
-        # Extract information from the analysis
-        institutions = analysis.get('institutions', [])
-        years = analysis.get('years', [])
-        start_year = analysis.get('start_year')
-        end_year = analysis.get('end_year')
-        data_request = analysis.get('data_request', ["general_data"])
-        
-        # Ensure data_request is a list
-        if isinstance(data_request, str):
-            data_request = [data_request]
-        
-        # Always include Leicester if specifically requested
-        leicester_included = False
-        for inst in institutions:
-            if 'leicester' in inst.lower():
-                leicester_included = True
-                break
-                
-        if not leicester_included:
+        # Ensure University of Leicester is always included (project requirement)
+        if 'University of Leicester' not in institutions:
             institutions.append('University of Leicester')
         
-        # For logging/debugging only - find matching files but don't include in response
-        requested_years = None
-        if years:
-            requested_years = years
-        elif start_year and end_year:
-            # Create a list of years from start to end
-            try:
-                start = int(start_year)
-                end = int(end_year)
-                requested_years = [str(y) for y in range(start, end + 1)]
-            except (ValueError, TypeError):
-                logger.warning("Invalid year range values, using None")
-                
-        # Find matching files, but only for logging purposes
-        file_matches = find_relevant_csv_files(
-            'hesa_*.csv',  # Pattern to match CSV files
-            query.split(),  # Split query into keywords
-            requested_years=requested_years
-        )
+        # Find matching datasets based on the extracted entities, using Gemini for semantic matching
+        matching_datasets = find_matching_datasets(query, data_request, start_year, end_year)
         
-        # Log the full results including file matches (for debugging)
+        # Log the analysis and matching results
         full_results = {
-            'status': 'success',
             'query': query,
             'institutions': institutions,
             'years': years,
             'start_year': start_year,
             'end_year': end_year,
             'data_request': data_request,
-            'file_matches': file_matches[:max_matches] if file_matches else []
+            'matching_datasets': [d.get('reference', '') for d in matching_datasets[:3]],  # Log just references for brevity
+            'total_matches': len(matching_datasets),
+            'using_mock': using_mock
         }
         
-        # Add the mock/API info
-        if "using_mock" in analysis:
-            full_results["using_mock"] = analysis["using_mock"]
-        if "api_error" in analysis:
-            full_results["api_error"] = analysis["api_error"]
+        logger.info(f"Gemini query analysis results: {json.dumps(full_results)}")
         
-        logger.info(f"Query analysis results: {json.dumps(full_results)}")
+        # Limit the number of datasets returned based on max_matches
+        if max_matches and max_matches > 0:
+            matching_datasets = matching_datasets[:max_matches]
         
-        # For the AI approach, return only the entity analysis, not the matching files
+        # Create the response data
         response_data = {
-            'status': 'success',
             'query': query,
             'institutions': institutions,
             'years': years,
             'start_year': start_year,
             'end_year': end_year,
-            'data_request': data_request
+            'data_request': data_request,
+            'matching_datasets': matching_datasets,
+            'using_mock': using_mock
         }
         
-        # Add the mock/API info to the response
-        if "using_mock" in analysis:
-            response_data["using_mock"] = analysis["using_mock"]
-        if "api_error" in analysis:
-            response_data["api_error"] = analysis["api_error"]
+        # Add API error message if using mock
+        if using_mock:
+            response_data['api_error'] = "Failed to connect to Gemini API. Using local analysis instead."
         
         return JsonResponse(response_data)
+    
+    return JsonResponse({'error': 'Invalid request method'}, status=400)
+
+def local_analyze_query(query):
+    """
+    A simple function to perform basic entity extraction from a query
+    when the Gemini API is unavailable.
+    """
+    import re
+    import logging
+    from datetime import datetime
+
+    logger = logging.getLogger(__name__)
+    logger.info(f"Local analysis for query: {query}")
+    
+    # Extract institutions
+    institutions = []
+    
+    # Common university names
+    uni_patterns = [
+        r"University of ([A-Za-z\s]+)",
+        r"([A-Za-z\s]+) University"
+    ]
+    
+    for pattern in uni_patterns:
+        matches = re.finditer(pattern, query, re.IGNORECASE)
+        for match in matches:
+            if match.group(0).lower() != "university of" and match.group(0).lower() != "in university":
+                institutions.append(match.group(0).strip())
+    
+    # Always include University of Leicester
+    if institutions and "University of Leicester" not in institutions:
+        institutions.append("University of Leicester")
+    
+    # Extract years
+    years = []
+    year_pattern = r"\b(20\d{2})(?:/(\d{2}))?\b"
+    matches = re.finditer(year_pattern, query)
+    for match in matches:
+        if match.group(2):  # academic year format (e.g., 2020/21)
+            years.append(f"{match.group(1)}/{match.group(2)}")
+        else:  # plain year format (e.g., 2020)
+            years.append(match.group(1))
+    
+    # Extract start and end years
+    start_year = None
+    end_year = None
+    
+    # Look for year ranges like "2019 to 2022" or "between 2019 and 2022"
+    range_pattern = r"(?:between|from)?\s*(20\d{2})\s*(?:to|and|[-])\s*(20\d{2})"
+    range_match = re.search(range_pattern, query, re.IGNORECASE)
+    if range_match:
+        start_year = range_match.group(1)
+        end_year = range_match.group(2)
+    
+    # Look for "past X years" pattern
+    past_years_pattern = r"past\s+(\d+)\s+years?"
+    past_match = re.search(past_years_pattern, query, re.IGNORECASE)
+    if past_match:
+        num_years = int(past_match.group(1))
+        current_year = datetime.now().year
+        end_year = str(current_year)
+        start_year = str(current_year - num_years)
         
-    except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error in process_gemini_query: {str(e)}")
+        # Add all years in range to the years list
+        if not years:
+            for year in range(current_year - num_years, current_year + 1):
+                years.append(str(year))
+                years.append(f"{year}/{str(year+1)[2:4]}")
+    
+    # Determine the type of data being requested
+    data_request = ["general_data"]  # Default
+    
+    # Pattern matching for data categories
+    data_patterns = {
+        "student_enrollment": ["enrollment", "enrolment", "students", "student numbers"],
+        "student_demographics": ["demographics", "gender", "ethnicity", "nationality"],
+        "graduation_rates": ["graduation", "graduates", "qualifiers", "degrees awarded"],
+        "staff_data": ["staff", "faculty", "employees", "lecturers"],
+        "research_data": ["research", "publications", "funding"]
+    }
+    
+    for category, keywords in data_patterns.items():
+        for keyword in keywords:
+            if keyword in query.lower():
+                data_request = [category]
+                break
+    
+    # Handle postgraduate specific queries
+    if "postgraduate" in query.lower() or "post-graduate" in query.lower() or "masters" in query.lower() or "phd" in query.lower():
+        data_request = ["student_enrollment"]  # Categorize as enrollment for postgraduates
+    
+    # Build and return the result
+    result = {
+        "institutions": institutions,
+        "years": years,
+        "start_year": start_year,
+        "end_year": end_year,
+        "data_request": data_request
+    }
+    
+    logger.info(f"Local analysis result: {result}")
+    return result
+
+def regex_matching_fallback(query, data_request, datasets):
+    """
+    Fallback function for matching datasets using regex when Gemini API fails.
+    This preserves the original functionality but is only used as a fallback.
+    """
+    import re
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Using regex fallback for dataset matching")
+    
+    # Define keyword expansions for semantic matching
+    keyword_expansions = {
+        'student': ['student', 'enrollment', 'enrolment', 'undergraduate', 'postgraduate', 'attendee', 'registration', 'registered'],
+        'graduate': ['graduate', 'qualification', 'degree', 'alumni', 'completed', 'graduated'],
+        'postgraduate': ['postgraduate', 'masters', 'doctorate', 'phd', 'research', 'post-graduate'],
+        'undergraduate': ['undergraduate', 'bachelor', 'first degree'],
+        'accommodation': ['accommodation', 'housing', 'residence', 'living', 'halls'],
+        'staff': ['staff', 'faculty', 'employee', 'lecturer', 'professor', 'teacher'],
+        'research': ['research', 'publication', 'study', 'project'],
+        'subject': ['subject', 'course', 'discipline', 'field', 'specialty'],
+        'gender': ['gender', 'male', 'female', 'sex'],
+        'engineering': ['engineering', 'technology'],
+        'medicine': ['medicine', 'health', 'medical', 'nursing'],
+        'business': ['business', 'management', 'administration', 'finance'],
+        'law': ['law', 'legal'],
+        'art': ['art', 'design', 'creative', 'performing'],
+        'science': ['science', 'sciences', 'scientific', 'biology', 'chemistry', 'physics'],
+        'humanities': ['humanities', 'history', 'philosophy', 'language'],
+        'social': ['social', 'society', 'sociology'],
+        'cost': ['cost', 'fee', 'finance', 'funding'],
+        'international': ['international', 'overseas', 'foreign', 'abroad', 'outside uk'],
+        'uk': ['uk', 'united kingdom', 'british', 'home'],
+        'location': ['location', 'region', 'area', 'address', 'permanent address'],
+        'enrollment': ['enrollment', 'enrolment', 'enrolled', 'register', 'registration', 'student', 'attendee']
+    }
+    
+    # Extract keywords from the query for matching
+    query_terms = set()
+    query_lower = query.lower()
+    
+    # Add data request categories as terms
+    if data_request and isinstance(data_request, list) and data_request[0] != 'general_data':
+        for category in data_request:
+            query_terms.add(category.replace('_', ' '))
+    
+    # Add expanded terms from the query
+    for keyword, expansions in keyword_expansions.items():
+        for term in expansions:
+            if term in query_lower:
+                query_terms.add(keyword)
+                query_terms.add(term)
+    
+    # Calculate match scores for each dataset
+    matches = []
+    for dataset in datasets:
+        title = dataset.get('title', '').lower()
+        columns = [col.lower() for col in dataset.get('columns', [])]
+        academic_year = dataset.get('academic_year', '')
         
-        return JsonResponse({
-            'status': 'error',
-            'error': f"An error occurred while processing your query: {str(e)}"
-        }, status=500)
+        # Track matched terms for each dataset
+        matched_terms = []
+        
+        # Base score starts at 0
+        score = 0
+        
+        # Score based on title match
+        for term in query_terms:
+            if term in title:
+                # Exact match in title gets high score
+                score += 3
+                matched_terms.append(term)
+            elif any(expanded_term in title for expanded_term in keyword_expansions.get(term, [])):
+                # Semantic match in title
+                score += 2
+                matched_terms.append(term)
+        
+        # Score based on column match
+        for term in query_terms:
+            for column in columns:
+                if term in column:
+                    # Exact match in column
+                    score += 2
+                    if term not in matched_terms:
+                        matched_terms.append(term)
+                elif any(expanded_term in column for expanded_term in keyword_expansions.get(term, [])):
+                    # Semantic match in column
+                    score += 1
+                    if term not in matched_terms:
+                        matched_terms.append(term)
+        
+        # If we found matches, add to results with score
+        if score > 0:
+            # Calculate match percentage based on the number of query terms matched
+            match_percentage = int((len(matched_terms) / max(1, len(query_terms))) * 100)
+            
+            matches.append({
+                'title': dataset.get('title', 'Untitled Dataset'),
+                'reference': dataset.get('reference', ''),
+                'academic_year': dataset.get('academic_year', 'Unknown'),
+                'columns': dataset.get('columns', []),
+                'score': score / 10,  # Normalize to 0-1 scale to match Gemini format
+                'match_percentage': match_percentage,
+                'matched_terms': matched_terms
+            })
+    
+    # Sort matches by score (highest first)
+    matches.sort(key=lambda x: x['score'], reverse=True)
+    
+    logger.info(f"Found {len(matches)} matching datasets using regex fallback")
+    return matches
