@@ -36,6 +36,9 @@ class GeminiClient:
                 - start_year: Start year of range (if applicable)
                 - end_year: End year of range (if applicable)
                 - data_request: List of data categories requested
+                - original_institutions: Original institution names with potential typos
+                - corrected_institutions: Corrected institution names
+                - has_typos: Boolean indicating if typos were detected
         """
         import requests
         import json
@@ -59,6 +62,15 @@ class GeminiClient:
         3. If a year range is given, identify the start_year and end_year
         4. The type of data being requested (e.g., "student numbers", "enrollment", "graduates")
         
+        IMPORTANT: You need to detect and correct ONLY SPELLING typos in institution names and years.
+        - For institutions, identify spelling errors (e.g., "Univercity" → "University")
+        - For years with typos (e.g., "20025" → "2025"), provide the corrected version
+        - UK university names follow a standard format where every word starts with a capital letter
+        - ONLY correct spelling mistakes, DO NOT change or add any words
+        - DO NOT transform a city name like "london" into "The University of London"
+        - PRESERVE the original terms from the query - if user says "london", keep it as "london" in the institutions list
+        - If user writes "yaes" or "yaers", correct it to "years" but don't change the number
+        
         Be careful about interpreting years in academic context:
         - If the query contains phrases like "starting in [YEAR]" or "beginning in [YEAR]", interpret [YEAR] as the start of an academic year.
         - If the query contains phrases like "end of [YEAR]" or "ending in [YEAR]", interpret [YEAR] as the end of an academic year.
@@ -68,14 +80,21 @@ class GeminiClient:
         
         Output format:
         {
-          "institutions": ["University X", "University Y"],
+          "institutions": ["University X", "london"],
+          "original_institutions": ["Universcity X", "london"],
+          "has_institution_typos": true,
           "years": ["2019/20", "2020/21"],
+          "original_years": ["20019", "2020"],
+          "has_year_typos": true,
           "start_year": "2019",
           "end_year": "2020",
           "data_request": ["student_enrollment", "graduation_rates"]
         }
         
-        If no specific institutions are mentioned, return an empty list.
+        If no specific institutions are mentioned, return an empty list for institutions and original_institutions.
+        If no typos were detected, original_institutions should match institutions, and has_institution_typos should be false.
+        The same applies to years and original_years.
+        
         For the data_request field, categorize the request into one of these categories:
         - student_enrollment
         - student_demographics
@@ -86,7 +105,7 @@ class GeminiClient:
         """
         
         # The actual user query
-        user_prompt = f"Extract information from this query, paying special attention to academic year conventions: '{query}'"
+        user_prompt = f"Extract information from this query, paying special attention to academic year conventions and potential typos in institution names and years: '{query}'"
         
         try:
             # Gemini API endpoint - Updated to use the most current endpoint
@@ -150,7 +169,11 @@ class GeminiClient:
             
             # Default values for missing fields
             result.setdefault('institutions', [])
+            result.setdefault('original_institutions', [])
+            result.setdefault('has_institution_typos', False)
             result.setdefault('years', [])
+            result.setdefault('original_years', [])
+            result.setdefault('has_year_typos', False)
             result.setdefault('data_request', ['general_data'])
             
             # Always ensure University of Leicester is included if any institution is mentioned
@@ -163,6 +186,16 @@ class GeminiClient:
                 if len(inst.split()) > 1  # Must be at least two words
                 and inst.lower() != "in university"  # Explicitly exclude "in university"
             ]
+                
+            # If we don't have typo information but have institutions, assume no typos
+            if 'original_institutions' not in result or not result['original_institutions']:
+                result['original_institutions'] = result['institutions'].copy()
+                result['has_institution_typos'] = False
+            
+            # If we don't have typo information but have years, assume no typos
+            if 'original_years' not in result or not result['original_years']:
+                result['original_years'] = result['years'].copy()
+                result['has_year_typos'] = False
                 
             # Handle special case for "past X years"
             if 'start_year' not in result or 'end_year' not in result:
@@ -368,7 +401,7 @@ class GeminiClient:
         except Exception as e:
             logger.error(f"Error getting completion from Gemini API: {str(e)}")
             raise
-
+    
     def _fallback_analysis(self, query: str, error: str = None) -> Dict[str, Any]:
         """Basic fallback analysis if the API call fails."""
         logger.warning(f"Using fallback analysis for query. Error: {error}")

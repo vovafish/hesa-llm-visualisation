@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ dataset_title }} | HESA Data{% endblock %}
+
+{% block extra_css %}
+<style>
+    .table-container {
+        overflow-x: auto;
+        max-height: 600px;
+        overflow-y: auto;
+        /* Ensure scrollbar is always visible if content overflows */
+        scrollbar-width: thin;
+    }
+    
+    /* Style for tables with more than 10 rows */
+    .table-container.scrollable {
+        max-height: 400px;
+    }
+    
+    .table-container::-webkit-scrollbar {
+        width: 8px;
+    }
+    .table-container::-webkit-scrollbar-thumb {
+        background-color: #cbd5e0;
+        border-radius: 4px;
+    }
+    .table-container::-webkit-scrollbar-track {
+        background-color: #f1f5f9;
+    }
+    
+    .year-column {
+        background-color: #ebf5ff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <!-- Back Button -->
+    <div class="mb-6">
+        <a href="{% url 'core:ai_dashboard' %}" class="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-md text-sm flex items-center inline-flex">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span>Back to AI Dashboard</span>
+        </a>
+    </div>
+    
+    <!-- Dataset Title -->
+    <h1 class="text-3xl font-bold mb-4">{{ dataset_title }}</h1>
+    
+    <!-- Query Information -->
+    <div class="bg-blue-50 shadow-md rounded-lg p-6 mb-8 border border-blue-200">
+        <h2 class="text-xl font-semibold mb-4 text-blue-800">Query Information</h2>
+        
+        <div class="mb-4">
+            <p class="font-medium text-gray-700">Your query:</p>
+            <p class="text-blue-800 bg-blue-100 p-2 rounded">{{ query }}</p>
+        </div>
+        
+        {% if corrected_query %}
+        <div class="mb-4">
+            <p class="font-medium text-gray-700">Corrected query:</p>
+            <p class="text-green-700 bg-green-50 p-2 rounded">{{ corrected_query }}</p>
+        </div>
+        {% endif %}
+        
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="border rounded p-3">
+                <p class="font-medium text-gray-700">Institutions:</p>
+                <ul class="list-disc list-inside">
+                    {% for institution in institutions %}
+                        <li>{{ institution }}</li>
+                    {% empty %}
+                        <li class="text-gray-500">None specified</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            
+            {% if original_institutions and original_institutions != institutions %}
+            <div class="border rounded p-3">
+                <p class="font-medium text-gray-700">Original Institutions (with typos):</p>
+                <ul class="list-disc list-inside">
+                    {% for institution in original_institutions %}
+                        <li>{{ institution }}</li>
+                    {% empty %}
+                        <li class="text-gray-500">None specified</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
+            
+            <div class="border rounded p-3">
+                <p class="font-medium text-gray-700">Years:</p>
+                <ul class="list-disc list-inside">
+                    {% for year in years %}
+                        <li>{{ year }}</li>
+                    {% empty %}
+                        <li class="text-gray-500">None specified</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Dataset Files -->
+    <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Dataset Results</h2>
+        
+        {% if has_data %}
+            {% for result in file_results %}
+                <div class="border rounded-lg p-4 mb-6 hover:bg-gray-50 transition-colors">
+                    <h3 class="font-semibold text-blue-800 text-lg mb-3">{{ result.academic_year }} - {{ result.reference }}</h3>
+                    
+                    {% if result.error %}
+                        <div class="bg-red-100 text-red-700 p-4 rounded">
+                            <p class="font-bold">Error:</p>
+                            <p>{{ result.error }}</p>
+                        </div>
+                    {% else %}
+                        {% if result.data %}
+                            {% with row_count=result.data|length %}
+                            <div class="overflow-x-auto {% if row_count > 10 %}table-container scrollable{% else %}table-container{% endif %} border rounded">
+                                <table class="min-w-full border-collapse table-auto text-sm">
+                                    <thead>
+                                        <tr>
+                                            {% for column in result.columns %}
+                                                <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">{{ column }}</th>
+                                            {% endfor %}
+                                            <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10 year-column">Academic Year</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for row in result.data %}
+                                            <tr>
+                                                {% for cell in row %}
+                                                    <td class="px-4 py-2 border-b border-gray-300 text-sm">{{ cell }}</td>
+                                                {% endfor %}
+                                                <td class="px-4 py-2 border-b border-gray-300 text-sm year-column">{{ result.academic_year }}</td>
+                                            </tr>
+                                        {% empty %}
+                                            <tr>
+                                                <td colspan="{{ result.columns|length|add:1 }}" class="px-4 py-2 text-center text-gray-500">
+                                                    No data available or no matching institutions found
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% endwith %}
+                            
+                            {% if result.matched_rows and result.data|length < result.matched_rows %}
+                                <div class="text-xs text-gray-500 mt-2">
+                                    Showing {{ result.data|length }} of {{ result.matched_rows }} matching rows
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+                                No data available for the requested institutions
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">
+                            No data found for the selected institutions in this dataset. Try a different institution or dataset.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

@@ -4,30 +4,32 @@
  * This file contains the JavaScript code for the AI-powered dashboard.
  */
 
-// Add the getCsrfToken function at the top of the file
+// Function to get CSRF token from cookies
 function getCsrfToken() {
-    // Django puts the CSRF token in a cookie named csrftoken
     const cookieValue = document.cookie
         .split('; ')
         .find(row => row.startsWith('csrftoken='))
         ?.split('=')[1];
-        
+    
     if (cookieValue) {
         return cookieValue;
     }
     
-    // If not in cookies, get from the hidden csrf input field that Django provides
-    const csrfElement = document.querySelector('input[name="csrfmiddlewaretoken"]');
-    if (csrfElement) {
-        return csrfElement.value;
+    // If no CSRF token in cookies, try to get it from the page meta tag
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) {
+        return csrfInput.value;
     }
     
-    console.error('CSRF token not found. This may cause API requests to fail.');
+    // Return empty string if no CSRF token found
     return '';
 }
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🤖 AI Dashboard JavaScript loaded');
+    
+    // Initialize loading state
+    let isLoading = false;
     
     // Core elements
     const aiQueryInput = document.getElementById('aiQueryInput');
@@ -199,6 +201,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     <p class="text-blue-800 bg-blue-50 p-2 rounded">${data.query}</p>
                 </div>
                 
+                ${data.has_institution_typos || data.has_year_typos ? `
+                <div class="mb-4 bg-blue-50 p-3 rounded border border-blue-200">
+                    <p class="font-medium text-gray-700">Corrected query:</p>
+                    <p class="text-blue-800 p-2">${generateCorrectedQuery(data)}</p>
+                </div>
+                ` : ''}
+                
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div class="border rounded p-3">
                         <p class="font-medium text-gray-700">Institutions:</p>
@@ -240,6 +249,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             </div>
         `;
+        
+        // Add warning for missing years if applicable
+        if (data.missing_years && data.missing_years.length > 0) {
+            resultsHTML += `
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mt-4" role="alert">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                <span class="font-bold">Note:</span> Data for the following academic years was requested but is not available: 
+                                ${data.missing_years.join(', ')}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
         
         // If matching grouped datasets are available, display them
         if (data.grouped_datasets && data.grouped_datasets.length > 0) {
@@ -332,23 +362,64 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="mt-3">
                             <div class="border-t pt-3">
                                 <span class="font-medium text-sm">Available Files:</span>
-                                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div class="mt-2">
                                     ${dataset.matches ? dataset.matches.map(match => `
-                                        <div class="border rounded p-2 bg-white">
-                                            <div class="text-sm font-medium">${match.academic_year}</div>
-                                            <div class="text-xs text-gray-600 mb-2">${match.reference}</div>
-                                            <a href="/dataset/${encodeURIComponent(match.reference)}" 
-                                               class="text-xs bg-blue-600 hover:bg-blue-700 text-white py-1 px-2 rounded inline-flex items-center">
-                                                <svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                                                </svg>
-                                                View
-                                            </a>
+                                        <div class="border rounded p-3 bg-white my-4">
+                                            <div class="text-sm font-medium mb-2">${match.academic_year} - ${match.reference}</div>
+                                            
+                                            ${match.preview ? `
+                                                <div class="overflow-x-auto max-h-[300px] table-container border rounded">
+                                                    <table class="min-w-full border-collapse table-auto text-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                ${match.preview.columns ? match.preview.columns.map(column => 
+                                                                    `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">${column}</th>`
+                                                                ).join('') : ''}
+                                                                <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">Academic Year</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            ${match.preview && match.preview.data && match.preview.data.length > 0 ? 
+                                                                match.preview.data.map(row => `
+                                                                    <tr>
+                                                                        ${row.map(cell => 
+                                                                            `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`
+                                                                        ).join('')}
+                                                                        <td class="px-4 py-2 border-b border-gray-300 text-sm bg-blue-50">${match.academic_year}</td>
+                                                                    </tr>
+                                                                `).join('') : 
+                                                                `<tr><td colspan="${match.preview && match.preview.columns ? match.preview.columns.length : 1}" class="px-4 py-2 text-center text-gray-500">No data available or no matching institutions found</td></tr>`
+                                                            }
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                ${match.preview.has_more ? 
+                                                    `<div class="text-xs text-gray-500 mt-2">
+                                                        Showing ${match.preview.data ? match.preview.data.length : 0} of ${match.preview.matched_rows} matching rows
+                                                    </div>` : 
+                                                    ''
+                                                }
+                                            ` : `
+                                                <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+                                                    Preview not available
+                                                </div>
+                                            `}
                                         </div>
-                                    `).join('') : ''}
+                                    `).join('') : `
+                                        <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+                                            No files available
+                                        </div>
+                                    `}
                                 </div>
                             </div>
+                        </div>
+                        
+                        <div class="mt-4 pt-2 border-t">
+                            <button class="select-dataset-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full" 
+                                data-dataset-title="${dataset.title || ''}" 
+                                data-dataset-references='${JSON.stringify(dataset.references || [])}'>
+                                Select this dataset
+                            </button>
                         </div>
                     </div>
                 `;
@@ -380,6 +451,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update the query results container
         aiQueryResults.innerHTML = resultsHTML;
+        addDataAttributes(data);
     }
     
     // Function to show loading indicator
@@ -435,5 +507,215 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p>${message}</p>
             </div>
         `;
+    }
+    
+    // Function to generate corrected query display text
+    function generateCorrectedQuery(data) {
+        let query = data.query;
+        
+        // Replace institution names with corrected versions
+        if (data.has_institution_typos && data.original_institutions && data.institutions) {
+            for (let i = 0; i < data.original_institutions.length; i++) {
+                if (i < data.institutions.length && data.original_institutions[i] !== data.institutions[i]) {
+                    // Create a case-insensitive regex to find all instances
+                    const regex = new RegExp(data.original_institutions[i], 'gi');
+                    query = query.replace(regex, `<span class="text-green-600 font-medium">${data.institutions[i]}</span>`);
+                }
+            }
+        }
+        
+        // Replace years with corrected versions
+        if (data.has_year_typos && data.original_years && data.years) {
+            for (let i = 0; i < data.original_years.length; i++) {
+                if (i < data.years.length && data.original_years[i] !== data.years[i]) {
+                    // Create a case-insensitive regex to find all instances
+                    const regex = new RegExp(data.original_years[i], 'gi');
+                    query = query.replace(regex, `<span class="text-green-600 font-medium">${data.years[i]}</span>`);
+                }
+            }
+        }
+        
+        return query;
+    }
+    
+    // Function to handle Select Dataset button clicks
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('select-dataset-btn')) {
+            const datasetTitle = e.target.getAttribute('data-dataset-title');
+            const datasetReferences = JSON.parse(e.target.getAttribute('data-dataset-references') || '[]');
+            
+            if (!datasetTitle || !datasetReferences.length) {
+                console.error('Missing dataset information for selection');
+                return;
+            }
+            
+            console.log('Selected dataset:', datasetTitle);
+            console.log('References:', datasetReferences);
+            
+            // Show loading state
+            showLoading('Loading complete dataset...');
+            
+            // Gather institutions from the query analysis
+            const queryResults = document.getElementById('aiQueryResults');
+            let institutions = [];
+            let originalInstitutions = [];
+            let query = '';
+            let correctedQuery = '';
+            
+            // Try to extract this information from the data attributes on the page
+            const institutionsElem = queryResults.querySelector('[data-institutions]');
+            const originalInstitutionsElem = queryResults.querySelector('[data-original-institutions]');
+            const queryElem = queryResults.querySelector('[data-query]');
+            const correctedQueryElem = queryResults.querySelector('[data-corrected-query]');
+            
+            if (institutionsElem) {
+                try {
+                    institutions = JSON.parse(institutionsElem.getAttribute('data-institutions'));
+                } catch (e) {
+                    console.error('Error parsing institutions:', e);
+                }
+            }
+            
+            if (originalInstitutionsElem) {
+                try {
+                    originalInstitutions = JSON.parse(originalInstitutionsElem.getAttribute('data-original-institutions'));
+                } catch (e) {
+                    console.error('Error parsing original institutions:', e);
+                }
+            }
+            
+            if (queryElem) {
+                query = queryElem.getAttribute('data-query') || '';
+            }
+            
+            if (correctedQueryElem) {
+                correctedQuery = correctedQueryElem.getAttribute('data-corrected-query') || '';
+            }
+            
+            // Call the AI dataset details endpoint
+            fetch('/ai_dataset_details/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                body: JSON.stringify({
+                    dataset_title: datasetTitle,
+                    dataset_references: datasetReferences,
+                    institutions: institutions,
+                    original_institutions: originalInstitutions,
+                    query: query,
+                    corrected_query: correctedQuery
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        throw new Error('Network response was not ok: ' + response.status + ' ' + text);
+                    });
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Received dataset details:', data);
+                hideLoading();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+                
+                // Instead of using URL parameters, use a form POST submission
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '/ai_dataset_details/';
+                form.style.display = 'none';
+                
+                // Add CSRF token
+                const csrfToken = getCsrfToken();
+                const csrfInput = document.createElement('input');
+                csrfInput.type = 'hidden';
+                csrfInput.name = 'csrfmiddlewaretoken';
+                csrfInput.value = csrfToken;
+                form.appendChild(csrfInput);
+                
+                // Add the data as a hidden field
+                const dataInput = document.createElement('input');
+                dataInput.type = 'hidden';
+                dataInput.name = 'dataset_data';
+                dataInput.value = JSON.stringify(data);
+                form.appendChild(dataInput);
+                
+                // Add form to document and submit
+                document.body.appendChild(form);
+                form.submit();
+            })
+            .catch(error => {
+                console.error('Error fetching dataset details:', error);
+                hideLoading();
+                showError('An error occurred while fetching dataset details. Please try again.');
+            });
+        }
+    });
+    
+    // Add data attributes to store query analysis data for later use
+    function addDataAttributes(data) {
+        const queryResults = document.getElementById('aiQueryResults');
+        if (!queryResults) return;
+        
+        // Generate corrected query if needed
+        let correctedQuery = '';
+        if (data.has_institution_typos || data.has_year_typos) {
+            correctedQuery = generateCorrectedQueryText(data);
+        }
+        
+        // Add hidden spans with data attributes
+        const dataElements = document.createElement('div');
+        dataElements.style.display = 'none';
+        dataElements.innerHTML = `
+            <span data-institutions='${JSON.stringify(data.institutions || [])}' id="data-institutions"></span>
+            <span data-original-institutions='${JSON.stringify(data.original_institutions || [])}' id="data-original-institutions"></span>
+            <span data-query='${data.query || ""}' id="data-query"></span>
+            <span data-corrected-query='${correctedQuery}' id="data-corrected-query"></span>
+        `;
+        
+        // Remove any existing data elements
+        const existingDataElements = queryResults.querySelector('#data-elements-container');
+        if (existingDataElements) {
+            existingDataElements.remove();
+        }
+        
+        // Add new data elements
+        dataElements.id = 'data-elements-container';
+        queryResults.appendChild(dataElements);
+    }
+    
+    // Function to generate plain text version of corrected query (without HTML)
+    function generateCorrectedQueryText(data) {
+        let query = data.query;
+        
+        // Replace institution names with corrected versions
+        if (data.has_institution_typos && data.original_institutions && data.institutions) {
+            for (let i = 0; i < data.original_institutions.length; i++) {
+                if (i < data.institutions.length && data.original_institutions[i] !== data.institutions[i]) {
+                    // Create a case-insensitive regex to find all instances
+                    const regex = new RegExp(data.original_institutions[i], 'gi');
+                    query = query.replace(regex, data.institutions[i]);
+                }
+            }
+        }
+        
+        // Replace years with corrected versions
+        if (data.has_year_typos && data.original_years && data.years) {
+            for (let i = 0; i < data.original_years.length; i++) {
+                if (i < data.years.length && data.original_years[i] !== data.years[i]) {
+                    // Create a case-insensitive regex to find all instances
+                    const regex = new RegExp(data.original_years[i], 'gi');
+                    query = query.replace(regex, data.years[i]);
+                }
+            }
+        }
+        
+        return query;
     }
 }); 

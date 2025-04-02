@@ -143,7 +143,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Dashboard configuration
 DASHBOARD_SETTINGS = {
-    'MAX_PREVIEW_ROWS': 5,  # Default number of rows to show in previews
+    'MAX_PREVIEW_ROWS': 3,  # Default number of rows to show in previews
     'DEFAULT_MAX_MATCHES': 3,
 }
 

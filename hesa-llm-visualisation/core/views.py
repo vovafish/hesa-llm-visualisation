@@ -692,10 +692,10 @@ def select_file_source(request):
                 matching_group = csv_matches[group_number - 1]  # Convert to 0-based index
                 target_title = matching_group['title']
                 logger.info(f"Found matching group {group_number} with title: {target_title}")
-                
-                # Directly use the file paths from the matching group
+                            
+                            # Directly use the file paths from the matching group
                 csv_files = [(file_match['file_path'], file_match.get('academic_year', file_match.get('year', 'Unknown'))) 
-                             for file_match in matching_group['files']]
+                                         for file_match in matching_group['files']]
             
             # If we still don't have a target title, try to find by title from metadata
             if not csv_files and not target_title:
@@ -770,7 +770,7 @@ def select_file_source(request):
                                     file_title = metadata.get('title', '')
                                     academic_year = metadata.get('academic_year', '')
                                     
-                                    # Case-insensitive substring matching in both directions
+                                        # Case-insensitive substring matching in both directions
                                     if (file_title.lower() == target_title.lower() or 
                                         target_title.lower() in file_title.lower() or 
                                         file_title.lower() in target_title.lower()):
@@ -1308,116 +1308,195 @@ def find_file_for_year(file_matches, year):
 
 def get_csv_preview(file_path, max_rows=MAX_PREVIEW_ROWS, institution=None, mission_group=None):
     """
-    Extract a preview of CSV data, filtered by institution or mission group.
+    Get a preview of a CSV file.
+    Can filter by institution name or mission group.
     
     Args:
         file_path: Path to the CSV file
-        max_rows: Maximum number of rows to return (defaults to MAX_PREVIEW_ROWS). If None, return all rows.
-        institution: Optional institution name(s) to filter by (comma-separated list for multiple)
-        mission_group: Optional mission group name to filter by (institutions from this group + Leicester)
+        max_rows: Maximum number of rows to include in the preview (None for all rows)
+        institution: Institution name(s) to filter by (can be a comma-separated list)
+        mission_group: Mission group to filter by
         
     Returns:
-        Dictionary with columns and preview data
+        dict: Preview data including columns and rows
     """
+    import csv
+    import re
+    import logging
+    
     logger = logging.getLogger(__name__)
+    logger.info(f"Generating preview for {file_path}, max_rows={max_rows}, institution={institution}")
     
     try:
-        # Read the CSV file
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return None
+        
+        # Read CSV file
         with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
             # Skip metadata line if present
             first_line = f.readline()
             if first_line.startswith('#METADATA:'):
-                next_line = f.readline()
+                # Move cursor back to beginning
+                f.seek(0)
+                # Skip the first line
+                next(f)
             else:
-                next_line = first_line
-                
-            # Reset file pointer if not a metadata line
-            if not first_line.startswith('#METADATA:'):
+                # If no metadata, reset file pointer
                 f.seek(0)
                 
             # Read CSV data
             csv_reader = csv.reader(f)
+            headers = next(csv_reader)  # Column headers
             
-            # Get column headers
-            if first_line.startswith('#METADATA:'):
-                headers = next_line.strip().split(',')
+            # Determine the institution column index
+            institution_col_idx = -1
+            mission_group_col_idx = -1
+            
+            # Try to find the institution and mission group columns
+            for i, header in enumerate(headers):
+                header_lower = header.lower()
+                if 'provider' in header_lower or 'institution' in header_lower or 'university' in header_lower:
+                    institution_col_idx = i
+                if 'mission' in header_lower and 'group' in header_lower:
+                    mission_group_col_idx = i
+            
+            # Parse institution names
+            institution_names = []
+            if institution:
+                # Parse comma-separated list of institutions
+                institution_names = [name.strip() for name in institution.split(',') if name.strip()]
+                logger.info(f"Filtering by institutions: {institution_names}")
+            
+            # Different logic for preview mode vs. dataset selection mode
+            is_preview_mode = max_rows is not None and max_rows > 0
+            
+            # Read all rows from CSV
+            all_rows = list(csv_reader)
+            
+            # For Preview Mode (limit to exactly 3 rows)
+            if is_preview_mode:
+                logger.info("Using Preview Mode logic")
+                
+                # Ensure we find "The University of Leicester" and other matching institutions
+                leicester_row = None
+                matching_rows = []
+                
+                for row in all_rows:
+                    # Skip empty rows or incorrectly formatted rows
+                    if not row or len(row) != len(headers) or institution_col_idx >= len(row):
+                        continue
+                    
+                    institution_name = row[institution_col_idx]
+                    
+                    # Check for Leicester first
+                    if "university of leicester" in institution_name.lower():
+                        leicester_row = row
+                    elif institution_names:
+                        # Check for other institution matches
+                        for name in institution_names:
+                            if name.lower() in institution_name.lower():
+                                matching_rows.append(row)
+                                break
+                
+                # Prepare final data set (up to 3 rows)
+                data = []
+                
+                # Add Leicester row if found
+                if leicester_row:
+                    data.append(leicester_row)
+                
+                # Add other matching rows (up to 2 more)
+                remaining_slots = min(max_rows, 3) - len(data)
+                if remaining_slots > 0 and matching_rows:
+                    data.extend(matching_rows[:remaining_slots])
+                
+                # If we still need more rows to reach 3, add any rows
+                remaining_slots = min(max_rows, 3) - len(data)
+                if remaining_slots > 0 and all_rows:
+                    # Add rows that weren't already included
+                    for row in all_rows:
+                        if row not in data and len(data) < min(max_rows, 3):
+                            data.append(row)
+                
+                matched_count = len(data)
+                
+            # For Dataset Selection Mode (include all matching rows)
             else:
-                headers = next(csv_reader)
+                logger.info("Using Dataset Selection Mode logic (all matching rows)")
                 
-            # Prepare data container
-            data = []
-            total_rows = 0
-            matched_rows = 0
-            
-            # Determine which institutions to filter by
-            target_institutions = []
-            
-            # Mission group takes precedence if provided
-            if mission_group and mission_group in MISSION_GROUPS:
-                # Get all institutions in the mission group
-                target_institutions = MISSION_GROUPS[mission_group].copy()
-                # Always add University of Leicester
-                if not any(inst.lower() == LEICESTER.lower() or LEICESTER.lower() in inst.lower() or inst.lower() in LEICESTER.lower() for inst in target_institutions):
-                    target_institutions.append(LEICESTER)
-                logger.info(f"Filtering by mission group: {mission_group} with {len(target_institutions)} institutions")
-            # Otherwise use provided institution(s)
-            elif institution:
-                # Split institution names
-                target_institutions = [inst.strip() for inst in institution.split(',') if inst.strip()]
-                # Ensure Leicester is included
-                if not any(inst.lower() == LEICESTER.lower() or LEICESTER.lower() in inst.lower() or inst.lower() in LEICESTER.lower() for inst in target_institutions):
-                    target_institutions.append(LEICESTER)
-                logger.info(f"Filtering by institutions: {target_institutions}")
-            
-            # Process rows
-            for row in csv_reader:
-                total_rows += 1
+                data = []
+                matched_count = 0
                 
-                # If row is shorter than headers, extend it
-                if len(row) < len(headers):
-                    row.extend([''] * (len(headers) - len(row)))
-                
-                # Filter by target institutions if defined
-                if target_institutions and len(row) > 0:
-                    # Check if row's institution matches any target institution using substring matching
-                    institution_matches = False
+                for row in all_rows:
+                    # Skip empty rows
+                    if not row or len(row) != len(headers):
+                        continue
                     
-                    for target_inst in target_institutions:
-                        # Case-insensitive substring matching
-                        if (target_inst.lower() in row[0].lower() or 
-                            row[0].lower() in target_inst.lower()):
-                            institution_matches = True
-                            break
+                    # Apply mission group filter if needed
+                    if mission_group and mission_group_col_idx >= 0:
+                        if mission_group_col_idx >= len(row) or mission_group.lower() not in row[mission_group_col_idx].lower():
+                            continue
                     
-                    if not institution_matches:
-                        continue  # Skip this row if no institution match
-                
-                # If we get here, either no institution filtering or we have a match
-                matched_rows += 1
-                
-                # If max_rows is None, add all rows
-                # Otherwise, only add up to max_rows
-                if max_rows is None or len(data) < max_rows:
+                    # Apply institution filter
+                    if institution_names and institution_col_idx >= 0:
+                        if institution_col_idx >= len(row):
+                            continue
+                        
+                        row_institution = row[institution_col_idx]
+                        found_match = False
+                        
+                        # Always include University of Leicester
+                        if "university of leicester" in row_institution.lower():
+                            found_match = True
+                        else:
+                            # Try exact matching first
+                            exact_match_found = False
+                            for name in institution_names:
+                                # Skip Leicester since we already checked for it
+                                if "leicester" in name.lower():
+                                    continue
+                                    
+                                # Try exact match (case insensitive)
+                                if name.lower() == row_institution.lower():
+                                    exact_match_found = True
+                                    found_match = True
+                                    break
+                            
+                            # If no exact matches found, try partial matching
+                            if not exact_match_found:
+                                for name in institution_names:
+                                    # Skip Leicester since we already checked for it
+                                    if "leicester" in name.lower():
+                                        continue
+                                        
+                                    # Check if institution name contains the search term
+                                    if name.lower() in row_institution.lower():
+                                        found_match = True
+                                        break
+                        
+                        if not found_match:
+                            continue
+                    
+                    # Include this row in the output
                     data.append(row)
+                    matched_count += 1
             
-            # Create result
+            # Prepare response
             result = {
                 'columns': headers,
                 'data': data,
-                'total_rows': total_rows,
-                'matched_rows': matched_rows,
-                'has_more': max_rows is not None and matched_rows > len(data)
+                'matched_rows': matched_count,
+                'has_more': is_preview_mode and len(all_rows) > matched_count
             }
             
             return result
-        
+            
     except Exception as e:
-        logger.error(f"Error extracting preview from {file_path}: {str(e)}")
-        return {
-            'columns': ['Error'],
-            'data': [[f"Could not read file: {str(e)}"]],
-            'error': str(e)
-        }
+        logger.error(f"Error generating preview: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
 
 def find_relevant_csv_files(file_pattern, keywords=None, requested_years=None):
     """Find relevant CSV files based on keywords and years.
@@ -1588,7 +1667,7 @@ def find_relevant_csv_files_fallback(file_pattern, keywords=None, requested_year
             file_paths = list(Path(csv_dir).glob('*.csv'))
             if not file_paths:
                 logger.error("No CSV files found at all in the directory.")
-                return []
+            return []
         
         # Create a map to group files by title
         grouped_files = {}
@@ -1774,15 +1853,15 @@ def dataset_details(request, group_id):
                                 continue
                 except Exception:
                     continue
-        
-        # Direct approach for common datasets if we still don't have a title
-        if not target_title:
+            
+            # Direct approach for common datasets if we still don't have a title
+            if not target_title:
             # These are common dataset titles that we can fall back to
-            default_titles = {
-                1: "HE student enrolments by HE provider",
-                2: "UK permanent address HE students by HE provider and permanent address",
-                3: "HE qualifiers by HE provider and level of qualification obtained"
-            }
+                default_titles = {
+                    1: "HE student enrolments by HE provider",
+                    2: "UK permanent address HE students by HE provider and permanent address",
+                    3: "HE qualifiers by HE provider and level of qualification obtained"
+                }
             
             if group_number in default_titles:
                 target_title = default_titles[group_number]
@@ -1831,7 +1910,8 @@ def dataset_details(request, group_id):
                 logger.warning(f"Error reading metadata from {file_path}: {str(e)}")
             
             # If no title from metadata, try from filename
-            if not csv_files:
+        if not csv_files:
+            for file_path in all_files:
                 file_name = os.path.basename(file_path)
                 derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
                 
@@ -2139,6 +2219,7 @@ def process_gemini_query(request):
     """
     import json
     import logging
+    import os
     
     # Get the logger for this module
     logger = logging.getLogger(__name__)
@@ -2173,6 +2254,61 @@ def process_gemini_query(request):
             result.get('end_year')
         )
         
+        # Get institutions for CSV preview filtering
+        institutions = result.get('institutions', [])
+        
+        # Always include University of Leicester
+        if not any('leicester' in inst.lower() for inst in institutions):
+            institutions.append('University of Leicester')
+            
+        # For preview mode, we want exactly 3 rows per dataset
+        preview_max_rows = 3
+            
+        # Generate CSV previews for each dataset
+        for dataset in matching_datasets:
+            dataset_previews = []
+            
+            # Process each file in the dataset (stored in matches)
+            if 'matches' in dataset:
+                for match in dataset['matches']:
+                    reference = match.get('reference', '')
+                    if reference:
+                        # Construct the full file path
+                        file_path = os.path.join(CLEANED_FILES_DIR, reference)
+                        
+                        # Get CSV preview for this file filtered by the extracted institutions
+                        try:
+                            # Convert institutions list to comma-separated string
+                            institutions_str = ','.join(institutions)
+                            
+                            # In preview mode, we want exactly 3 rows per dataset
+                            preview = get_csv_preview(
+                                file_path=file_path,
+                                max_rows=preview_max_rows,
+                                institution=institutions_str
+                            )
+                            
+                            # Add the preview to the match
+                            match['preview'] = preview
+                            
+                            # Also add to a collection of previews for the dataset
+                            if preview:
+                                preview_with_metadata = preview.copy()
+                                preview_with_metadata['reference'] = reference
+                                preview_with_metadata['academic_year'] = match.get('academic_year', '')
+                                dataset_previews.append(preview_with_metadata)
+                    
+                        except Exception as e:
+                            logger.error(f"Error generating preview for {reference}: {str(e)}")
+                            match['preview'] = {
+                                'columns': ['Error'],
+                                'data': [[f"Could not generate preview: {str(e)}"]],
+                                'error': str(e)
+                            }
+            
+            # Add the collection of previews to the dataset
+            dataset['previews'] = dataset_previews
+        
         # Limit the number of datasets based on max_matches
         matching_datasets = matching_datasets[:max_matches]
         
@@ -2180,7 +2316,11 @@ def process_gemini_query(request):
         response_data = {
             'query': query,
             'institutions': result.get('institutions', []),
+            'original_institutions': result.get('original_institutions', []),
+            'has_institution_typos': result.get('has_institution_typos', False),
             'years': result.get('years', []),
+            'original_years': result.get('original_years', []),
+            'has_year_typos': result.get('has_year_typos', False),
             'start_year': result.get('start_year'),
             'end_year': result.get('end_year'),
             'data_request': result.get('data_request', []),
@@ -2189,6 +2329,25 @@ def process_gemini_query(request):
             'total_matches': len(matching_datasets),
             'using_mock': using_mock
         }
+        
+        # Check if any requested years are missing from the available datasets
+        requested_years = result.get('years', [])
+        available_years = set()
+        
+        # Collect all available years from matching datasets
+        for dataset in matching_datasets:
+            if 'academic_years' in dataset:
+                available_years.update(dataset['academic_years'])
+        
+        # Find missing years
+        missing_years = []
+        if requested_years:
+            for year in requested_years:
+                if year not in available_years:
+                    missing_years.append(year)
+        
+        # Add missing years information to the response data
+        response_data['missing_years'] = missing_years
         
         logger.info(f"Gemini query analysis results: {json.dumps(response_data)}")
         
@@ -2223,6 +2382,36 @@ def local_analyze_query(query):
         for match in matches:
             if match.group(0).lower() != "university of" and match.group(0).lower() != "in university":
                 institutions.append(match.group(0).strip())
+    
+    # Also look for standalone city/location names (not part of university patterns)
+    # This is to handle cases like "london" without transforming to "University of London"
+    
+    # Get the original query with university matches removed to find standalone locations
+    query_without_unis = query
+    for inst in institutions:
+        query_without_unis = query_without_unis.replace(inst, "", 1)
+    
+    # Common UK cities/locations that might be used as education institutions
+    city_patterns = [
+        r"\b(london)\b",
+        r"\b(manchester)\b",
+        r"\b(birmingham)\b",
+        r"\b(leeds)\b",
+        r"\b(edinburgh)\b",
+        r"\b(glasgow)\b",
+        r"\b(cardiff)\b",
+        r"\b(oxford)\b",
+        r"\b(cambridge)\b",
+    ]
+    
+    # Check for standalone city names
+    for pattern in city_patterns:
+        matches = re.finditer(pattern, query_without_unis, re.IGNORECASE)
+        for match in matches:
+            city_name = match.group(1)
+            # If we find a standalone city, add it exactly as typed in the original query
+            original_case = query[match.start():match.end()]
+            institutions.append(original_case)
     
     # Always include University of Leicester
     if institutions and "University of Leicester" not in institutions:
@@ -2357,7 +2546,7 @@ def local_analyze_query(query):
             if keyword in query.lower():
                 data_request = [category]
                 break
-    
+                
     # Handle postgraduate specific queries
     if "postgraduate" in query.lower() or "post-graduate" in query.lower() or "masters" in query.lower() or "phd" in query.lower():
         data_request = ["student_enrollment"]  # Categorize as enrollment for postgraduates
@@ -2547,3 +2736,195 @@ def regex_matching_fallback(query, data_request, datasets):
     
     logger.info(f"Found {len(individual_matches)} individual matching datasets grouped into {len(grouped_matches)} dataset groups using regex fallback")
     return grouped_matches
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def ai_dataset_details(request):
+    """
+    View a specific dataset selected from the AI dashboard.
+    GET: Displays the dataset details page with data passed as URL parameter
+    POST: Handles form submission with dataset data or API endpoint to get dataset details
+    """
+    import json
+    import logging
+    import os
+    
+    # Get the logger for this module
+    logger = logging.getLogger(__name__)
+    
+    # Handle GET request to display the dataset details page
+    if request.method == "GET":
+        try:
+            # Get data from URL parameter
+            data_json = request.GET.get('data', '{}')
+            dataset_data = json.loads(data_json)
+            
+            logger.info(f"Displaying AI dataset details for: {dataset_data.get('dataset_title', 'Unknown dataset')}")
+            
+            # Extract years from the file results
+            years = set()
+            for result in dataset_data.get('file_results', []):
+                if 'academic_year' in result and result['academic_year']:
+                    years.add(result['academic_year'])
+            
+            # Render the dataset details template with the data
+            return render(request, 'core/ai_dataset_details.html', {
+                'dataset_data': dataset_data,
+                'dataset_title': dataset_data.get('dataset_title', 'Dataset Details'),
+                'institutions': dataset_data.get('institutions', []),
+                'original_institutions': dataset_data.get('original_institutions', []),
+                'corrected_query': dataset_data.get('corrected_query', ''),
+                'query': dataset_data.get('query', ''),
+                'file_results': dataset_data.get('file_results', []),
+                'has_data': dataset_data.get('has_data', False),
+                'years': sorted(list(years))
+            })
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding dataset data JSON: {str(e)}")
+            return render(request, 'core/error.html', {
+                'error': 'Invalid dataset data format',
+                'details': str(e)
+            })
+        except Exception as e:
+            logger.error(f"Error displaying dataset details: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            
+            return render(request, 'core/error.html', {
+                'error': 'Error displaying dataset details',
+                'details': str(e)
+            })
+    
+    # Handle POST request for dataset details
+    try:
+        # Check if this is a form submission from the dashboard
+        dataset_data_json = request.POST.get('dataset_data')
+        
+        if dataset_data_json:
+            # This is a form submission with dataset_data
+            try:
+                dataset_data = json.loads(dataset_data_json)
+                
+                # Extract years from the file results
+                years = set()
+                for result in dataset_data.get('file_results', []):
+                    if 'academic_year' in result and result['academic_year']:
+                        years.add(result['academic_year'])
+                
+                # Render the dataset details template with the data
+                return render(request, 'core/ai_dataset_details.html', {
+                    'dataset_data': dataset_data,
+                    'dataset_title': dataset_data.get('dataset_title', 'Dataset Details'),
+                    'institutions': dataset_data.get('institutions', []),
+                    'original_institutions': dataset_data.get('original_institutions', []),
+                    'corrected_query': dataset_data.get('corrected_query', ''),
+                    'query': dataset_data.get('query', ''),
+                    'file_results': dataset_data.get('file_results', []),
+                    'has_data': dataset_data.get('has_data', False),
+                    'years': sorted(list(years))
+                })
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding POST dataset_data JSON: {str(e)}")
+                return render(request, 'core/error.html', {
+                    'error': 'Invalid dataset data format',
+                    'details': str(e)
+                })
+            
+        # This is a regular API request for dataset details
+        # Get the dataset information from the request
+        data = json.loads(request.body)
+        dataset_title = data.get('dataset_title', '')
+        dataset_references = data.get('dataset_references', [])
+        institutions = data.get('institutions', [])
+        original_institutions = data.get('original_institutions', [])
+        query = data.get('query', '')
+        corrected_query = data.get('corrected_query', '')
+        
+        logger.info(f"AI Dataset details request for: {dataset_title}")
+        logger.info(f"References: {dataset_references}")
+        logger.info(f"Institutions: {institutions}")
+        logger.info(f"Original institutions: {original_institutions}")
+        
+        if not dataset_title or not dataset_references:
+            return JsonResponse({'error': 'Dataset information is missing'}, status=400)
+        
+        # Collect all institutions to search for, including original and corrected versions
+        all_institutions = set()
+        if institutions:
+            all_institutions.update(institutions)
+        if original_institutions:
+            all_institutions.update(original_institutions)
+        
+        # If no institutions were provided, include University of Leicester by default
+        if not all_institutions:
+            all_institutions.add('University of Leicester')
+        
+        # Convert to list for easier handling
+        all_institutions = list(all_institutions)
+        logger.info(f"Searching for institutions: {all_institutions}")
+        
+        # Process each reference to get the complete data
+        file_results = []
+        years = set()
+        
+        for reference in dataset_references:
+            file_path = os.path.join(CLEANED_FILES_DIR, reference)
+            
+            # Extract academic year from reference name
+            year_match = re.search(r'(20\d{2}).{0,4}(20\d{2}|[0-9]{2})', reference)
+            academic_year = None
+            if year_match:
+                if len(year_match.group(2)) == 2:
+                    academic_year = f"{year_match.group(1)}/{year_match.group(2)}"
+                else:
+                    academic_year = f"{year_match.group(1)}/{year_match.group(2)[2:4]}"
+            
+            # Add to years set if valid
+            if academic_year:
+                years.add(academic_year)
+                
+            try:
+                # Get all the rows for the specified institutions using fuzzy matching
+                preview = get_csv_preview(
+                    file_path=file_path,
+                    max_rows=None,  # Get all matching rows, not just a preview
+                    institution=','.join(all_institutions)
+                )
+                
+                if preview:
+                    preview['academic_year'] = academic_year
+                    preview['reference'] = reference
+                    file_results.append(preview)
+            except Exception as e:
+                logger.error(f"Error processing file {reference}: {str(e)}")
+                # Add error information to the results
+                file_results.append({
+                    'academic_year': academic_year,
+                    'reference': reference,
+                    'error': str(e),
+                    'columns': ['Error'],
+                    'data': [[f"Could not process file: {str(e)}"]]
+                })
+        
+        # Prepare response with dataset details and file results
+        response_data = {
+            'dataset_title': dataset_title,
+            'institutions': institutions,
+            'original_institutions': original_institutions,
+            'query': query,
+            'corrected_query': corrected_query,
+            'file_results': file_results,
+            'total_files': len(dataset_references),
+            'processed_files': len(file_results),
+            'has_data': any(result.get('data') for result in file_results),
+            'years': sorted(list(years))
+        }
+        
+        return JsonResponse(response_data)
+        
+    except Exception as e:
+        logger.error(f"Error in AI dataset details: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        return JsonResponse({'error': str(e)}, status=500)

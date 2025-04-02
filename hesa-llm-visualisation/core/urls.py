@@ -18,5 +18,6 @@ urlpatterns = [
     path('api/select-file-source/', views.select_file_source, name='api_select_file_source'),
     path('ai-dashboard/', views.ai_dashboard, name='ai_dashboard'),
     path('process_gemini_query/', views.process_gemini_query, name='process_gemini_query'),
+    path('ai_dataset_details/', views.ai_dataset_details, name='ai_dataset_details'),
     path('api/select-file-source/<str:file_id>/', views.select_file_source, name='select_file_source'),
 ]
