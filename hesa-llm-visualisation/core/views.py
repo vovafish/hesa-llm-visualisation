@@ -549,6 +549,7 @@ def process_hesa_query(request):
                 # Generate preview data for this file, filtered by mission group if provided
                 preview = get_csv_preview(
                     file_path, 
+                    max_rows=None,  # No limit - display all rows
                     institution=institution,
                     mission_group=mission_group
                 )
@@ -840,6 +841,7 @@ def select_file_source(request):
                     data = get_csv_preview(
                         str(csv_path),
                         max_rows=None,  # No limit - display all rows
+                        institutions=institution,
                         mission_group=mission_group
                     )
                 else:
@@ -847,7 +849,7 @@ def select_file_source(request):
                     data = get_csv_preview(
                         str(csv_path),
                         max_rows=None,  # No limit - display all rows
-                        institution=institution
+                        institutions=institution
                     )
                 
                 if data and 'columns' in data and 'data' in data:
@@ -1306,197 +1308,321 @@ def find_file_for_year(file_matches, year):
     
     return None
 
-def get_csv_preview(file_path, max_rows=MAX_PREVIEW_ROWS, institution=None, mission_group=None):
+def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, mission_group=None):
     """
-    Get a preview of a CSV file.
-    Can filter by institution name or mission group.
+    Generate a preview of a CSV file, optionally filtering for specific institutions.
     
     Args:
         file_path: Path to the CSV file
-        max_rows: Maximum number of rows to include in the preview (None for all rows)
-        institution: Institution name(s) to filter by (can be a comma-separated list)
-        mission_group: Mission group to filter by
-        
+        max_rows: Maximum number of rows to include in the preview
+        institutions: Comma-separated string of institution names to filter for
+        institution: Deprecated - use institutions instead. Comma-separated string of institution names.
+        mission_group: Mission group to filter for
+    
     Returns:
-        dict: Preview data including columns and rows
+        dict: Dictionary containing columns and data for the preview
     """
     import csv
-    import re
     import logging
-    
     logger = logging.getLogger(__name__)
-    logger.info(f"Generating preview for {file_path}, max_rows={max_rows}, institution={institution}")
+    
+    # Configure console logging for debugging
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('[CSV Preview] %(asctime)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    logger.info(f"=== Starting CSV preview generation ===")
+    logger.info(f"File path: {file_path}")
+    logger.info(f"Max rows: {max_rows}")
+    
+    # For backward compatibility, use institution if institutions is None
+    if institutions is None and institution is not None:
+        institutions = institution
+    
+    logger.info(f"Filtering by institutions: {institutions}")
+    
+    # Extract academic year from the file name
+    year_match = re.search(r'(\d{4})(?:&|_)(\d{2})', os.path.basename(file_path))
+    academic_year = None
+    if year_match:
+        academic_year = f"{year_match.group(1)}/{year_match.group(2)}"
+        logger.info(f"Extracted academic year from filename: {academic_year}")
     
     try:
-        if not os.path.exists(file_path):
-            logger.error(f"File not found: {file_path}")
-            return None
+        institution_list = []
+        if institutions:
+            # Split the comma-separated list into individual institution names
+            institution_list = [inst.strip() for inst in institutions.split(',')]
+            logger.info(f"Parsed institution list: {institution_list}")
         
-        # Read CSV file
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-            # Skip metadata line if present
+        logger.info(f"Opening file: {file_path}")
+        with open(file_path, 'r', encoding='utf-8-sig') as f:
+            # Check if the first line contains metadata
             first_line = f.readline()
-            if first_line.startswith('#METADATA:'):
-                # Move cursor back to beginning
+            logger.debug(f"First line: {first_line[:100]}...")
+            
+            is_metadata = first_line.startswith('#METADATA:')
+            if is_metadata:
+                logger.info("File contains metadata line, skipping for column headers")
+                # Read the actual header line after metadata
+                headers_line = f.readline()
+                # Reset file position for CSV reader
                 f.seek(0)
-                # Skip the first line
-                next(f)
+                f.readline()  # Skip metadata line again
             else:
-                # If no metadata, reset file pointer
+                # Reset file position for CSV reader
                 f.seek(0)
-                
-            # Read CSV data
-            csv_reader = csv.reader(f)
-            headers = next(csv_reader)  # Column headers
+                headers_line = first_line
             
-            # Determine the institution column index
-            institution_col_idx = -1
-            mission_group_col_idx = -1
+            # Parse headers from the header line
+            headers = next(csv.reader([headers_line]))
+            logger.info(f"Parsed headers: {headers}")
             
-            # Try to find the institution and mission group columns
+            # Read the rest of the file with CSV reader
+            reader = csv.reader(f)
+            
+            # Find institution column - typically "HE provider" or similar
+            institution_col = None
             for i, header in enumerate(headers):
-                header_lower = header.lower()
-                if 'provider' in header_lower or 'institution' in header_lower or 'university' in header_lower:
-                    institution_col_idx = i
-                if 'mission' in header_lower and 'group' in header_lower:
-                    mission_group_col_idx = i
+                if re.search(r'(?:institution|provider|university|college)', header.lower()):
+                    institution_col = i
+                    logger.info(f"Found institution column: {header} at index {i}")
+                    break
             
-            # Parse institution names
-            institution_names = []
-            if institution:
-                # Parse comma-separated list of institutions
-                institution_names = [name.strip() for name in institution.split(',') if name.strip()]
-                logger.info(f"Filtering by institutions: {institution_names}")
+            if institution_col is None:
+                institution_col = 0  # Default to first column if no obvious institution column
+                logger.warning(f"No institution column found, defaulting to index 0: {headers[0]}")
             
-            # Different logic for preview mode vs. dataset selection mode
-            is_preview_mode = max_rows is not None and max_rows > 0
-            
-            # Read all rows from CSV
-            all_rows = list(csv_reader)
-            
-            # For Preview Mode (limit to exactly 3 rows)
-            if is_preview_mode:
-                logger.info("Using Preview Mode logic")
-                
-                # Ensure we find "The University of Leicester" and other matching institutions
-                leicester_row = None
-                matching_rows = []
-                
-                for row in all_rows:
-                    # Skip empty rows or incorrectly formatted rows
-                    if not row or len(row) != len(headers) or institution_col_idx >= len(row):
-                        continue
-                    
-                    institution_name = row[institution_col_idx]
-                    
-                    # Check for Leicester first
-                    if "university of leicester" in institution_name.lower():
-                        leicester_row = row
-                    elif institution_names:
-                        # Check for other institution matches
-                        for name in institution_names:
-                            if name.lower() in institution_name.lower():
-                                matching_rows.append(row)
-                                break
-                
-                # Prepare final data set (up to 3 rows)
-                data = []
-                
-                # Add Leicester row if found
-                if leicester_row:
-                    data.append(leicester_row)
-                
-                # Add other matching rows (up to 2 more)
-                remaining_slots = min(max_rows, 3) - len(data)
-                if remaining_slots > 0 and matching_rows:
-                    data.extend(matching_rows[:remaining_slots])
-                
-                # If we still need more rows to reach 3, add any rows
-                remaining_slots = min(max_rows, 3) - len(data)
-                if remaining_slots > 0 and all_rows:
-                    # Add rows that weren't already included
-                    for row in all_rows:
-                        if row not in data and len(data) < min(max_rows, 3):
-                            data.append(row)
-                
-                matched_count = len(data)
-                
-            # For Dataset Selection Mode (include all matching rows)
+            # Add Academic Year as the last column if not already present
+            if "Academic Year" not in headers and academic_year:
+                headers.append("Academic Year")
+                add_academic_year = True
+                logger.info(f"Added 'Academic Year' column with value: {academic_year}")
             else:
-                logger.info("Using Dataset Selection Mode logic (all matching rows)")
-                
-                data = []
-                matched_count = 0
-                
-                for row in all_rows:
-                    # Skip empty rows
-                    if not row or len(row) != len(headers):
-                        continue
-                    
-                    # Apply mission group filter if needed
-                    if mission_group and mission_group_col_idx >= 0:
-                        if mission_group_col_idx >= len(row) or mission_group.lower() not in row[mission_group_col_idx].lower():
-                            continue
-                    
-                    # Apply institution filter
-                    if institution_names and institution_col_idx >= 0:
-                        if institution_col_idx >= len(row):
-                            continue
-                        
-                        row_institution = row[institution_col_idx]
-                        found_match = False
-                        
-                        # Always include University of Leicester
-                        if "university of leicester" in row_institution.lower():
-                            found_match = True
-                        else:
-                            # Try exact matching first
-                            exact_match_found = False
-                            for name in institution_names:
-                                # Skip Leicester since we already checked for it
-                                if "leicester" in name.lower():
-                                    continue
-                                    
-                                # Try exact match (case insensitive)
-                                if name.lower() == row_institution.lower():
-                                    exact_match_found = True
-                                    found_match = True
-                                    break
-                            
-                            # If no exact matches found, try partial matching
-                            if not exact_match_found:
-                                for name in institution_names:
-                                    # Skip Leicester since we already checked for it
-                                    if "leicester" in name.lower():
-                                        continue
-                                        
-                                    # Check if institution name contains the search term
-                                    if name.lower() in row_institution.lower():
-                                        found_match = True
-                                        break
-                        
-                        if not found_match:
-                            continue
-                    
-                    # Include this row in the output
-                    data.append(row)
-                    matched_count += 1
+                add_academic_year = False
             
-            # Prepare response
-            result = {
-                'columns': headers,
-                'data': data,
-                'matched_rows': matched_count,
-                'has_more': is_preview_mode and len(all_rows) > matched_count
+            # Preview modes:
+            # 1. No institutions specified: just return first max_rows
+            # 2. Institutions specified: filter and return relevant rows (max_rows limit)
+            all_rows = []
+            important_rows = {}  # Dictionary to store rows for institutions in the request
+            
+            # Set of common words to ignore in partial matching
+            common_words = {'university', 'the', 'of', 'and', 'institute', 'college', 'higher', 
+                          'education', 'school', 'academy', 'faculty', 'department', 'campus', 
+                          'studies', 'centre', 'center', 'for'}
+            
+            # Pre-normalize the requested institutions
+            normalized_requested = {}
+            for inst in institution_list:
+                # Create normalized form (lowercase, remove common words)
+                words = [w.lower() for w in inst.split() if w.lower() not in common_words]
+                normalized = ' '.join(words)
+                normalized_requested[normalized] = inst
+                logger.info(f"Normalized institution '{inst}' to '{normalized}'")
+            
+            for row in reader:
+                # Add academic year to the row if needed
+                if add_academic_year and academic_year:
+                    row.append(academic_year)
+                
+                # Check if this is a requested institution
+                if institution_col < len(row):
+                    inst_name = row[institution_col]
+                    
+                    # Normalize the institution name from the dataset
+                    inst_words = [w.lower() for w in inst_name.split() if w.lower() not in common_words]
+                    normalized_name = ' '.join(inst_words)
+                    
+                    # Check if this is one of our requested institutions
+                    for normalized_req, original_req in normalized_requested.items():
+                        if normalized_req in normalized_name or normalized_name in normalized_req:
+                            important_rows[normalized_name] = row
+                            logger.info(f"Found important institution: {inst_name} (matches {original_req})")
+                
+                # Store all rows for processing
+                all_rows.append(row)
+            
+            logger.info(f"Read {len(all_rows)} rows from file")
+            
+            # Mission group filtering
+            if mission_group and len(all_rows) > 0:
+                # Find mission group column if it exists
+                mission_group_col = None
+                for i, header in enumerate(headers):
+                    if 'mission' in header.lower() and 'group' in header.lower():
+                        mission_group_col = i
+                        break
+                
+                # If found, filter by mission group
+                if mission_group_col is not None:
+                    filtered_rows = [row for row in all_rows if 
+                                   mission_group_col < len(row) and 
+                                   mission_group.lower() in row[mission_group_col].lower()]
+                    
+                    # Ensure important institutions are included
+                    for inst_row in important_rows.values():
+                        if inst_row not in filtered_rows:
+                            filtered_rows.append(inst_row)
+                    
+                    all_rows = filtered_rows
+                    logger.info(f"Filtered to {len(all_rows)} rows by mission group '{mission_group}'")
+            
+            # If no institutions to filter by, just return the first rows
+            if not institution_list:
+                logger.info("No institutions specified, returning first rows")
+                
+                # Even if no specific filtering, ensure important institutions are in the results
+                preview_rows = all_rows[:max_rows if max_rows else 5]
+                
+                # Make sure important institutions are included
+                for i, inst_row in enumerate(important_rows.values()):
+                    if inst_row not in preview_rows:
+                        if max_rows and len(preview_rows) >= max_rows:
+                            # Replace one of the existing rows
+                            replace_index = max_rows - i - 1  # Start replacing from the end
+                            if replace_index >= 0:
+                                preview_rows[replace_index] = inst_row
+                                logger.info(f"Replaced row at position {replace_index} with {inst_row[institution_col]}")
+                        else:
+                            preview_rows.append(inst_row)
+                            logger.info(f"Added {inst_row[institution_col]} to preview")
+                
+                logger.info(f"Returning {len(preview_rows)} rows without filtering")
+                return {
+                    "columns": headers,
+                    "data": preview_rows,
+                    "matched_rows": len(preview_rows),
+                    "has_more": len(all_rows) > len(preview_rows)
+                }
+            
+            # If institutions are specified, we need to filter
+            # Dictionary to map institution names to their data rows
+            institution_rows = {}
+            
+            # Process institutions in the data 
+            for row in all_rows:
+                if institution_col < len(row):
+                    inst_name = row[institution_col]
+                    
+                    # Create normalized form for the institution in the data
+                    words = [w.lower() for w in inst_name.split() if w.lower() not in common_words]
+                    key = ' '.join(words)
+                    institution_rows[key] = row
+            
+            # First pass: Exact normalized matches
+            matched_rows = []
+            
+            # Add all important rows first (these are the rows that directly match requested institutions)
+            for row in important_rows.values():
+                if row not in matched_rows:
+                    matched_rows.append(row)
+                    logger.info(f"Added important row for {row[institution_col]} to matched rows")
+            
+            # Check for exact matches against normalized requested institutions
+            for normalized_req in normalized_requested.keys():
+                if normalized_req in institution_rows:
+                    row = institution_rows[normalized_req]
+                    if row not in matched_rows:
+                        matched_rows.append(row)
+                        logger.info(f"Exact normalized match for '{normalized_req}'")
+            
+            # If we found exact normalized matches, return those
+            if matched_rows:
+                logger.info(f"Found {len(matched_rows)} exact institution matches")
+                preview_rows = matched_rows[:max_rows if max_rows else 5]
+                logger.info(f"Returning {len(preview_rows)} exact match rows")
+                return {
+                    "columns": headers,
+                    "data": preview_rows,
+                    "matched_rows": len(matched_rows),
+                    "has_more": len(matched_rows) > len(preview_rows)
+                }
+            
+            # Second pass: Partial word matching if no exact matches found
+            logger.info("No exact matches found, trying partial word matching")
+            matched_rows = []
+            
+            # Start with important rows (requested institutions)
+            for row in important_rows.values():
+                if row not in matched_rows:
+                    matched_rows.append(row)
+            
+            # For each institution in the dataset
+            for row in all_rows:
+                # Skip if row is already matched
+                if row in matched_rows:
+                    continue
+                    
+                if institution_col < len(row):
+                    dataset_inst_name = row[institution_col].lower()
+                    
+                    # Check each requested institution for partial matches
+                    for normalized_req, original_req in normalized_requested.items():
+                        req_words = normalized_req.split()
+                        
+                        # Log the significant words we're looking for
+                        logger.debug(f"Looking for partial matches with words: {req_words}")
+                        
+                        # Check if any significant word from the request matches in the provider name
+                        for word in req_words:
+                            if len(word) > 2 and word.lower() in dataset_inst_name:
+                                matched_rows.append(row)
+                                logger.info(f"Partial match found: '{word}' from '{original_req}' in '{dataset_inst_name}'")
+                                # Break after first match to avoid duplicates
+                                break
+                        
+                        # If we already matched this row, skip to the next
+                        if row in matched_rows:
+                            break
+            
+            # If we found partial matches, return those
+            if matched_rows:
+                logger.info(f"Found {len(matched_rows)} partial institution matches")
+                preview_rows = matched_rows[:max_rows if max_rows else 5]
+                logger.info(f"Returning {len(preview_rows)} partial match rows")
+                return {
+                    "columns": headers,
+                    "data": preview_rows,
+                    "matched_rows": len(preview_rows),
+                    "has_more": len(matched_rows) > len(preview_rows)
+                }
+            
+            # If we still have no matches, return at least some rows
+            logger.info("No institution matches found, returning first rows")
+            preview_rows = all_rows[:max_rows if max_rows else 5]
+            
+            # Again, ensure important institutions are included if they exist
+            for i, inst_row in enumerate(important_rows.values()):
+                if inst_row not in preview_rows:
+                    if max_rows and len(preview_rows) >= max_rows:
+                        # Replace one of the existing rows
+                        replace_index = max_rows - i - 1  # Start replacing from the end
+                        if replace_index >= 0:
+                            preview_rows[replace_index] = inst_row
+                            logger.info(f"Replaced row at position {replace_index} with {inst_row[institution_col]}")
+                    else:
+                        preview_rows.append(inst_row)
+                        logger.info(f"Added {inst_row[institution_col]} to preview")
+                    
+            logger.info(f"Returning {len(preview_rows)} rows as fallback")
+            return {
+                "columns": headers,
+                "data": preview_rows,
+                "matched_rows": len(preview_rows),
+                "has_more": len(all_rows) > len(preview_rows),
+                "no_institution_matches": True
             }
             
-            return result
-            
     except Exception as e:
-        logger.error(f"Error generating preview: {str(e)}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
+        logger.error(f"Error generating preview: {str(e)}", exc_info=True)
+        return {
+            "error": f"Error generating preview: {str(e)}",
+            "columns": [],
+            "data": []
+        }
 
 def find_relevant_csv_files(file_pattern, keywords=None, requested_years=None):
     """Find relevant CSV files based on keywords and years.
@@ -2213,80 +2339,136 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
 @csrf_exempt
 @require_http_methods(["POST"])
 def process_gemini_query(request):
-    """
-    Process a query using the Gemini API.
-    Extract entities and find matching datasets.
-    """
+    """Process a query using the Gemini API to extract entities and find matching datasets."""
     import json
     import logging
     import os
+    from django.conf import settings
     
-    # Get the logger for this module
     logger = logging.getLogger(__name__)
+    logger.info("=== STARTING GEMINI QUERY PROCESSING ===")
+    logger.info(f"Request received: {request.method}")
+    
+    # Configure logging to console for better debugging
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
     
     try:
-        # Get the query from the request
-        data = json.loads(request.body)
+        # Parse the query from the request
+        data = json.loads(request.body.decode('utf-8'))
         query = data.get('query', '')
-        max_matches = int(data.get('max_matches', 3))  # Convert to integer
+        max_matches = int(data.get('max_matches', 5))
+        preview_max_rows = int(data.get('preview_rows', 3))
         
+        # Log the input parameters
+        logger.info(f"Query: '{query}'")
+        logger.info(f"Max matches: {max_matches}")
+        logger.info(f"Max preview rows: {preview_max_rows}")
+        
+        # Validate query
         if not query:
-            return JsonResponse({'error': 'No query provided'}, status=400)
-            
-        logger.info(f"Processing Gemini query: {query}")
+            logger.warning("Empty query received")
+            return JsonResponse({'error': 'Query is required'}, status=400)
         
-        # Use Gemini API to extract entities from query
-        try:
-            gemini_client = GeminiClient(settings.GEMINI_API_KEY)
-            result = gemini_client.analyze_query(query)
-            using_mock = False
-        except Exception as e:
-            logger.error(f"Gemini API error (using local fallback): {str(e)}")
-            # Fallback to local analysis
+        # Initialize Gemini client
+        gemini_client = GeminiClient(settings.GEMINI_API_KEY)
+        
+        # Check if we should use mock mode
+        using_mock = not gemini_client.api_key or settings.DASHBOARD_SETTINGS.get('USE_MOCK_AI', False)
+        logger.info(f"Using mock AI: {using_mock}")
+        
+        # Extract entities from query
+        if using_mock:
+            logger.info("Using local fallback analysis")
             result = local_analyze_query(query)
-            using_mock = True
-            
-        # Find matching datasets based on the extracted entities
-        matching_datasets = find_matching_datasets(
-            query, 
-            result.get('data_request', []), 
-            result.get('start_year'), 
-            result.get('end_year')
-        )
+        else:
+            try:
+                logger.info("Calling Gemini API for query analysis")
+                result = gemini_client.analyze_query(query)
+                logger.info(f"API response received: {json.dumps(result, default=str)}")
+            except Exception as e:
+                logger.error(f"Error analyzing query with Gemini API: {str(e)}", exc_info=True)
+                # Fallback to local analysis on error
+                logger.info("Falling back to local analysis")
+                result = local_analyze_query(query)
+                result['api_error'] = str(e)
         
-        # Get institutions for CSV preview filtering
+        # Log the extracted institutions and years
+        logger.info(f"Extracted institutions: {result.get('institutions', [])}")
+        logger.info(f"Extracted years: {result.get('years', [])}")
+        logger.info(f"Year range: {result.get('start_year')} to {result.get('end_year')}")
+        logger.info(f"Data requested: {result.get('data_request', [])}")
+        
+        # Find matching datasets
+        data_request = result.get('data_request', ['general_data'])
+        start_year = result.get('start_year')
+        end_year = result.get('end_year')
+        
+        # Always ensure University of Leicester is included
         institutions = result.get('institutions', [])
-        
-        # Always include University of Leicester
-        if not any('leicester' in inst.lower() for inst in institutions):
+        if institutions and 'University of Leicester' not in institutions:
+            logger.info("Adding University of Leicester to institutions list")
             institutions.append('University of Leicester')
-            
-        # For preview mode, we want exactly 3 rows per dataset
-        preview_max_rows = 3
-            
+            result['institutions'] = institutions
+        
+        # Attempt to find matching datasets using either API or fallback
+        if using_mock:
+            logger.info("Using regex fallback to find matching datasets")
+            matching_datasets = regex_matching_fallback(query, data_request, datasets=None)
+        else:
+            try:
+                logger.info("Using semantic matching to find datasets")
+                matching_datasets = find_matching_datasets(query, data_request, start_year, end_year)
+                logger.info(f"Found {len(matching_datasets)} matching datasets")
+            except Exception as e:
+                logger.error(f"Error finding matching datasets: {str(e)}", exc_info=True)
+                logger.info("Falling back to regex matching")
+                matching_datasets = regex_matching_fallback(query, data_request, datasets=None)
+        
         # Generate CSV previews for each dataset
         for dataset in matching_datasets:
+            logger.info(f"Processing dataset previews for: {dataset.get('title', 'Untitled dataset')}")
             dataset_previews = []
             
-            # Process each file in the dataset (stored in matches)
             if 'matches' in dataset:
                 for match in dataset['matches']:
                     reference = match.get('reference', '')
                     if reference:
+                        logger.info(f"Generating preview for file: {reference}")
                         # Construct the full file path
                         file_path = os.path.join(CLEANED_FILES_DIR, reference)
+                        
+                        # Verify file exists
+                        if not os.path.exists(file_path):
+                            logger.error(f"File not found: {file_path}")
+                            match['preview'] = {
+                                'columns': ['Error'],
+                                'data': [['File not found']],
+                                'error': 'File not found'
+                            }
+                            continue
                         
                         # Get CSV preview for this file filtered by the extracted institutions
                         try:
                             # Convert institutions list to comma-separated string
                             institutions_str = ','.join(institutions)
+                            logger.info(f"Filtering by institutions: {institutions_str}")
                             
                             # In preview mode, we want exactly 3 rows per dataset
                             preview = get_csv_preview(
                                 file_path=file_path,
                                 max_rows=preview_max_rows,
-                                institution=institutions_str
+                                institutions=institutions_str
                             )
+                            
+                            if preview:
+                                logger.info(f"Preview generated successfully: {len(preview.get('data', []))} rows")
+                                logger.debug(f"Preview data: {json.dumps(preview, default=str)}")
+                            else:
+                                logger.warning(f"Empty preview generated for {reference}")
                             
                             # Add the preview to the match
                             match['preview'] = preview
@@ -2299,7 +2481,7 @@ def process_gemini_query(request):
                                 dataset_previews.append(preview_with_metadata)
                     
                         except Exception as e:
-                            logger.error(f"Error generating preview for {reference}: {str(e)}")
+                            logger.error(f"Error generating preview for {reference}: {str(e)}", exc_info=True)
                             match['preview'] = {
                                 'columns': ['Error'],
                                 'data': [[f"Could not generate preview: {str(e)}"]],
@@ -2349,11 +2531,11 @@ def process_gemini_query(request):
         # Add missing years information to the response data
         response_data['missing_years'] = missing_years
         
-        logger.info(f"Gemini query analysis results: {json.dumps(response_data)}")
-        
+        logger.info(f"Gemini query analysis complete with {len(matching_datasets)} datasets and {len(missing_years)} missing years")
         return JsonResponse(response_data)
+        
     except Exception as e:
-        logger.error(f"Error processing Gemini query: {str(e)}")
+        logger.error(f"Error processing Gemini query: {str(e)}", exc_info=True)
         return JsonResponse({'error': str(e)}, status=500)
 
 def local_analyze_query(query):
@@ -2888,7 +3070,7 @@ def ai_dataset_details(request):
                 preview = get_csv_preview(
                     file_path=file_path,
                     max_rows=None,  # Get all matching rows, not just a preview
-                    institution=','.join(all_institutions)
+                    institutions=','.join(all_institutions)
                 )
                 
                 if preview:

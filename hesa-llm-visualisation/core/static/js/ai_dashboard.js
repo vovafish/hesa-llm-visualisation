@@ -148,6 +148,76 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Function to clean column headers and data
+    function cleanMetadataArtifacts(columns, tableData) {
+        console.log('Cleaning metadata artifacts from columns:', columns);
+        
+        // Handle case where no columns are provided
+        if (!columns || columns.length === 0) {
+            console.warn('No columns provided to cleanMetadataArtifacts');
+            return { columns: [], data: tableData || [] };
+        }
+        
+        // Remove any metadata string from column headers
+        const cleanColumns = columns.map(col => {
+            // Remove #METADATA and any JSON that follows it
+            if (typeof col === 'string') {
+                // Handle metadata in column headers
+                const metadataRemoved = col.replace(/#METADATA:.*?}/g, '').trim();
+                
+                // Make column names look nicer (capitalize first letter of each word)
+                return metadataRemoved.split(/[\s_]+/).map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ');
+            }
+            return col;
+        });
+        
+        console.log('Columns after metadata removal:', cleanColumns);
+        
+        // Remove duplicate "Academic Year" columns
+        const uniqueColumns = [];
+        const seenColumns = new Set();
+        
+        cleanColumns.forEach(col => {
+            if (!seenColumns.has(col)) {
+                uniqueColumns.push(col);
+                seenColumns.add(col);
+            } else {
+                console.log(`Duplicate column removed: ${col}`);
+            }
+        });
+        
+        console.log('Final unique columns:', uniqueColumns);
+        
+        // Clean row data - remove any metadata strings and ensure correct length
+        const cleanData = (tableData || []).map(row => {
+            // Handle metadata in row data
+            const cleanRow = row.map(cell => {
+                if (typeof cell === 'string') {
+                    return cell.replace(/#METADATA:.*?}/g, '').trim();
+                }
+                return cell;
+            });
+            
+            // Adjust row length to match columns
+            if (cleanRow.length > uniqueColumns.length) {
+                console.log(`Trimming row from ${cleanRow.length} to ${uniqueColumns.length} columns`);
+                return cleanRow.slice(0, uniqueColumns.length);
+            } else if (cleanRow.length < uniqueColumns.length) {
+                console.log(`Padding row from ${cleanRow.length} to ${uniqueColumns.length} columns`);
+                const paddedRow = [...cleanRow];
+                while (paddedRow.length < uniqueColumns.length) {
+                    paddedRow.push('');
+                }
+                return paddedRow;
+            }
+            return cleanRow;
+        });
+        
+        return { columns: uniqueColumns, data: cleanData };
+    }
+    
     // Function to display query analysis
     function displayQueryAnalysis(data) {
         console.log('Displaying query analysis:', data);
@@ -282,150 +352,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         </span>
                     </h3>
                     <p class="text-sm text-gray-600 mb-4">The following datasets were found to be relevant to your query:</p>
-                    <div class="space-y-4">
-            `;
-            
-            // Add each grouped dataset
-            data.grouped_datasets.forEach((dataset, index) => {
-                // Handle score display
-                const matchScore = dataset.score !== undefined ? parseFloat(dataset.score).toFixed(2) : 'N/A';
-                const matchPercentage = dataset.match_percentage || Math.round(parseFloat(matchScore) * 100) || 'N/A';
-                
-                // Determine score color based on match quality
-                let scoreColorClass = 'bg-gray-100 text-gray-800';
-                if (matchScore !== 'N/A') {
-                    const score = parseFloat(matchScore);
-                    if (score >= 0.8) {
-                        scoreColorClass = 'bg-green-100 text-green-800';
-                    } else if (score >= 0.5) {
-                        scoreColorClass = 'bg-blue-100 text-blue-800';
-                    } else if (score >= 0.3) {
-                        scoreColorClass = 'bg-yellow-100 text-yellow-800';
-                    } else {
-                        scoreColorClass = 'bg-orange-100 text-orange-800';
-                    }
-                }
-                
-                // Format academic years for display
-                const academicYearsDisplay = dataset.academic_years ? 
-                    dataset.academic_years.join(', ') : 
-                    (dataset.academic_year || 'Unknown');
-                
-                // Format reference files for display
-                const referencesDisplay = dataset.references ? 
-                    dataset.references.map(ref => `<div class="text-xs bg-gray-50 p-1 my-1 rounded border">${ref}</div>`).join('') : 
-                    (dataset.reference || 'Unknown');
-                
-                // Combine all descriptions
-                const combinedDescription = dataset.descriptions ? 
-                    dataset.descriptions.join('<br><br>') : 
-                    (dataset.description || '');
-                
-                resultsHTML += `
-                    <div class="border rounded-lg p-4 hover:bg-blue-50 transition-colors">
-                        <div class="flex justify-between items-start">
-                            <h4 class="font-semibold text-blue-800 text-lg">${index + 1}. ${dataset.title || 'Untitled Dataset'}</h4>
-                            <span class="text-sm px-2 py-1 rounded-full ${scoreColorClass}">
-                                Match: ${matchScore} (${matchPercentage}%)
-                            </span>
+                    <div class="space-y-4" id="datasets-list">
+                        <!-- Datasets will be inserted here -->
+                        <div class="text-center p-4">
+                            <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                            <p class="mt-2 text-gray-600">Loading datasets...</p>
                         </div>
-                        
-                        <div class="mt-2 text-gray-600 text-sm">
-                            <div class="px-2 py-1 bg-gray-100 rounded mb-2">
-                                <span class="font-medium">Academic Years:</span> ${academicYearsDisplay}
-                            </div>
-                            
-                            <div class="px-2 py-1 bg-gray-100 rounded">
-                                <span class="font-medium">References:</span>
-                                <div class="mt-1">${referencesDisplay}</div>
-                            </div>
-                        </div>
-                        
-                        ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
-                            <div class="mt-3">
-                                <span class="font-medium text-sm text-gray-700">Matched Terms:</span>
-                                <div class="flex flex-wrap gap-1 mt-1">
-                                    ${dataset.matched_terms.map(term => 
-                                        `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
-                                    ).join('')}
-                                </div>
-                            </div>
-                        ` : ''}
-                        
-                        ${combinedDescription ? `
-                            <div class="mt-3 text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                                <span class="font-medium">Why this matches:</span>
-                                <div class="mt-1">${combinedDescription}</div>
-                            </div>
-                        ` : ''}
-                        
-                        <div class="mt-3">
-                            <div class="border-t pt-3">
-                                <span class="font-medium text-sm">Available Files:</span>
-                                <div class="mt-2">
-                                    ${dataset.matches ? dataset.matches.map(match => `
-                                        <div class="border rounded p-3 bg-white my-4">
-                                            <div class="text-sm font-medium mb-2">${match.academic_year} - ${match.reference}</div>
-                                            
-                                            ${match.preview ? `
-                                                <div class="overflow-x-auto max-h-[300px] table-container border rounded">
-                                                    <table class="min-w-full border-collapse table-auto text-sm">
-                                                        <thead>
-                                                            <tr>
-                                                                ${match.preview.columns ? match.preview.columns.map(column => 
-                                                                    `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">${column}</th>`
-                                                                ).join('') : ''}
-                                                                <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">Academic Year</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            ${match.preview && match.preview.data && match.preview.data.length > 0 ? 
-                                                                match.preview.data.map(row => `
-                                                                    <tr>
-                                                                        ${row.map(cell => 
-                                                                            `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`
-                                                                        ).join('')}
-                                                                        <td class="px-4 py-2 border-b border-gray-300 text-sm bg-blue-50">${match.academic_year}</td>
-                                                                    </tr>
-                                                                `).join('') : 
-                                                                `<tr><td colspan="${match.preview && match.preview.columns ? match.preview.columns.length : 1}" class="px-4 py-2 text-center text-gray-500">No data available or no matching institutions found</td></tr>`
-                                                            }
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                                ${match.preview.has_more ? 
-                                                    `<div class="text-xs text-gray-500 mt-2">
-                                                        Showing ${match.preview.data ? match.preview.data.length : 0} of ${match.preview.matched_rows} matching rows
-                                                    </div>` : 
-                                                    ''
-                                                }
-                                            ` : `
-                                                <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
-                                                    Preview not available
-                                                </div>
-                                            `}
-                                        </div>
-                                    `).join('') : `
-                                        <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
-                                            No files available
-                                        </div>
-                                    `}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="mt-4 pt-2 border-t">
-                            <button class="select-dataset-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full" 
-                                data-dataset-title="${dataset.title || ''}" 
-                                data-dataset-references='${JSON.stringify(dataset.references || [])}'>
-                                Select this dataset
-                            </button>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            resultsHTML += `
                     </div>
                 </div>
             `;
@@ -452,6 +384,225 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update the query results container
         aiQueryResults.innerHTML = resultsHTML;
         addDataAttributes(data);
+        
+        // Process datasets in a separate step
+        if (data.grouped_datasets && data.grouped_datasets.length > 0) {
+            setTimeout(() => {
+                const datasetsList = document.getElementById('datasets-list');
+                if (!datasetsList) {
+                    console.error("Datasets list container not found");
+                    return;
+                }
+                
+                // Clear loading indicator
+                datasetsList.innerHTML = '';
+                
+                // Add each dataset
+                data.grouped_datasets.forEach((dataset, index) => {
+                    // Handle score display
+                    const matchScore = dataset.score !== undefined ? parseFloat(dataset.score).toFixed(2) : 'N/A';
+                    const matchPercentage = dataset.match_percentage || Math.round(parseFloat(matchScore) * 100) || 'N/A';
+                    
+                    // Determine score color based on match quality
+                    let scoreColorClass = 'bg-gray-100 text-gray-800';
+                    if (matchScore !== 'N/A') {
+                        const score = parseFloat(matchScore);
+                        if (score >= 0.8) {
+                            scoreColorClass = 'bg-green-100 text-green-800';
+                        } else if (score >= 0.5) {
+                            scoreColorClass = 'bg-blue-100 text-blue-800';
+                        } else if (score >= 0.3) {
+                            scoreColorClass = 'bg-yellow-100 text-yellow-800';
+                        } else {
+                            scoreColorClass = 'bg-orange-100 text-orange-800';
+                        }
+                    }
+                    
+                    // Format academic years for display
+                    const academicYearsDisplay = dataset.academic_years ? 
+                        dataset.academic_years.join(', ') : 
+                        (dataset.academic_year || 'Unknown');
+                    
+                    // Format reference files for display
+                    const referencesDisplay = dataset.references ? 
+                        dataset.references.map(ref => `<div class="text-xs bg-gray-50 p-1 my-1 rounded border">${ref}</div>`).join('') : 
+                        (dataset.reference || 'Unknown');
+                    
+                    // Combine all descriptions
+                    const combinedDescription = dataset.descriptions ? 
+                        dataset.descriptions.join('<br><br>') : 
+                        (dataset.description || '');
+                    
+                    const datasetHTML = `
+                        <div class="border rounded-lg p-4 hover:bg-blue-50 transition-colors">
+                            <div class="flex justify-between items-start">
+                                <h4 class="font-semibold text-blue-800 text-lg">${index + 1}. ${dataset.title || 'Untitled Dataset'}</h4>
+                                <span class="text-sm px-2 py-1 rounded-full ${scoreColorClass}">
+                                    Match: ${matchScore} (${matchPercentage}%)
+                                </span>
+                            </div>
+                            
+                            <div class="mt-2 text-gray-600 text-sm">
+                                <div class="px-2 py-1 bg-gray-100 rounded mb-2">
+                                    <span class="font-medium">Academic Years:</span> ${academicYearsDisplay}
+                                </div>
+                                
+                                <div class="px-2 py-1 bg-gray-100 rounded">
+                                    <span class="font-medium">References:</span>
+                                    <div class="mt-1">${referencesDisplay}</div>
+                                </div>
+                            </div>
+                            
+                            ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
+                                <div class="mt-3">
+                                    <span class="font-medium text-sm text-gray-700">Matched Terms:</span>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        ${dataset.matched_terms.map(term => 
+                                            `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
+                                        ).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${combinedDescription ? `
+                                <div class="mt-3 text-sm text-gray-700 bg-gray-50 p-2 rounded">
+                                    <span class="font-medium">Why this matches:</span>
+                                    <div class="mt-1">${combinedDescription}</div>
+                                </div>
+                            ` : ''}
+                            
+                            <div class="mt-3">
+                                <div class="border-t pt-3">
+                                    <span class="font-medium text-sm">Available Files:</span>
+                                    <div class="mt-2" id="files-container-${index}">
+                                        <div class="text-center p-2">
+                                            <div class="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-blue-500 mx-auto"></div>
+                                            <p class="mt-1 text-gray-600 text-sm">Loading file previews...</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4 pt-2 border-t">
+                                <button class="select-dataset-btn bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 w-full" 
+                                    data-dataset-title="${dataset.title || ''}" 
+                                    data-dataset-references='${JSON.stringify(dataset.references || [])}'>
+                                    Select this dataset
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    datasetsList.innerHTML += datasetHTML;
+                    
+                    // Load file previews in a separate step
+                    setTimeout(() => {
+                        renderFilePreview(dataset, index);
+                    }, 10);
+                });
+            }, 0);
+        }
+    }
+    
+    // Function to render file previews for a dataset
+    function renderFilePreview(dataset, datasetIndex) {
+        console.log(`Rendering file previews for dataset ${datasetIndex + 1}: ${dataset.title || 'Untitled'}`);
+        
+        const filesContainer = document.getElementById(`files-container-${datasetIndex}`);
+        if (!filesContainer) {
+            console.error(`Files container not found for dataset ${datasetIndex}`);
+            return;
+        }
+        
+        if (!dataset.matches || dataset.matches.length === 0) {
+            filesContainer.innerHTML = `
+                <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+                    No files available
+                </div>
+            `;
+            return;
+        }
+        
+        let filesHTML = '';
+        
+        dataset.matches.forEach(match => {
+            console.log(`Processing match for dataset ${datasetIndex + 1}:`, match);
+            
+            filesHTML += `
+                <div class="border rounded p-3 bg-white my-4">
+                    <div class="text-sm font-medium mb-2">${match.academic_year || 'Unknown Year'} - ${match.reference || 'Unknown Reference'}</div>
+            `;
+            
+            if (match.preview && match.preview.columns && match.preview.data) {
+                console.log(`Processing preview data for ${match.reference}`, {
+                    columns: match.preview.columns.length,
+                    data: match.preview.data.length
+                });
+                
+                try {
+                    // Clean metadata artifacts from columns and data
+                    const { columns: uniqueColumns, data: previewData } = cleanMetadataArtifacts(
+                        match.preview.columns, 
+                        match.preview.data
+                    );
+                    
+                    filesHTML += `
+                        <div class="overflow-x-auto max-h-[300px] table-container border rounded">
+                            <table class="min-w-full border-collapse table-auto text-sm">
+                                <thead>
+                                    <tr>
+                                        ${uniqueColumns.map(column => 
+                                            `<th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">${column}</th>`
+                                        ).join('')}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${previewData.length > 0 ? 
+                                        previewData.map(row => `
+                                            <tr>
+                                                ${row.map(cell => 
+                                                    `<td class="px-4 py-2 border-b border-gray-300 text-sm">${cell}</td>`
+                                                ).join('')}
+                                            </tr>
+                                        `).join('') : 
+                                        `<tr><td colspan="${uniqueColumns.length}" class="px-4 py-2 text-center text-gray-500">No data available or no matching institutions found</td></tr>`
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        ${match.preview.has_more ? 
+                            `<div class="text-xs text-gray-500 mt-2">
+                                Showing ${previewData.length} of ${match.preview.matched_rows || previewData.length} matching rows
+                            </div>` : 
+                            ''
+                        }
+                    `;
+                } catch (error) {
+                    console.error('Error processing preview data:', error);
+                    filesHTML += `
+                        <div class="text-sm text-red-500 p-3 bg-red-50 rounded">
+                            Error processing preview data: ${error.message}
+                        </div>
+                    `;
+                }
+            } else if (match.preview && match.preview.error) {
+                filesHTML += `
+                    <div class="text-sm text-red-500 p-3 bg-red-50 rounded">
+                        Error loading preview: ${match.preview.error}
+                    </div>
+                `;
+            } else {
+                filesHTML += `
+                    <div class="text-sm text-gray-500 p-3 bg-gray-50 rounded">
+                        Preview not available
+                    </div>
+                `;
+            }
+            
+            filesHTML += `</div>`;
+        });
+        
+        filesContainer.innerHTML = filesHTML;
     }
     
     // Function to show loading indicator

@@ -63,13 +63,18 @@ class GeminiClient:
         4. The type of data being requested (e.g., "student numbers", "enrollment", "graduates")
         
         IMPORTANT: You need to detect and correct ONLY SPELLING typos in institution names and years.
-        - For institutions, identify spelling errors (e.g., "Univercity" → "University")
-        - For years with typos (e.g., "20025" → "2025"), provide the corrected version
-        - UK university names follow a standard format where every word starts with a capital letter
-        - ONLY correct spelling mistakes, DO NOT change or add any words
+        
+        For institutions, follow these strict rules:
+        - ONLY consider a term to have a typo if it has clear misspellings (e.g., "Univercity" → "University", "Liecester" → "Leicester")
+        - DO NOT consider "Oxford University" vs "University of Oxford" as a typo - these are different ways to refer to the same institution
+        - DO NOT mark an institution as having a typo if it's spelled correctly but uses a different naming convention
         - DO NOT transform a city name like "london" into "The University of London"
         - PRESERVE the original terms from the query - if user says "london", keep it as "london" in the institutions list
-        - If user writes "yaes" or "yaers", correct it to "years" but don't change the number
+        - If there are no spelling errors, original_institutions should exactly match institutions, and has_institution_typos should be false
+        
+        For years:
+        - ONLY mark years as having typos if they have clear numerical errors (e.g., "20025" → "2025")
+        - If no year typos exist, original_years should exactly match years, and has_year_typos should be false
         
         Be careful about interpreting years in academic context:
         - If the query contains phrases like "starting in [YEAR]" or "beginning in [YEAR]", interpret [YEAR] as the start of an academic year.
