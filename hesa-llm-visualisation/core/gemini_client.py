@@ -260,20 +260,24 @@ class GeminiClient:
         ]
         
         # Handle range logic for years without context
-        if 'start_year' in result and 'end_year' in result:
+        if 'start_year' in result and 'end_year' in result and result['start_year'] is not None and result['end_year'] is not None:
             # Range years should be treated as starting years of academic years
             start_year = result['start_year']
             end_year = result['end_year']
             
-            # Clear existing years array to rebuild it with correct academic years
-            result['years'] = []
+            try:
+                # Clear existing years array to rebuild it with correct academic years
+                result['years'] = []
+                
+                # Add academic years for the range
+                for year in range(int(start_year), int(end_year) + 1):
+                    academic_year = f"{year}/{str(year+1)[2:4]}"
+                    result['years'].append(academic_year)
+                
+                logger.info(f"Processed year range: {start_year}-{end_year} as academic years: {', '.join(result['years'])}")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Error processing year range: {e}. start_year={start_year}, end_year={end_year}")
             
-            # Add academic years for the range
-            for year in range(int(start_year), int(end_year) + 1):
-                academic_year = f"{year}/{str(year+1)[2:4]}"
-                result['years'].append(academic_year)
-            
-            logger.info(f"Processed year range: {start_year}-{end_year} as academic years: {', '.join(result['years'])}")
             return
         
         # Explicitly defined start years
@@ -281,25 +285,31 @@ class GeminiClient:
             start_match = re.search(pattern, query_lower)
             if start_match:
                 year = start_match.group(1)
-                academic_year = f"{year}/{str(int(year)+1)[2:4]}"
-                
-                if academic_year not in result['years']:
-                    result['years'].append(academic_year)
-                    result['start_year'] = year
-                    logger.info(f"Processed starting year {year} as academic year {academic_year}")
+                try:
+                    academic_year = f"{year}/{str(int(year)+1)[2:4]}"
+                    
+                    if academic_year not in result['years']:
+                        result['years'].append(academic_year)
+                        result['start_year'] = year
+                        logger.info(f"Processed starting year {year} as academic year {academic_year}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error processing starting year {year}: {e}")
         
         # Explicitly defined end years
         for pattern in end_patterns:
             end_match = re.search(pattern, query_lower)
             if end_match:
                 year = end_match.group(1)
-                previous_year = str(int(year) - 1)
-                academic_year = f"{previous_year}/{year[2:4]}"
-                
-                if academic_year not in result['years']:
-                    result['years'].append(academic_year)
-                    result['end_year'] = year
-                    logger.info(f"Processed ending year {year} as academic year {academic_year}")
+                try:
+                    previous_year = str(int(year) - 1)
+                    academic_year = f"{previous_year}/{year[2:4]}"
+                    
+                    if academic_year not in result['years']:
+                        result['years'].append(academic_year)
+                        result['end_year'] = year
+                        logger.info(f"Processed ending year {year} as academic year {academic_year}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error processing ending year {year}: {e}")
         
         # For single years without context, treat as starting years
         plain_year_pattern = r'\b(20\d{2})\b'
@@ -315,14 +325,17 @@ class GeminiClient:
                     break
             
             if not already_processed:
-                # No context, treat as starting year
-                academic_year = f"{year}/{str(int(year)+1)[2:4]}"
-                if academic_year not in result['years']:
-                    result['years'].append(academic_year)
-                    # If no explicit start_year is set, use this as default
-                    if 'start_year' not in result:
-                        result['start_year'] = year
-                    logger.info(f"Processed plain year {year} as academic year {academic_year}")
+                try:
+                    # No context, treat as starting year
+                    academic_year = f"{year}/{str(int(year)+1)[2:4]}"
+                    if academic_year not in result['years']:
+                        result['years'].append(academic_year)
+                        # If no explicit start_year is set, use this as default
+                        if 'start_year' not in result or result['start_year'] is None:
+                            result['start_year'] = year
+                        logger.info(f"Processed plain year {year} as academic year {academic_year}")
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Error processing plain year {year}: {e}")
                 
         # Make sure years are unique
         result['years'] = list(set(result['years']))
