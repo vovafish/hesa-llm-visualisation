@@ -294,24 +294,49 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
     }
     
-    // Get the first table (for visualization purposes)
-    const tableElement = tables[0];
+    // Prepare combined dataset info
+    let columns = [];
+    let allRows = [];
+    let years = [];
     
-    // Extract columns and rows
-    const columns = [];
-    const tableHeaders = tableElement.querySelectorAll('thead th');
-    tableHeaders.forEach(th => {
-        columns.push(th.textContent.trim());
+    // Get academic years from the section headers
+    const sectionHeaders = document.querySelectorAll('.border.rounded-lg h3');
+    sectionHeaders.forEach(header => {
+        const headerText = header.textContent.trim();
+        const yearMatch = headerText.match(/^(\d{4}\/\d{2})/);
+        if (yearMatch) {
+            years.push(yearMatch[1]);
+        }
     });
     
-    const rows = [];
-    const tableRows = tableElement.querySelectorAll('tbody tr');
-    tableRows.forEach(tr => {
-        const rowData = [];
-        tr.querySelectorAll('td').forEach(td => {
-            rowData.push(td.textContent.trim());
+    console.log("Years detected from headers:", years);
+    
+    // Process all tables to combine data
+    tables.forEach((tableElement, tableIndex) => {
+        // Extract columns from first table only (assuming all tables have same structure)
+        if (tableIndex === 0) {
+            const tableHeaders = tableElement.querySelectorAll('thead th');
+            tableHeaders.forEach(th => {
+                columns.push(th.textContent.trim());
+            });
+        }
+        
+        // Extract rows with year information
+        const tableRows = tableElement.querySelectorAll('tbody tr');
+        const year = years[tableIndex] || 'Unknown';
+        
+        tableRows.forEach(tr => {
+            const rowData = [];
+            tr.querySelectorAll('td').forEach(td => {
+                rowData.push(td.textContent.trim());
+            });
+            
+            // Add the academic year to each row
+            allRows.push({
+                data: rowData,
+                year: year
+            });
         });
-        rows.push(rowData);
     });
     
     // Get query information
@@ -341,7 +366,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const datasetInfo = {
         title: datasetTitle,
         columns: columns,
-        rows: rows,
+        rows: allRows.map(row => row.data), // For backward compatibility
+        years: years,
+        allYearData: allRows, // New property containing year information
         query: query,
         institutions: institutions
     };

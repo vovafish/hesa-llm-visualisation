@@ -3187,6 +3187,13 @@ def get_chart_recommendation(client, dataset_info):
         sample_rows = dataset_info.get('rows', [])[:5]  # Use up to 5 rows as a sample
         query = dataset_info.get('query', '')
         institutions = dataset_info.get('institutions', [])
+        years = dataset_info.get('years', [])
+        all_year_data = dataset_info.get('allYearData', [])
+        
+        # Log information about the data
+        logging.info(f"Chart recommendation for dataset: {title}")
+        logging.info(f"Years detected: {years}")
+        logging.info(f"Number of institutions: {len(institutions)}")
         
         # Ensure 'The University of Leicester' is always considered
         leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
@@ -3198,6 +3205,12 @@ def get_chart_recommendation(client, dataset_info):
                 
         if not leicester_included:
             institutions.append('The University of Leicester')
+        
+        # Format information about multi-year data if available
+        multi_year_info = ""
+        if years and len(years) > 0:
+            multi_year_info = f"\nThis dataset contains data for multiple academic years: {', '.join(years)}."
+            multi_year_info += "\nConsider suggesting visualizations that could compare trends across these years or focus on specific years."
         
         # Prepare a prompt for Gemini
         prompt = f"""
@@ -3211,16 +3224,17 @@ def get_chart_recommendation(client, dataset_info):
         
         The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
         
-        IMPORTANT: "The University of Leicester" should always be considered a key institution for this visualization, as the purpose of this project is to compare Leicester against other institutions.
+        IMPORTANT: "The University of Leicester" should always be considered a key institution for this visualization, as the purpose of this project is to compare Leicester against other institutions.{multi_year_info}
         
         Based on this dataset structure and content, what type of chart would be most appropriate for visualizing the data?
         Consider the data types, the relationships between variables, and what would be most insightful for comparing Leicester with other institutions.
         
         Also, provide 3 relevant example visualization requests that users could enter based on this specific dataset.
         These examples should be tailored to the actual columns and institutions in this dataset, not generic examples.
+        If the dataset contains multiple years of data, include at least one example that compares data across different years.
         
         Return a JSON response with the following structure:
-        {{
+        {{{{
             "recommended_chart_type": "The name of the recommended chart type (e.g., 'bar', 'line', 'pie', etc.)",
             "recommendation_reason": "A brief explanation of why this chart type is recommended, mentioning how it helps compare Leicester with other institutions",
             "example_prompts": [
@@ -3228,7 +3242,7 @@ def get_chart_recommendation(client, dataset_info):
                 "Example prompt 2 using actual columns and institutions from this dataset",
                 "Example prompt 3 using actual columns and institutions from this dataset"
             ]
-        }}
+        }}}}
         """
         
         # Call Gemini API for chart recommendation
@@ -3245,11 +3259,7 @@ def get_chart_recommendation(client, dataset_info):
                     'success': True,
                     'recommended_chart_type': recommendation.get('recommended_chart_type', 'bar chart'),
                     'recommendation_reason': recommendation.get('recommendation_reason', 'This chart type best represents your data'),
-                    'example_prompts': recommendation.get('example_prompts', [
-                        f"Compare total postgraduate numbers between The University of Leicester and other institutions",
-                        f"Show the trend of doctorate research qualifiers for The University of Leicester across all years",
-                        f"Compare undergraduate vs postgraduate totals for The University of Leicester"
-                    ])
+                    'example_prompts': recommendation.get('example_prompts', get_default_example_prompts(title, columns, institutions, years))
                 })
             else:
                 # Fallback if JSON pattern not found
@@ -3258,11 +3268,7 @@ def get_chart_recommendation(client, dataset_info):
                     'success': True,
                     'recommended_chart_type': 'grouped bar chart',
                     'recommendation_reason': 'A grouped bar chart is ideal for comparing categories across different institutions, with a focus on comparing The University of Leicester with other specified institutions.',
-                    'example_prompts': [
-                        f"Compare total postgraduate numbers between The University of Leicester and other institutions",
-                        f"Show the trend of doctorate research qualifiers for The University of Leicester across all years",
-                        f"Compare undergraduate vs postgraduate totals for The University of Leicester"
-                    ]
+                    'example_prompts': get_default_example_prompts(title, columns, institutions, years)
                 })
         except json.JSONDecodeError as e:
             logging.error("Failed to parse Gemini's JSON response for chart recommendation: %s", str(e))
@@ -3278,6 +3284,51 @@ def get_chart_recommendation(client, dataset_info):
             'error': f'Error generating recommendation: {str(e)}'
         })
 
+def get_default_example_prompts(title, columns, institutions, years):
+    """
+    Generate default example prompts based on dataset information
+    """
+    prompts = []
+    
+    # Get the secondary institution to compare with Leicester
+    secondary_institution = None
+    for inst in institutions:
+        if 'leicester' not in inst.lower():
+            secondary_institution = inst
+            break
+    
+    if not secondary_institution and institutions:
+        secondary_institution = institutions[0]
+    elif not secondary_institution:
+        secondary_institution = "other institutions"
+    
+    # Extract meaningful column names (skip Academic Year, HE provider, etc.)
+    data_columns = []
+    for col in columns:
+        if col not in ['Academic Year', 'HE provider'] and not col.endswith('Year'):
+            data_columns.append(col)
+    
+    # Get most recent year if available
+    most_recent_year = years[-1] if years and len(years) > 0 else "the most recent year"
+    
+    # Generate prompts
+    if len(data_columns) > 0:
+        prompts.append(f"Compare {data_columns[0]} between The University of Leicester and {secondary_institution} for {most_recent_year}")
+    else:
+        prompts.append(f"Compare The University of Leicester and {secondary_institution} for {most_recent_year}")
+    
+    if len(years) > 1:
+        prompts.append(f"Show how The University of Leicester's data changed between {years[0]} and {years[-1]}")
+    
+    if len(data_columns) > 1:
+        prompts.append(f"Compare {data_columns[0]} and {data_columns[1]} for The University of Leicester across all available years")
+    
+    # If we don't have enough prompts, add a generic one
+    if len(prompts) < 3:
+        prompts.append(f"Visualize the overall trends for The University of Leicester in {most_recent_year}")
+    
+    return prompts[:3]  # Limit to 3 prompts
+
 def generate_visualization(client, dataset_info, user_request):
     """
     Generate a Chart.js visualization based on the dataset and user request
@@ -3289,6 +3340,14 @@ def generate_visualization(client, dataset_info, user_request):
         rows = dataset_info.get('rows', [])
         query = dataset_info.get('query', '')
         institutions = dataset_info.get('institutions', [])
+        years = dataset_info.get('years', [])
+        all_year_data = dataset_info.get('allYearData', [])
+        
+        # Log the data structure received
+        logging.info(f"Visualization request for dataset: {title}")
+        logging.info(f"Years detected: {years}")
+        logging.info(f"Number of rows: {len(rows)}")
+        logging.info(f"Number of all year data rows: {len(all_year_data)}")
         
         # Ensure 'The University of Leicester' is always considered
         leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
@@ -3300,17 +3359,37 @@ def generate_visualization(client, dataset_info, user_request):
                 
         if not leicester_included:
             institutions.append('The University of Leicester')
-            
+        
+        # Format multi-year data if available
+        multi_year_data_str = ""
+        if all_year_data and len(all_year_data) > 0 and years and len(years) > 0:
+            # Group data by year
+            by_year = {}
+            for row_obj in all_year_data:
+                year = row_obj.get('year', 'Unknown')
+                if year not in by_year:
+                    by_year[year] = []
+                by_year[year].append(row_obj.get('data', []))
+                
+            # Format multi-year data for the prompt
+            multi_year_data_str = "Data organized by academic year:\n\n"
+            for year in years:
+                if year in by_year:
+                    multi_year_data_str += f"Academic Year: {year}\n"
+                    year_rows = by_year[year]
+                    multi_year_data_str += format_sample_rows(columns, year_rows[:10])  # Limit to 10 rows per year
+                    multi_year_data_str += "\n\n"
+        
         # Prepare a prompt for Gemini
         prompt = f"""
         I have a dataset titled "{title}" with the following columns:
         {', '.join(columns)}
         
-        Here is the data:
-        {format_sample_rows(columns, rows)}
+        {multi_year_data_str if multi_year_data_str else f"Here is the data:\n{format_sample_rows(columns, rows)}"}
         
         The user's original query was: "{query}"
         The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
+        The academic years in the dataset are: {', '.join(years) if years else 'Not specified'}
         
         The user now wants to visualize this data with the following request:
         "{user_request}"
@@ -3319,17 +3398,22 @@ def generate_visualization(client, dataset_info, user_request):
         1. Always include "The University of Leicester" in the visualization, even if not explicitly requested.
         2. If the user doesn't specify any institution to compare with Leicester, focus only on Leicester's data.
         3. If the user specifies other institutions, compare them with Leicester.
-        4. In the insights section, always focus on comparing Leicester with the other institutions the user specified.
-        5. Create a Chart.js configuration object that will visualize this data according to the instructions above.
+        4. If the user specifies a specific year (like 2019/20), use data from that year only.
+        5. If the user mentions multiple years or doesn't specify a year, use data from all available years.
+        6. In the insights section, always focus on comparing Leicester with the other institutions the user specified.
+        7. Create a Chart.js configuration object that will visualize this data according to the instructions above.
+        
+        Based on the available data and the user's request, create the most appropriate visualization. 
+        If the user mentions a specific dataset that is not available for a certain year, explain why this isn't possible.
         
         Also provide 3-5 insights that can be derived from this visualization, specifically comparing Leicester with other institutions specified by the user.
         
         Return your response as a JSON object with the following structure:
-        {{
+        {{{{
             "chart_config": "Complete Chart.js configuration object as a string that can be evaluated",
             "insights": "HTML-formatted list of insights derived from the data, focusing on comparing Leicester with other institutions",
             "alternatives": ["list", "of", "alternative", "visualization", "suggestions"]
-        }}
+        }}}}
         
         If the request is not feasible, explain why and suggest alternatives.
         """
@@ -3367,18 +3451,18 @@ def generate_visualization(client, dataset_info, user_request):
                 return JsonResponse({
                     'success': False,
                     'error': 'Failed to generate visualization. Please try a different request.',
-                    'alternatives': ['Show data for The University of Leicester', 
-                                    'Compare University of Leicester with other institutions',
-                                    'Show distribution of values for University of Leicester']
+                    'alternatives': ['Show data for The University of Leicester across all years', 
+                                    'Compare University of Leicester with other institutions in the most recent year',
+                                    'Show trends for University of Leicester across multiple years']
                 })
         except json.JSONDecodeError as e:
             logging.error("Failed to parse Gemini's JSON response for visualization: %s", str(e))
             return JsonResponse({
                 'success': False,
                 'error': 'Could not generate the visualization. Please try a simpler request.',
-                'alternatives': ['Show basic counts for University of Leicester', 
-                                'Compare University of Leicester with one other institution', 
-                                'Show gender distribution at University of Leicester']
+                'alternatives': ['Show basic counts for University of Leicester in a single year', 
+                                'Compare University of Leicester with one other institution in the most recent year', 
+                                'Show data for a specific year only']
             })
         
     except Exception as e:
