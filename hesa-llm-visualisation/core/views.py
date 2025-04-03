@@ -30,7 +30,7 @@ from django.views.decorators.csrf import csrf_exempt
 import re
 import json
 import glob
-from .gemini_client import GeminiClient
+from .gemini_client import GeminiClient, get_llm_client
 from .mock_ai_client import MockAIClient
 import fnmatch
 from collections import defaultdict
@@ -3141,3 +3141,282 @@ def ai_dataset_details(request):
         logger.error(traceback.format_exc())
         
         return JsonResponse({'error': str(e)}, status=500)
+
+@csrf_exempt
+def visualization_api(request):
+    """
+    API endpoint for visualization recommendations and generation
+    """
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        action = data.get('action')
+        dataset_info = data.get('dataset_info')
+        
+        if not action or not dataset_info:
+            return JsonResponse({'success': False, 'error': 'Missing required parameters'}, status=400)
+        
+        client = get_llm_client()
+        
+        if action == 'get_recommendation':
+            return get_chart_recommendation(client, dataset_info)
+        elif action == 'generate_visualization':
+            user_request = data.get('user_request')
+            if not user_request:
+                return JsonResponse({'success': False, 'error': 'Missing user request'}, status=400)
+            return generate_visualization(client, dataset_info, user_request)
+        else:
+            return JsonResponse({'success': False, 'error': f'Unknown action: {action}'}, status=400)
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'success': False, 'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        logging.exception("Error in visualization API: %s", str(e))
+        return JsonResponse({'success': False, 'error': f'Server error: {str(e)}'}, status=500)
+
+def get_chart_recommendation(client, dataset_info):
+    """
+    Get a chart type recommendation from Gemini based on the dataset
+    """
+    try:
+        # Extract relevant information from dataset_info
+        title = dataset_info.get('title', '')
+        columns = dataset_info.get('columns', [])
+        sample_rows = dataset_info.get('rows', [])[:5]  # Use up to 5 rows as a sample
+        query = dataset_info.get('query', '')
+        institutions = dataset_info.get('institutions', [])
+        
+        # Ensure 'The University of Leicester' is always considered
+        leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
+        leicester_included = False
+        for inst in institutions:
+            if inst.lower() in leicester_variants:
+                leicester_included = True
+                break
+                
+        if not leicester_included:
+            institutions.append('The University of Leicester')
+        
+        # Prepare a prompt for Gemini
+        prompt = f"""
+        I have a dataset titled "{title}" with the following columns:
+        {', '.join(columns)}
+        
+        Here are some sample rows from the dataset:
+        {format_sample_rows(columns, sample_rows)}
+        
+        The user's original query was: "{query}"
+        
+        The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
+        
+        IMPORTANT: "The University of Leicester" should always be considered a key institution for this visualization, as the purpose of this project is to compare Leicester against other institutions.
+        
+        Based on this dataset structure and content, what type of chart would be most appropriate for visualizing the data?
+        Consider the data types, the relationships between variables, and what would be most insightful for comparing Leicester with other institutions.
+        
+        Also, provide 3 relevant example visualization requests that users could enter based on this specific dataset.
+        These examples should be tailored to the actual columns and institutions in this dataset, not generic examples.
+        
+        Return a JSON response with the following structure:
+        {{
+            "recommended_chart_type": "The name of the recommended chart type (e.g., 'bar', 'line', 'pie', etc.)",
+            "recommendation_reason": "A brief explanation of why this chart type is recommended, mentioning how it helps compare Leicester with other institutions",
+            "example_prompts": [
+                "Example prompt 1 using actual columns and institutions from this dataset",
+                "Example prompt 2 using actual columns and institutions from this dataset",
+                "Example prompt 3 using actual columns and institutions from this dataset"
+            ]
+        }}
+        """
+        
+        # Call Gemini API for chart recommendation
+        response = client.generate_text(prompt)
+        
+        # Extract and parse the JSON response
+        try:
+            # Look for JSON pattern in the response
+            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                recommendation = json.loads(json_str)
+                return JsonResponse({
+                    'success': True,
+                    'recommended_chart_type': recommendation.get('recommended_chart_type', 'bar chart'),
+                    'recommendation_reason': recommendation.get('recommendation_reason', 'This chart type best represents your data'),
+                    'example_prompts': recommendation.get('example_prompts', [
+                        f"Compare total postgraduate numbers between The University of Leicester and other institutions",
+                        f"Show the trend of doctorate research qualifiers for The University of Leicester across all years",
+                        f"Compare undergraduate vs postgraduate totals for The University of Leicester"
+                    ])
+                })
+            else:
+                # Fallback if JSON pattern not found
+                logging.warning("Could not find JSON pattern in Gemini response for chart recommendation")
+                return JsonResponse({
+                    'success': True,
+                    'recommended_chart_type': 'grouped bar chart',
+                    'recommendation_reason': 'A grouped bar chart is ideal for comparing categories across different institutions, with a focus on comparing The University of Leicester with other specified institutions.',
+                    'example_prompts': [
+                        f"Compare total postgraduate numbers between The University of Leicester and other institutions",
+                        f"Show the trend of doctorate research qualifiers for The University of Leicester across all years",
+                        f"Compare undergraduate vs postgraduate totals for The University of Leicester"
+                    ]
+                })
+        except json.JSONDecodeError as e:
+            logging.error("Failed to parse Gemini's JSON response for chart recommendation: %s", str(e))
+            return JsonResponse({
+                'success': False,
+                'error': 'Could not generate a recommendation. Please try again.'
+            })
+        
+    except Exception as e:
+        logging.exception("Error getting chart recommendation: %s", str(e))
+        return JsonResponse({
+            'success': False,
+            'error': f'Error generating recommendation: {str(e)}'
+        })
+
+def generate_visualization(client, dataset_info, user_request):
+    """
+    Generate a Chart.js visualization based on the dataset and user request
+    """
+    try:
+        # Extract relevant information from dataset_info
+        title = dataset_info.get('title', '')
+        columns = dataset_info.get('columns', [])
+        rows = dataset_info.get('rows', [])
+        query = dataset_info.get('query', '')
+        institutions = dataset_info.get('institutions', [])
+        
+        # Ensure 'The University of Leicester' is always considered
+        leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
+        leicester_included = False
+        for inst in institutions:
+            if inst.lower() in leicester_variants:
+                leicester_included = True
+                break
+                
+        if not leicester_included:
+            institutions.append('The University of Leicester')
+            
+        # Prepare a prompt for Gemini
+        prompt = f"""
+        I have a dataset titled "{title}" with the following columns:
+        {', '.join(columns)}
+        
+        Here is the data:
+        {format_sample_rows(columns, rows)}
+        
+        The user's original query was: "{query}"
+        The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
+        
+        The user now wants to visualize this data with the following request:
+        "{user_request}"
+        
+        IMPORTANT INSTRUCTIONS:
+        1. Always include "The University of Leicester" in the visualization, even if not explicitly requested.
+        2. If the user doesn't specify any institution to compare with Leicester, focus only on Leicester's data.
+        3. If the user specifies other institutions, compare them with Leicester.
+        4. In the insights section, always focus on comparing Leicester with the other institutions the user specified.
+        5. Create a Chart.js configuration object that will visualize this data according to the instructions above.
+        
+        Also provide 3-5 insights that can be derived from this visualization, specifically comparing Leicester with other institutions specified by the user.
+        
+        Return your response as a JSON object with the following structure:
+        {{
+            "chart_config": "Complete Chart.js configuration object as a string that can be evaluated",
+            "insights": "HTML-formatted list of insights derived from the data, focusing on comparing Leicester with other institutions",
+            "alternatives": ["list", "of", "alternative", "visualization", "suggestions"]
+        }}
+        
+        If the request is not feasible, explain why and suggest alternatives.
+        """
+        
+        # Call Gemini API for visualization generation
+        response = client.generate_text(prompt)
+        
+        # Extract and parse the JSON response
+        try:
+            # Look for JSON pattern in the response
+            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+            if match:
+                json_str = match.group(0)
+                visualization_data = json.loads(json_str)
+                
+                # Check if we have all required fields
+                if 'chart_config' in visualization_data:
+                    # Return the visualization data
+                    return JsonResponse({
+                        'success': True,
+                        'chart_config': visualization_data.get('chart_config'),
+                        'insights': visualization_data.get('insights', '<p>No insights available</p>'),
+                        'alternatives': visualization_data.get('alternatives', [])
+                    })
+                else:
+                    # If no chart config, assume Gemini is suggesting we can't fulfill the request
+                    return JsonResponse({
+                        'success': False,
+                        'error': visualization_data.get('error', 'Could not generate the requested visualization'),
+                        'alternatives': visualization_data.get('alternatives', [])
+                    })
+            else:
+                # Fallback if JSON pattern not found
+                logging.warning("Could not find JSON pattern in Gemini response for visualization")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Failed to generate visualization. Please try a different request.',
+                    'alternatives': ['Show data for The University of Leicester', 
+                                    'Compare University of Leicester with other institutions',
+                                    'Show distribution of values for University of Leicester']
+                })
+        except json.JSONDecodeError as e:
+            logging.error("Failed to parse Gemini's JSON response for visualization: %s", str(e))
+            return JsonResponse({
+                'success': False,
+                'error': 'Could not generate the visualization. Please try a simpler request.',
+                'alternatives': ['Show basic counts for University of Leicester', 
+                                'Compare University of Leicester with one other institution', 
+                                'Show gender distribution at University of Leicester']
+            })
+        
+    except Exception as e:
+        logging.exception("Error generating visualization: %s", str(e))
+        return JsonResponse({
+            'success': False,
+            'error': f'Error generating visualization: {str(e)}'
+        })
+
+def format_sample_rows(columns, rows):
+    """
+    Format sample rows as a readable string for the prompt
+    """
+    if not rows:
+        return "No data available"
+    
+    formatted_rows = []
+    for row in rows:
+        # Make sure row has the same length as columns
+        if len(row) < len(columns):
+            row = row + [''] * (len(columns) - len(row))
+        elif len(row) > len(columns):
+            row = row[:len(columns)]
+        
+        formatted_row = ", ".join([f"{col}: {val}" for col, val in zip(columns, row)])
+        formatted_rows.append(formatted_row)
+    
+    return "\n".join(formatted_rows)
+
+# Configure logging to prevent duplicate handlers
+logger = logging.getLogger('core.views')
+# Remove all handlers to avoid duplicates
+if logger.handlers:
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+# Add a single handler
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.propagate = False  # Prevent propagation to root logger

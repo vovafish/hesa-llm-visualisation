@@ -10,7 +10,18 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime
 from google import genai
 
-logger = logging.getLogger(__name__)
+# Configure logging to prevent duplicate handlers
+logger = logging.getLogger('core.gemini_client')
+# Remove all handlers to avoid duplicates
+if logger.handlers:
+    for handler in logger.handlers:
+        logger.removeHandler(handler)
+# Add a single handler
+handler = logging.StreamHandler()
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+handler.setFormatter(formatter)
+logger.addHandler(handler)
+logger.propagate = False  # Prevent propagation to root logger
 
 class GeminiClient:
     """Client for interacting with Google's Gemini API for natural language processing."""
@@ -420,6 +431,18 @@ class GeminiClient:
             logger.error(f"Error getting completion from Gemini API: {str(e)}")
             raise
     
+    def generate_text(self, prompt):
+        """
+        Generate text using the Gemini API - alias for get_completion for compatibility
+        
+        Args:
+            prompt: The prompt to send to Gemini
+            
+        Returns:
+            str: The generated text from Gemini
+        """
+        return self.get_completion(prompt)
+    
     def _fallback_analysis(self, query: str, error: str = None) -> Dict[str, Any]:
         """Basic fallback analysis if the API call fails."""
         logger.warning(f"Using fallback analysis for query. Error: {error}")
@@ -510,4 +533,10 @@ class GeminiClient:
         if error:
             result["api_error"] = error
             
-        return result 
+        return result
+
+def get_llm_client():
+    """
+    Returns an instance of the LLM client (Gemini)
+    """
+    return GeminiClient() 

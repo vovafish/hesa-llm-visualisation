@@ -185,5 +185,433 @@
             </div>
         {% endif %}
     </div>
+
+    <!-- Data Visualization Section -->
+    <div class="border-t-2 border-gray-300 my-8"></div>
+
+    <div class="bg-white shadow-md rounded-lg p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Data Visualization</h2>
+        
+        <!-- Gemini's recommendation -->
+        <div id="chartRecommendation" class="bg-blue-50 p-4 rounded-lg mb-6">
+            <p class="text-blue-800">Based on this dataset, Gemini recommends a <span id="recommendedChartType">bar chart</span> for visualization.</p>
+            <p class="text-sm text-gray-600 mt-2">Why? <span id="recommendationReason">Loading recommendation...</span></p>
+        </div>
+        
+        <!-- Chart type selection buttons -->
+        <div class="flex space-x-3 my-4">
+            <button id="barChartBtn" class="chart-type-btn px-4 py-2 rounded-lg flex items-center border border-gray-300 hover:bg-blue-50 transition-all duration-200 transform hover:scale-105" data-chart-type="bar">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 11h2v4H2v-4zm4-5h2v9H6V6zm4-3h2v12h-2V3zm4 4h2v8h-2V7z"></path>
+                </svg>
+                Bar Chart
+            </button>
+            <button id="lineChartBtn" class="chart-type-btn px-4 py-2 rounded-lg flex items-center border border-gray-300 hover:bg-blue-50 transition-all duration-200 transform hover:scale-105" data-chart-type="line">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2 10h2v7H2v-7zm4-5h2v12H6V5zm4-3h2v15h-2V2zm4 5h2v10h-2V7z"></path>
+                </svg>
+                Line Chart
+            </button>
+            <button id="pieChartBtn" class="chart-type-btn px-4 py-2 rounded-lg flex items-center border border-gray-300 hover:bg-blue-50 transition-all duration-200 transform hover:scale-105" data-chart-type="pie">
+                <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm0 14.5a6.5 6.5 0 110-13 6.5 6.5 0 010 13z"></path>
+                    <path d="M10 0C4.477 0 0 4.477 0 10s4.477 10 10 10 10-4.477 10-10S15.523 0 10 0zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z" fill-opacity="0"></path>
+                    <path d="M10 0v10l7.071 7.071a10 10 0 01-14.142 0A10 10 0 010 10C0 4.477 4.477 0 10 0z"></path>
+                </svg>
+                Pie Chart
+            </button>
+        </div>
+        
+        <!-- User input -->
+        <div class="mb-6">
+            <label for="visualizationRequest" class="block text-sm font-medium text-gray-700 mb-2">
+                Describe what you'd like to visualize:
+            </label>
+            <div id="examplePrompts" class="mb-2 text-sm text-gray-500">
+                <p class="font-medium mb-1">Try one of these examples:</p>
+                <ul id="examplePromptsList" class="space-y-1 cursor-pointer">
+                    <li class="hover:text-blue-600 hover:underline">Loading examples...</li>
+                </ul>
+            </div>
+            <textarea id="visualizationRequest" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+            <button id="generateVisualization" class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Generate Visualization</button>
+        </div>
+        
+        <!-- Loading indicator (hidden by default) -->
+        <div id="visualizationLoading" class="hidden flex justify-center my-6">
+            <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+        
+        <!-- Error message area (hidden by default) -->
+        <div id="visualizationError" class="hidden bg-red-50 border-l-4 border-red-500 p-4 my-4">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm text-red-700" id="visualizationErrorMessage"></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Alternative suggestions (hidden by default) -->
+        <div id="alternativeSuggestions" class="hidden bg-yellow-50 p-4 rounded-lg my-4">
+            <p class="font-medium text-yellow-800">Try these suggestions instead:</p>
+            <ul id="suggestionsList" class="list-disc list-inside text-sm mt-2"></ul>
+        </div>
+        
+        <!-- Visualization container (hidden by default) -->
+        <div id="visualizationContainer" class="hidden mt-6">
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <canvas id="visualizationChart" height="400"></canvas>
+            </div>
+            
+            <!-- Insights -->
+            <div class="mt-6 bg-green-50 p-4 rounded-lg">
+                <h3 class="font-medium text-green-800 mb-2">Data Insights:</h3>
+                <div id="insightsContent" class="text-gray-700"></div>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- Include Chart.js library -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get dataset information from the page
+    const datasetTitle = document.querySelector('h1').textContent;
+    const tables = document.querySelectorAll('table');
+    
+    if (tables.length === 0) {
+        console.error("No tables found on the page");
+        showError("Could not find data tables on the page");
+        return;
+    }
+    
+    // Get the first table (for visualization purposes)
+    const tableElement = tables[0];
+    
+    // Extract columns and rows
+    const columns = [];
+    const tableHeaders = tableElement.querySelectorAll('thead th');
+    tableHeaders.forEach(th => {
+        columns.push(th.textContent.trim());
+    });
+    
+    const rows = [];
+    const tableRows = tableElement.querySelectorAll('tbody tr');
+    tableRows.forEach(tr => {
+        const rowData = [];
+        tr.querySelectorAll('td').forEach(td => {
+            rowData.push(td.textContent.trim());
+        });
+        rows.push(rowData);
+    });
+    
+    // Get query information
+    let query = "";
+    const queryElements = document.querySelectorAll('.bg-blue-50 p');
+    queryElements.forEach(el => {
+        if (el.textContent.trim().startsWith("Your query:")) {
+            query = el.textContent.trim().replace("Your query:", "").trim();
+        }
+    });
+    
+    // Get institutions
+    const institutions = [];
+    const institutionLists = document.querySelectorAll('.border ul');
+    institutionLists.forEach(ul => {
+        if (ul.parentElement.textContent.includes("Institutions:")) {
+            ul.querySelectorAll('li').forEach(li => {
+                const inst = li.textContent.trim();
+                if (inst && !inst.includes("None specified")) {
+                    institutions.push(inst);
+                }
+            });
+        }
+    });
+    
+    // Create dataset info object
+    const datasetInfo = {
+        title: datasetTitle,
+        columns: columns,
+        rows: rows,
+        query: query,
+        institutions: institutions
+    };
+    
+    console.log("Dataset info collected:", datasetInfo);
+    
+    // Get initial chart recommendation
+    getChartRecommendation(datasetInfo);
+    
+    // Set up event listener for generate button
+    document.getElementById('generateVisualization').addEventListener('click', function() {
+        const request = document.getElementById('visualizationRequest').value;
+        if (!request) {
+            showError("Please describe what you'd like to visualize.");
+            return;
+        }
+        
+        generateVisualization(datasetInfo, request);
+    });
+
+    // Set up suggestion click handler
+    document.getElementById('suggestionsList').addEventListener('click', function(e) {
+        // Check if clicked element is a suggestion
+        if (e.target.tagName === 'LI') {
+            document.getElementById('visualizationRequest').value = e.target.textContent;
+        }
+    });
+    
+    // Set up example prompts click handler
+    document.getElementById('examplePromptsList').addEventListener('click', function(e) {
+        // Check if clicked element is an example prompt
+        if (e.target.classList.contains('example-prompt-item')) {
+            document.getElementById('visualizationRequest').value = e.target.textContent;
+            // Focus the textarea
+            document.getElementById('visualizationRequest').focus();
+        }
+    });
+    
+    // Set up chart type button click handlers
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Get chart type from button's data attribute
+            const chartType = this.getAttribute('data-chart-type');
+            
+            // Set this button as active
+            setActiveChartButton(chartType);
+            
+            // We're not actually changing the chart type for now
+            // This is just a visual toggle
+            console.log(`Chart type button clicked: ${chartType}`);
+        });
+    });
+});
+
+// Function to get chart recommendation from Gemini
+function getChartRecommendation(datasetInfo) {
+    const loadingEl = document.getElementById('visualizationLoading');
+    const recommendationEl = document.getElementById('chartRecommendation');
+    const reasonEl = document.getElementById('recommendationReason');
+    const chartTypeEl = document.getElementById('recommendedChartType');
+    const examplePromptsList = document.getElementById('examplePromptsList');
+    
+    // Show loading state
+    loadingEl.classList.remove('hidden');
+    
+    console.log("Sending chart recommendation request with data:", datasetInfo);
+    
+    // Prepare data for API call
+    const requestData = {
+        action: 'get_recommendation',
+        dataset_info: datasetInfo
+    };
+    
+    // Call backend API for Gemini recommendation
+    fetch('/visualization_api/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => {
+        console.log("Received recommendation response status:", response.status);
+        return response.json();
+    })
+    .then(data => {
+        // Hide loading state
+        loadingEl.classList.add('hidden');
+        console.log("Recommendation data:", data);
+        
+        // Update recommendation
+        if (data.success) {
+            chartTypeEl.textContent = data.recommended_chart_type;
+            reasonEl.textContent = data.recommendation_reason;
+            recommendationEl.classList.remove('hidden');
+            
+            // Set the active chart type button based on recommendation
+            setActiveChartButton(data.recommended_chart_type);
+            
+            // Update example prompts if available
+            if (data.example_prompts && data.example_prompts.length > 0) {
+                examplePromptsList.innerHTML = '';
+                data.example_prompts.forEach(prompt => {
+                    const li = document.createElement('li');
+                    li.textContent = prompt;
+                    li.classList.add('hover:text-blue-600', 'hover:underline', 'example-prompt-item');
+                    examplePromptsList.appendChild(li);
+                });
+            }
+        } else {
+            showError(data.error || "Failed to get chart recommendation");
+        }
+    })
+    .catch(error => {
+        loadingEl.classList.add('hidden');
+        showError("Network error: " + error.message);
+        console.error("Error getting chart recommendation:", error);
+    });
+}
+
+// Function to set active chart button
+function setActiveChartButton(chartType) {
+    // Normalize chart type name
+    const normalizedChartType = chartType.toLowerCase();
+    
+    // Remove active class from all buttons
+    document.querySelectorAll('.chart-type-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-100', 'border-blue-500', 'text-blue-700', 'font-medium', 'shadow-md');
+    });
+    
+    // Determine which button to activate
+    let buttonId = 'barChartBtn'; // Default to bar chart
+    
+    if (normalizedChartType.includes('bar')) {
+        buttonId = 'barChartBtn';
+    } else if (normalizedChartType.includes('line')) {
+        buttonId = 'lineChartBtn';
+    } else if (normalizedChartType.includes('pie')) {
+        buttonId = 'pieChartBtn';
+    }
+    
+    // Add active class to the selected button
+    const activeButton = document.getElementById(buttonId);
+    if (activeButton) {
+        activeButton.classList.add('bg-blue-100', 'border-blue-500', 'text-blue-700', 'font-medium', 'shadow-md');
+    }
+}
+
+// Function to generate visualization based on user request
+function generateVisualization(datasetInfo, request) {
+    const loadingEl = document.getElementById('visualizationLoading');
+    const errorEl = document.getElementById('visualizationError');
+    const errorMsgEl = document.getElementById('visualizationErrorMessage');
+    const alternativesEl = document.getElementById('alternativeSuggestions');
+    const suggestionsListEl = document.getElementById('suggestionsList');
+    const visualizationEl = document.getElementById('visualizationContainer');
+    const insightsEl = document.getElementById('insightsContent');
+    
+    // Hide previous results
+    errorEl.classList.add('hidden');
+    alternativesEl.classList.add('hidden');
+    visualizationEl.classList.add('hidden');
+    
+    // Show loading state
+    loadingEl.classList.remove('hidden');
+    
+    // Prepare data for API call
+    const requestData = {
+        action: 'generate_visualization',
+        dataset_info: datasetInfo,
+        user_request: request
+    };
+    
+    // Call backend API for Gemini visualization generation
+    fetch('/visualization_api/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading state
+        loadingEl.classList.add('hidden');
+        
+        if (data.success) {
+            // If successful, render the chart
+            try {
+                // Evaluate the chart_js_code to get the visualization
+                const chartConfig = eval('(' + data.chart_config + ')');
+                renderChart(chartConfig);
+                
+                // Show insights
+                insightsEl.innerHTML = data.insights;
+                visualizationEl.classList.remove('hidden');
+            } catch (e) {
+                console.error("Error evaluating chart configuration:", e);
+                showError("Error rendering chart: " + e.message);
+            }
+        } else {
+            // Show error and suggestions if available
+            errorMsgEl.textContent = data.error || "Failed to generate visualization";
+            errorEl.classList.remove('hidden');
+            
+            if (data.alternatives && data.alternatives.length > 0) {
+                // Clear previous suggestions
+                suggestionsListEl.innerHTML = '';
+                
+                // Add new suggestions
+                data.alternatives.forEach(suggestion => {
+                    const li = document.createElement('li');
+                    li.textContent = suggestion;
+                    li.classList.add('cursor-pointer', 'hover:text-blue-700', 'mb-1');
+                    suggestionsListEl.appendChild(li);
+                });
+                
+                alternativesEl.classList.remove('hidden');
+            }
+        }
+    })
+    .catch(error => {
+        loadingEl.classList.add('hidden');
+        showError("Network error: " + error.message);
+        console.error("Error generating visualization:", error);
+    });
+}
+
+// Function to render Chart.js chart
+function renderChart(chartConfig) {
+    const ctx = document.getElementById('visualizationChart').getContext('2d');
+    
+    // Destroy previous chart if it exists
+    if (window.currentChart) {
+        window.currentChart.destroy();
+    }
+    
+    // Create new chart
+    window.currentChart = new Chart(ctx, chartConfig);
+}
+
+// Helper function to show error message
+function showError(message) {
+    const errorEl = document.getElementById('visualizationError');
+    const errorMsgEl = document.getElementById('visualizationErrorMessage');
+    
+    errorMsgEl.textContent = message;
+    errorEl.classList.remove('hidden');
+}
+
+// Helper function to get CSRF token
+function getCsrfToken() {
+    const cookieValue = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrftoken='))
+        ?.split('=')[1];
+        
+    if (cookieValue) {
+        return cookieValue;
+    }
+    
+    // If no CSRF token in cookies, try to get it from the page meta tag
+    const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (csrfInput) {
+        return csrfInput.value;
+    }
+    
+    return '';
+}
+</script>
 {% endblock %} 
