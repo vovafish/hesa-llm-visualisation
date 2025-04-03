@@ -1314,7 +1314,7 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
     
     Args:
         file_path: Path to the CSV file
-        max_rows: Maximum number of rows to include in the preview
+        max_rows: Maximum number of rows to include in the preview, None means no limit
         institutions: Comma-separated string of institution names to filter for
         institution: Deprecated - use institutions instead. Comma-separated string of institution names.
         mission_group: Mission group to filter for
@@ -1396,7 +1396,15 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                 logger.warning(f"No institution column found, defaulting to index 0: {headers[0]}")
             
             # Add Academic Year as the last column if not already present
-            if "Academic Year" not in headers and academic_year:
+            academic_year_col = None
+            for i, header in enumerate(headers):
+                if header.lower() == "academic year":
+                    academic_year_col = i
+                    logger.info(f"Found existing Academic Year column at index {i}")
+                    break
+                    
+            # Only add Academic Year column if it doesn't exist and we have a value
+            if academic_year_col is None and academic_year:
                 headers.append("Academic Year")
                 add_academic_year = True
                 logger.info(f"Added 'Academic Year' column with value: {academic_year}")
@@ -1424,9 +1432,11 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                 logger.info(f"Normalized institution '{inst}' to '{normalized}'")
             
             for row in reader:
-                # Add academic year to the row if needed
+                # Add academic year to the row if needed, checking if it already contains the academic year
                 if add_academic_year and academic_year:
-                    row.append(academic_year)
+                    # Only add academic year if it's not already in the row
+                    if academic_year not in row:
+                        row.append(academic_year)
                 
                 # Check if this is a requested institution
                 if institution_col < len(row):
@@ -1474,13 +1484,17 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
             if not institution_list:
                 logger.info("No institutions specified, returning first rows")
                 
-                # Even if no specific filtering, ensure important institutions are in the results
-                preview_rows = all_rows[:max_rows if max_rows else 5]
-                
+                # When max_rows is None, it means do not limit (used for dataset details view)
+                if max_rows is None:
+                    preview_rows = all_rows
+                    logger.info(f"No limit (max_rows=None), returning all {len(all_rows)} rows")
+                else:
+                    preview_rows = all_rows[:max_rows]
+                    
                 # Make sure important institutions are included
                 for i, inst_row in enumerate(important_rows.values()):
                     if inst_row not in preview_rows:
-                        if max_rows and len(preview_rows) >= max_rows:
+                        if max_rows and len(preview_rows) >= max_rows and max_rows > 0:
                             # Replace one of the existing rows
                             replace_index = max_rows - i - 1  # Start replacing from the end
                             if replace_index >= 0:
@@ -1532,7 +1546,13 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
             # If we found exact normalized matches, return those
             if matched_rows:
                 logger.info(f"Found {len(matched_rows)} exact institution matches")
-                preview_rows = matched_rows[:max_rows if max_rows else 5]
+                # When max_rows is None, it means do not limit (used for dataset details view)
+                if max_rows is None:
+                    preview_rows = matched_rows
+                    logger.info(f"No limit (max_rows=None), returning all {len(matched_rows)} exact matched rows")
+                else:
+                    preview_rows = matched_rows[:max_rows]
+                
                 logger.info(f"Returning {len(preview_rows)} exact match rows")
                 return {
                     "columns": headers,
@@ -1581,7 +1601,13 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
             # If we found partial matches, return those
             if matched_rows:
                 logger.info(f"Found {len(matched_rows)} partial institution matches")
-                preview_rows = matched_rows[:max_rows if max_rows else 5]
+                # When max_rows is None, it means do not limit (used for dataset details view)
+                if max_rows is None:
+                    preview_rows = matched_rows
+                    logger.info(f"No limit (max_rows=None), returning all {len(matched_rows)} partially matched rows")
+                else:
+                    preview_rows = matched_rows[:max_rows]
+                
                 logger.info(f"Returning {len(preview_rows)} partial match rows")
                 return {
                     "columns": headers,
@@ -1592,12 +1618,17 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
             
             # If we still have no matches, return at least some rows
             logger.info("No institution matches found, returning first rows")
-            preview_rows = all_rows[:max_rows if max_rows else 5]
+            # When max_rows is None, it means do not limit (used for dataset details view)
+            if max_rows is None:
+                preview_rows = all_rows
+                logger.info(f"No limit (max_rows=None), returning all {len(all_rows)} rows as fallback")
+            else:
+                preview_rows = all_rows[:max_rows]
             
             # Again, ensure important institutions are included if they exist
             for i, inst_row in enumerate(important_rows.values()):
                 if inst_row not in preview_rows:
-                    if max_rows and len(preview_rows) >= max_rows:
+                    if max_rows and len(preview_rows) >= max_rows and max_rows > 0:
                         # Replace one of the existing rows
                         replace_index = max_rows - i - 1  # Start replacing from the end
                         if replace_index >= 0:
@@ -2920,7 +2951,7 @@ def regex_matching_fallback(query, data_request, datasets):
     return grouped_matches
 
 @csrf_exempt
-@require_http_methods(["GET", "POST"])
+@require_http_methods(["POST"])
 def ai_dataset_details(request):
     """
     View a specific dataset selected from the AI dashboard.

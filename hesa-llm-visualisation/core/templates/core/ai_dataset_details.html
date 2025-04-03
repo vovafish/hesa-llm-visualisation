@@ -128,7 +128,9 @@
                                             {% for column in result.columns %}
                                                 <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10">{{ column }}</th>
                                             {% endfor %}
+                                            {% if "Academic Year" not in result.columns %}
                                             <th class="px-4 py-2 border-b border-gray-300 text-left text-sm font-medium sticky top-0 bg-white z-10 year-column">Academic Year</th>
+                                            {% endif %}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -137,7 +139,9 @@
                                                 {% for cell in row %}
                                                     <td class="px-4 py-2 border-b border-gray-300 text-sm">{{ cell }}</td>
                                                 {% endfor %}
+                                                {% if "Academic Year" not in result.columns %}
                                                 <td class="px-4 py-2 border-b border-gray-300 text-sm year-column">{{ result.academic_year }}</td>
+                                                {% endif %}
                                             </tr>
                                         {% empty %}
                                             <tr>
