@@ -1869,7 +1869,7 @@ def find_relevant_csv_files_fallback(file_pattern, keywords=None, requested_year
             match = {
                 'file_path': str(file_path),
                 'file_name': file_name,
-                'title': file_title, 
+                'title': file_title,
                 'year': year,
                 'academic_year': academic_year,
                 'score': score,
@@ -3162,11 +3162,19 @@ def visualization_api(request):
         
         if action == 'get_recommendation':
             return get_chart_recommendation(client, dataset_info)
+        elif action == 'change_chart_type':
+            chart_type = data.get('chart_type')
+            original_recommendation = data.get('original_recommendation')
+            current_request = data.get('current_request', '')
+            if not chart_type:
+                return JsonResponse({'success': False, 'error': 'Missing chart type'}, status=400)
+            return change_chart_type(client, dataset_info, chart_type, original_recommendation, current_request)
         elif action == 'generate_visualization':
             user_request = data.get('user_request')
+            chart_type = data.get('chart_type', None)  # Get the requested chart type if provided
             if not user_request:
                 return JsonResponse({'success': False, 'error': 'Missing user request'}, status=400)
-            return generate_visualization(client, dataset_info, user_request)
+            return generate_visualization(client, dataset_info, user_request, chart_type)
         else:
             return JsonResponse({'success': False, 'error': f'Unknown action: {action}'}, status=400)
     
@@ -3194,6 +3202,37 @@ def get_chart_recommendation(client, dataset_info):
         logging.info(f"Chart recommendation for dataset: {title}")
         logging.info(f"Years detected: {years}")
         logging.info(f"Number of institutions: {len(institutions)}")
+        logging.info(f"Institutions: {institutions}")
+        
+        # Extract institution names directly from the dataset
+        dataset_institutions = []
+        if sample_rows and len(sample_rows) > 0:
+            # Find the institution/provider column index
+            provider_col_idx = -1
+            for i, col in enumerate(columns):
+                if col.lower() in ['he provider', 'institution', 'provider', 'university']:
+                    provider_col_idx = i
+                    break
+                    
+            if provider_col_idx >= 0:
+                # Extract unique institution names from rows
+                for row in sample_rows:
+                    if len(row) > provider_col_idx and row[provider_col_idx]:
+                        inst_name = row[provider_col_idx].strip()
+                        if inst_name and inst_name not in dataset_institutions:
+                            dataset_institutions.append(inst_name)
+        
+        # If we found institutions in the dataset, use those instead of the provided list
+        if dataset_institutions:
+            logging.info(f"Using {len(dataset_institutions)} institutions extracted directly from dataset")
+            institutions = dataset_institutions
+        else:
+            # If no institutions found in the sample, validate the provided institutions
+            valid_institutions = []
+            for inst in institutions:
+                if inst and isinstance(inst, str) and len(inst.strip()) > 0:
+                    valid_institutions.append(inst.strip())
+            institutions = valid_institutions
         
         # Ensure 'The University of Leicester' is always considered
         leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
@@ -3203,16 +3242,23 @@ def get_chart_recommendation(client, dataset_info):
                 leicester_included = True
                 break
                 
-        if not leicester_included:
+        if not leicester_included and 'leicester' not in ' '.join(institutions).lower():
             institutions.append('The University of Leicester')
+            logging.info("Added University of Leicester to institutions list")
         
-        # Format information about multi-year data if available
-        multi_year_info = ""
-        if years and len(years) > 0:
-            multi_year_info = f"\nThis dataset contains data for multiple academic years: {', '.join(years)}."
-            multi_year_info += "\nConsider suggesting visualizations that could compare trends across these years or focus on specific years."
+        # Analyze the dataset characteristics
+        dataset_characteristics = {
+            "has_multiple_years": len(years) > 1,
+            "has_multiple_institutions": len(institutions) > 1,
+            "number_of_numeric_columns": len([col for col in columns if col not in ['HE provider', 'Academic Year']]),
+            "total_rows": len(sample_rows),
+            "available_institutions": institutions,
+            "available_years": years
+        }
         
-        # Prepare a prompt for Gemini
+        logging.info(f"Dataset characteristics: {dataset_characteristics}")
+        
+        # Prepare prompt for Gemini
         prompt = f"""
         I have a dataset titled "{title}" with the following columns:
         {', '.join(columns)}
@@ -3220,27 +3266,37 @@ def get_chart_recommendation(client, dataset_info):
         Here are some sample rows from the dataset:
         {format_sample_rows(columns, sample_rows)}
         
-        The user's original query was: "{query}"
+        The institutions in this dataset are: {', '.join(institutions)}
+        The academic years in the dataset are: {', '.join(years)}
         
-        The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
+        IMPORTANT INSTRUCTIONS:
+        1. Analyze this specific dataset and determine the most appropriate chart type based solely on the data characteristics.
+        2. ONLY use the EXACT institution names from the list I provided - do not modify, abbreviate or combine them.
+        3. Do not mention or suggest institutions that aren't in the provided dataset list.
+        4. Consider the following chart theory principles:
+           - Line charts are best for showing trends and changes over time (multiple years/time periods)
+           - Bar charts are best for comparing data across different categories or groups
+           - Pie charts are best for showing proportions of parts to a whole (typically at a single point in time)
+        5. Ignore the user's original query completely and focus only on what visualizations would be most valuable for this dataset.
         
-        IMPORTANT: "The University of Leicester" should always be considered a key institution for this visualization, as the purpose of this project is to compare Leicester against other institutions.{multi_year_info}
+        Please provide:
+        1. The recommended chart type (bar, line, or pie) that would be most appropriate for this specific dataset
+        2. A clear explanation of why this chart type is recommended based on the dataset characteristics
+        3. Three specific example visualization requests that:
+           - Only use institutions and years that are available in this dataset
+           - Must use the EXACT institution names as listed in the dataset - never abbreviate them
+           - Would work well with the recommended chart type
+           - Are realistic and can be fulfilled with the available data
+           - Make sure to verify that all institutions mentioned actually exist in the dataset list
         
-        Based on this dataset structure and content, what type of chart would be most appropriate for visualizing the data?
-        Consider the data types, the relationships between variables, and what would be most insightful for comparing Leicester with other institutions.
-        
-        Also, provide 3 relevant example visualization requests that users could enter based on this specific dataset.
-        These examples should be tailored to the actual columns and institutions in this dataset, not generic examples.
-        If the dataset contains multiple years of data, include at least one example that compares data across different years.
-        
-        Return a JSON response with the following structure:
+        Return your response as a JSON object with the following structure:
         {{{{
-            "recommended_chart_type": "The name of the recommended chart type (e.g., 'bar', 'line', 'pie', etc.)",
-            "recommendation_reason": "A brief explanation of why this chart type is recommended, mentioning how it helps compare Leicester with other institutions",
+            "recommended_chart_type": "The recommended chart type (bar, line, or pie)",
+            "recommendation_reason": "A clear explanation of why this chart type is best suited for this dataset",
             "example_prompts": [
-                "Example prompt 1 using actual columns and institutions from this dataset",
-                "Example prompt 2 using actual columns and institutions from this dataset",
-                "Example prompt 3 using actual columns and institutions from this dataset"
+                "Example 1 using only available institutions and years",
+                "Example 2 using only available institutions and years",
+                "Example 3 using only available institutions and years"
             ]
         }}}}
         """
@@ -3255,19 +3311,57 @@ def get_chart_recommendation(client, dataset_info):
             if match:
                 json_str = match.group(0)
                 recommendation = json.loads(json_str)
+                
+                # Validate example prompts to ensure they only mention available institutions
+                validated_examples = []
+                for example in recommendation.get('example_prompts', []):
+                    valid = True
+                    
+                    # For each example, check if it mentions only valid institutions
+                    for institution in institutions:
+                        # If the institution name is in the example, validate it matches exactly
+                        if institution.lower() in example.lower():
+                            # Check if the full exact name is used (not just a substring)
+                            if institution not in example:
+                                # If exact name not found, mark as invalid
+                                valid = False
+                                logging.warning(f"Example uses invalid institution reference: '{example}'")
+                                break
+                    
+                    # If the example passed validation, include it
+                    if valid:
+                        validated_examples.append(example)
+                    else:
+                        logging.warning(f"Rejecting example: {example}")
+                
+                # If we don't have enough valid examples, generate defaults
+                if len(validated_examples) < 3:
+                    logging.info("Not enough valid examples from Gemini, generating defaults")
+                    validated_examples = get_default_example_prompts(
+                        title, 
+                        columns, 
+                        institutions, 
+                        years, 
+                        recommendation.get('recommended_chart_type', 'bar').lower().replace(' chart', '')
+                    )
+                
                 return JsonResponse({
                     'success': True,
                     'recommended_chart_type': recommendation.get('recommended_chart_type', 'bar chart'),
                     'recommendation_reason': recommendation.get('recommendation_reason', 'This chart type best represents your data'),
-                    'example_prompts': recommendation.get('example_prompts', get_default_example_prompts(title, columns, institutions, years))
+                    'example_prompts': validated_examples[:3]  # Limit to 3 examples
                 })
             else:
                 # Fallback if JSON pattern not found
                 logging.warning("Could not find JSON pattern in Gemini response for chart recommendation")
+                # Determine a logical default based on dataset characteristics
+                default_type = "line chart" if len(years) > 1 and len(institutions) <= 1 else "bar chart"
+                default_reason = "A line chart is recommended for showing trends over multiple years for a single institution." if default_type == "line chart" else "A bar chart is recommended for comparing values across different categories."
+                
                 return JsonResponse({
                     'success': True,
-                    'recommended_chart_type': 'grouped bar chart',
-                    'recommendation_reason': 'A grouped bar chart is ideal for comparing categories across different institutions, with a focus on comparing The University of Leicester with other specified institutions.',
+                    'recommended_chart_type': default_type,
+                    'recommendation_reason': default_reason,
                     'example_prompts': get_default_example_prompts(title, columns, institutions, years)
                 })
         except json.JSONDecodeError as e:
@@ -3284,52 +3378,139 @@ def get_chart_recommendation(client, dataset_info):
             'error': f'Error generating recommendation: {str(e)}'
         })
 
-def get_default_example_prompts(title, columns, institutions, years):
+# Update the default example prompts function to be more chart-specific and dataset-aware
+def get_default_example_prompts(title, columns, institutions, years, chart_type=None):
     """
-    Generate default example prompts based on dataset information
+    Generate default example prompts based on the dataset and optionally the chart type
     """
+    # Clean and validate inputs
+    institutions = [i.strip() for i in institutions if i and isinstance(i, str) and len(i.strip()) > 0]
+    years = [y.strip() for y in years if y and isinstance(y, str) and len(y.strip()) > 0]
+    
+    # If no valid institutions or years, return generic prompts
+    if not institutions or not years:
+        return [
+            "Show the total values for all available institutions",
+            "Compare the key metrics across the dataset",
+            "Visualize the main trends in this dataset"
+        ]
+    
+    # Get non-institution and non-year columns that might contain interesting data
+    data_columns = [col for col in columns if col.lower() not in ['he provider', 'academic year', 'total', 'institution']]
+    
+    # If no data columns are found, use 'Total' as a fallback
+    if not data_columns and 'Total' in columns:
+        data_columns = ['Total']
+    elif not data_columns:
+        # If we still don't have any data columns, use any numeric-looking columns
+        for col in columns:
+            if any(numeric_term in col.lower() for numeric_term in ['count', 'number', 'total', 'value', 'sum', 'average']):
+                data_columns.append(col)
+    
+    # Default to first data column if available, otherwise use a fallback
+    main_data_column = data_columns[0] if data_columns else 'Total'
+    
+    # Choose institutions carefully to avoid problematic characters
+    safe_institutions = []
+    for inst in institutions:
+        if inst and not any(c in inst for c in ['"', "'", '\\', '\n']):
+            safe_institutions.append(inst)
+    
+    # If we don't have any safe institutions, clean the original ones
+    if not safe_institutions and institutions:
+        safe_institutions = [inst.replace('"', '').replace("'", '').replace('\\', '') 
+                            for inst in institutions if inst]
+    
+    # If we still don't have institutions, use a generic placeholder
+    if not safe_institutions:
+        safe_institutions = ["the institution"]
+    
+    # Use the first safe institution for examples
+    primary_institution = safe_institutions[0]
+    
+    # For comparison examples, use a second institution if available
+    secondary_institution = (safe_institutions[1] if len(safe_institutions) > 1 
+                            else primary_institution)
+    
+    # Get the most recent year
+    recent_year = years[-1] if years else "the most recent year"
+    
+    # Create a set of prompts based on the chart type
     prompts = []
     
-    # Get the secondary institution to compare with Leicester
-    secondary_institution = None
-    for inst in institutions:
-        if 'leicester' not in inst.lower():
-            secondary_institution = inst
-            break
+    # Generate chart-specific examples
+    if chart_type:
+        chart_type = chart_type.lower()
+        
+        if chart_type == 'line':
+            # Line charts work best with multiple years
+            if len(years) > 1:
+                prompts.append(f"Show {main_data_column} trend for {primary_institution} from {years[0]} to {recent_year}")
+                
+                if len(safe_institutions) > 1:
+                    prompts.append(f"Compare {main_data_column} trends between {primary_institution} and {secondary_institution}")
+            else:
+                # For single year, suggest category comparisons that can be displayed as lines
+                if len(data_columns) > 1:
+                    prompts.append(f"Compare different types of {main_data_column} for {primary_institution} in {recent_year}")
+                
+                prompts.append(f"Show {main_data_column} for {primary_institution} in {recent_year}")
+        
+        elif chart_type == 'pie':
+            # Pie charts work best with single points in time and categorical data
+            prompts.append(f"Show the distribution of {main_data_column} for {primary_institution} in {recent_year}")
+            
+            if len(safe_institutions) > 1 and len(safe_institutions) <= 5:
+                prompts.append(f"Compare {main_data_column} between {primary_institution} and {secondary_institution} for {recent_year}")
+            
+        else:  # bar chart
+            # Bar charts work well for comparisons
+            if len(safe_institutions) > 1:
+                prompts.append(f"Compare {main_data_column} between {primary_institution} and {secondary_institution} for {recent_year}")
+            
+            if len(years) > 1:
+                prompts.append(f"Show {main_data_column} for {primary_institution} in {years[0]} and {recent_year}")
+            
+            prompts.append(f"Show {main_data_column} for {primary_institution} in {recent_year}")
     
-    if not secondary_institution and institutions:
-        secondary_institution = institutions[0]
-    elif not secondary_institution:
-        secondary_institution = "other institutions"
-    
-    # Extract meaningful column names (skip Academic Year, HE provider, etc.)
-    data_columns = []
-    for col in columns:
-        if col not in ['Academic Year', 'HE provider'] and not col.endswith('Year'):
-            data_columns.append(col)
-    
-    # Get most recent year if available
-    most_recent_year = years[-1] if years and len(years) > 0 else "the most recent year"
-    
-    # Generate prompts
-    if len(data_columns) > 0:
-        prompts.append(f"Compare {data_columns[0]} between The University of Leicester and {secondary_institution} for {most_recent_year}")
     else:
-        prompts.append(f"Compare The University of Leicester and {secondary_institution} for {most_recent_year}")
+        # Generic examples for any chart type
+        if len(years) > 1:
+            prompts.append(f"Show how {main_data_column} for {primary_institution} changed from {years[0]} to {recent_year}")
+        
+        if len(safe_institutions) > 1:
+            prompts.append(f"Compare {main_data_column} between {primary_institution} and {secondary_institution} for {recent_year}")
+        
+        prompts.append(f"Show {main_data_column} for {primary_institution} in {recent_year}")
     
-    if len(years) > 1:
-        prompts.append(f"Show how The University of Leicester's data changed between {years[0]} and {years[-1]}")
+    # Add generic examples if we need more
+    while len(prompts) < 3:
+        generic_prompts = [
+            f"Visualize {main_data_column} for {primary_institution}",
+            f"Show {main_data_column} data for {recent_year}",
+            f"Analyze trends in {main_data_column}",
+            f"Compare {main_data_column} across institutions",
+            f"Show the distribution of {main_data_column}"
+        ]
+        
+        for prompt in generic_prompts:
+            if prompt not in prompts:
+                prompts.append(prompt)
+                break
     
-    if len(data_columns) > 1:
-        prompts.append(f"Compare {data_columns[0]} and {data_columns[1]} for The University of Leicester across all available years")
+    # Ensure we have punctuation at the end and deduplicate
+    unique_prompts = []
+    for prompt in prompts:
+        if not prompt.endswith(('.', '!', '?')):
+            prompt += "."
+        
+        if prompt not in unique_prompts:
+            unique_prompts.append(prompt)
     
-    # If we don't have enough prompts, add a generic one
-    if len(prompts) < 3:
-        prompts.append(f"Visualize the overall trends for The University of Leicester in {most_recent_year}")
-    
-    return prompts[:3]  # Limit to 3 prompts
+    # Return only up to 3 prompts
+    return unique_prompts[:3]
 
-def generate_visualization(client, dataset_info, user_request):
+def generate_visualization(client, dataset_info, user_request, chart_type=None):
     """
     Generate a Chart.js visualization based on the dataset and user request
     """
@@ -3343,11 +3524,100 @@ def generate_visualization(client, dataset_info, user_request):
         years = dataset_info.get('years', [])
         all_year_data = dataset_info.get('allYearData', [])
         
-        # Log the data structure received
+        # Log information about the request
         logging.info(f"Visualization request for dataset: {title}")
+        logging.info(f"User request: {user_request}")
         logging.info(f"Years detected: {years}")
         logging.info(f"Number of rows: {len(rows)}")
-        logging.info(f"Number of all year data rows: {len(all_year_data)}")
+        logging.info(f"Number of all year data rows: {len(all_year_data) if all_year_data else 0}")
+        logging.info(f"Requested chart type: {chart_type}")
+        
+        # Extract institution names directly from the dataset
+        dataset_institutions = []
+        provider_col_idx = -1
+        
+        if rows and len(rows) > 0:
+            # Find the institution/provider column index
+            for i, col in enumerate(columns):
+                if col.lower() in ['he provider', 'institution', 'provider', 'university']:
+                    provider_col_idx = i
+                    break
+                    
+            if provider_col_idx >= 0:
+                # Extract unique institution names from rows
+                for row in rows:
+                    if len(row) > provider_col_idx and row[provider_col_idx]:
+                        inst_name = row[provider_col_idx].strip()
+                        if inst_name and inst_name not in dataset_institutions:
+                            dataset_institutions.append(inst_name)
+        
+        # If we found institutions in the dataset, use those instead of the provided list
+        if dataset_institutions:
+            logging.info(f"Using {len(dataset_institutions)} institutions extracted directly from dataset")
+            institutions = dataset_institutions
+        else:
+            # If no institutions found in the rows, validate the provided institutions
+            valid_institutions = []
+            for inst in institutions:
+                if inst and isinstance(inst, str) and len(inst.strip()) > 0:
+                    valid_institutions.append(inst.strip())
+            institutions = valid_institutions
+        
+        # Analyze dataset characteristics
+        dataset_characteristics = {
+            "has_multiple_years": len(years) > 1,
+            "has_multiple_institutions": len(institutions) > 1,
+            "number_of_numeric_columns": len([col for col in columns if col not in ['HE provider', 'Academic Year']]),
+            "total_rows": len(rows),
+            "available_institutions": institutions,
+            "available_years": years
+        }
+        
+        logging.info(f"Dataset characteristics for visualization: {dataset_characteristics}")
+        
+        # Check for common chart type compatibility issues
+        chart_compatibility_check = ""
+        chart_compatibility_issue = False
+        
+        if chart_type == 'line' and not dataset_characteristics["has_multiple_years"]:
+            chart_compatibility_check = """
+            IMPORTANT NOTE: The user has requested a line chart, but this dataset only contains data for a single academic year.
+            Line charts are generally better suited for showing trends over multiple time periods.
+            
+            You should:
+            1. Try to generate a line chart as requested, adapting the data to work with a single year if possible
+            2. Make sure the chart configuration is valid JavaScript that can be evaluated
+            3. Explicitly mention the limitation of using a line chart with single-year data in your insights
+            """
+            chart_compatibility_issue = True
+            
+        elif chart_type == 'pie' and len([col for col in columns if col not in ['HE provider', 'Academic Year']]) > 5:
+            chart_compatibility_check = """
+            IMPORTANT NOTE: The user has requested a pie chart with a dataset that has many data columns.
+            Pie charts work best with a small number of categories (typically 5 or fewer).
+            
+            You should:
+            1. Generate a pie chart as requested, but focus on the most important categories
+            2. Make sure the chart configuration is valid JavaScript that can be evaluated
+            3. Mention the limitation of using pie charts with many categories in your insights
+            """
+            chart_compatibility_issue = True
+            
+        # Check if there are too many institutions for a readable chart
+        too_many_institutions = False
+        if len(institutions) > 5 and 'compare' in user_request.lower() and any(inst.lower() in user_request.lower() for inst in institutions):
+            too_many_institutions_warning = """
+            IMPORTANT NOTE: The user has requested comparing multiple institutions, but displaying too many institutions 
+            on a single chart can make it cluttered and hard to read.
+            
+            You should:
+            1. Limit the visualization to the 3-5 most relevant institutions mentioned in the user's request
+            2. If the user explicitly mentioned specific institutions, prioritize those
+            3. Mention in the insights that you've limited the chart to the most relevant institutions for readability
+            """
+            chart_compatibility_check += too_many_institutions_warning
+            too_many_institutions = True
+            chart_compatibility_issue = True
         
         # Ensure 'The University of Leicester' is always considered
         leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
@@ -3357,8 +3627,9 @@ def generate_visualization(client, dataset_info, user_request):
                 leicester_included = True
                 break
                 
-        if not leicester_included:
+        if not leicester_included and 'leicester' not in ' '.join(institutions).lower():
             institutions.append('The University of Leicester')
+            logging.info("Added University of Leicester to institutions list")
         
         # Format multi-year data if available
         multi_year_data_str = ""
@@ -3380,42 +3651,150 @@ def generate_visualization(client, dataset_info, user_request):
                     multi_year_data_str += format_sample_rows(columns, year_rows[:10])  # Limit to 10 rows per year
                     multi_year_data_str += "\n\n"
         
-        # Prepare a prompt for Gemini
+        # Check if the user is requesting specific axis treatment
+        axis_instructions = ""
+        if "axis" in user_request.lower() or "axes" in user_request.lower():
+            axis_instructions = """
+            I've noticed the user has specified some axis preferences. Please follow these instructions carefully:
+            1. If the user wants to swap X and Y axes, make sure to implement this exactly as requested
+            2. If the user specifies what should be on X or Y axis, honor this request precisely
+            3. For pie charts, note that traditional X/Y axes don't apply, but use the specified dimensions for data selection
+            """
+        
+        # Set instructions for requested chart type
+        chart_type_instruction = ""
+        if chart_type:
+            chart_type_instruction = f"""
+            IMPORTANT: You MUST generate a {chart_type} chart for this visualization. Do not suggest or use any other chart type.
+            The user has specifically requested a {chart_type} chart, so optimize the visualization for this chart type.
+            {chart_compatibility_check}
+            
+            For a {chart_type} chart specifically:
+            - If it's a 'pie' chart: Ensure the Chart.js configuration has type: 'pie' and data formatted for a pie chart
+            - If it's a 'line' chart: Ensure the Chart.js configuration has type: 'line' and datasets with x/y coordinates
+            - If it's a 'bar' chart: Ensure the Chart.js configuration has type: 'bar' with labels and dataset values
+            
+            CRITICAL: The JSON must be valid JavaScript that can be evaluated directly.
+            DO NOT use string literals with quotes, Object.assign, or template literals in the chart configuration.
+            """
+        
+        # Check if user request contains references to institutions not in the dataset
+        referenced_institutions = []
+        mentioned_institutions = []
+
+        # Extract institution mentions from the user request
+        for word in user_request.lower().split():
+            if 'university' in word or 'college' in word:
+                mentioned_institutions.append(word)
+
+        # Check if any mentioned institutions are in our dataset
+        for institution in institutions:
+            institution_lower = institution.lower()
+            if any(institution_lower in mention for mention in mentioned_institutions) or institution_lower in user_request.lower():
+                referenced_institutions.append(institution)
+        
+        # Create institution analysis string
+        institution_analysis = ""
+        if len(mentioned_institutions) > 0 and len(referenced_institutions) == 0:
+            # User mentioned institutions but none match our dataset
+            institution_analysis = f"""
+            IMPORTANT WARNING: The user has requested information about institutions that don't exist in the dataset.
+            The available institutions in this dataset are: {', '.join(institutions[:10])}{'...' if len(institutions) > 10 else ''}
+            
+            You MUST adapt the visualization to use only institutions that exist in the dataset and clearly explain in the insights
+            that the requested institution(s) aren't available in this dataset.
+            """
+        elif any(university_term in user_request.lower() for university_term in ["university", "college", "school"]) and len(referenced_institutions) == 0:
+            # Generic institution terms but no specific matches
+            institution_analysis = """
+            IMPORTANT WARNING: The user's request mentions educational institutions, but I couldn't determine which specific 
+            institutions from the dataset they're interested in. 
+            
+            Please create a visualization using the institutions available in the dataset, and clearly explain in the insights
+            which institutions were selected and why.
+            """
+        
+        # Create institution note for warnings
+        mentioned_institutions_note = ""
+        if len(referenced_institutions) > 0:
+            mentioned_institutions_note = f"The user has requested data about the following institutions: {', '.join(referenced_institutions)}"
+        
+        # Add any compatibility warnings for the selected chart type
+        chart_compatibility_note = ""
+        if chart_type:
+            chart_compatibility_warning = get_chart_type_explanation(chart_type, dataset_characteristics)
+            if chart_compatibility_warning:
+                chart_compatibility_note = f"\n\nIMPORTANT NOTE ABOUT {chart_type.upper()} CHARTS: {chart_compatibility_warning}"
+        
+        # Create years description
+        years_description = f"{len(years)} academic year{'s' if len(years) > 1 else ''}"
+        
+        # Create institutions description
+        institutions_description = f"{len(institutions)} institution{'s' if len(institutions) > 1 else ''}"
+        
+        # Format sample data
+        sample_data = format_sample_rows(columns, rows[:10])
+        
+        # Prepare prompt for visualization generation
         prompt = f"""
-        I have a dataset titled "{title}" with the following columns:
-        {', '.join(columns)}
+        I want to generate a {chart_type if chart_type else "visual"} chart visualization based on the following dataset:
         
-        {multi_year_data_str if multi_year_data_str else f"Here is the data:\n{format_sample_rows(columns, rows)}"}
+        DATASET INFORMATION:
+        - Title: {title}
+        - Columns: {', '.join(columns)}
+        - Sample data rows: {sample_data}
+        - Academic years available: {', '.join(years)}
+        - Dataset characteristics: {years_description}, {institutions_description}
         
-        The user's original query was: "{query}"
-        The institutions of interest are: {', '.join(institutions) if institutions else 'Not specified'}
-        The academic years in the dataset are: {', '.join(years) if years else 'Not specified'}
+        USER REQUEST: {user_request}
         
-        The user now wants to visualize this data with the following request:
-        "{user_request}"
+        {institution_analysis}
+        
+        {mentioned_institutions_note}
+        
+        {chart_compatibility_note}
         
         IMPORTANT INSTRUCTIONS:
-        1. Always include "The University of Leicester" in the visualization, even if not explicitly requested.
-        2. If the user doesn't specify any institution to compare with Leicester, focus only on Leicester's data.
-        3. If the user specifies other institutions, compare them with Leicester.
-        4. If the user specifies a specific year (like 2019/20), use data from that year only.
-        5. If the user mentions multiple years or doesn't specify a year, use data from all available years.
-        6. In the insights section, always focus on comparing Leicester with the other institutions the user specified.
-        7. Create a Chart.js configuration object that will visualize this data according to the instructions above.
+        1. Generate a Chart.js configuration for a {chart_type if chart_type else "suitable"} chart visualization.
+        2. STRICTLY USE ONLY the {chart_type.upper() if chart_type else "appropriate"} CHART TYPE for visualization, even if another type might be better suited.
+        3. Ensure the visualization accurately represents the data and addresses the user's request.
+        4. ONLY use the exact institution names as they appear in the dataset.
+        5. If the user mentions institutions not in the dataset, adapt the visualization using only available institutions and clearly explain this in the insights.
+        6. Generate clear and insightful analysis of the visualization.
+        7. If the user's request cannot be fulfilled with the available data, provide a clear explanation.
+        8. Make sure colors are distinct and the visualization is easy to interpret.
         
-        Based on the available data and the user's request, create the most appropriate visualization. 
-        If the user mentions a specific dataset that is not available for a certain year, explain why this isn't possible.
-        
-        Also provide 3-5 insights that can be derived from this visualization, specifically comparing Leicester with other institutions specified by the user.
+        CRITICAL FOR CHART GENERATION:
+        1. Ensure the chart_config field contains VALID JavaScript code that can be directly evaluated.
+        2. Do NOT include extra quotes around property values in the chart_config.
+        3. For string properties, use single quotes within the JavaScript object.
+        4. NEVER use string literals, template literals, or expressions in your chart configuration.
+        5. DO NOT use JavaScript methods like Object.assign() in the chart configuration.
+        6. All property names must be quoted properly.
+        7. NEVER use backslash escapes like \\n or \\t or \\' inside string values unless absolutely necessary.
+        8. DO NOT include any special characters that would need escaping in your chart_config.
+        9. Make sure all quotes are properly balanced and all brackets/braces are closed.
+        10. ALWAYS use standard straight quotes (' and ") instead of curly or smart quotes (' ' " ").
+        11. DO NOT use special characters in property names or values, especially apostrophes.
+        12. Test your JSON to ensure it doesn't contain syntax errors.
         
         Return your response as a JSON object with the following structure:
         {{{{
-            "chart_config": "Complete Chart.js configuration object as a string that can be evaluated",
-            "insights": "HTML-formatted list of insights derived from the data, focusing on comparing Leicester with other institutions",
-            "alternatives": ["list", "of", "alternative", "visualization", "suggestions"]
+            "chart_config": // Complete Chart.js configuration object as a string that can be evaluated,
+            "insights": "HTML-formatted analysis of what the visualization shows, including key observations, trends, or comparisons",
+            "alternatives": [
+                "Optional: If the request was ambiguous, suggest alternative visualization requests"
+            ]
         }}}}
         
-        If the request is not feasible, explain why and suggest alternatives.
+        If the user's request cannot be fulfilled with the available data or is not suitable for the requested chart type, return:
+        {{{{
+            "error": "Clear explanation of why the request cannot be fulfilled",
+            "alternatives": [
+                "Suggestion 1 for a visualization request that would work better with this data and chart type",
+                "Suggestion 2 for a visualization request that would work better with this data and chart type"
+            ]
+        }}}}
         """
         
         # Call Gemini API for visualization generation
@@ -3423,53 +3802,275 @@ def generate_visualization(client, dataset_info, user_request):
         
         # Extract and parse the JSON response
         try:
-            # Look for JSON pattern in the response
-            match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
-            if match:
-                json_str = match.group(0)
+            # Extract and sanitize JSON from the response
+            json_str = extract_and_sanitize_json(response)
+            
+            try:
+                # Try to parse the JSON
                 visualization_data = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                # If still failing, try a more aggressive approach
+                logging.warning(f"JSON parsing failed: {str(e)}, trying direct extraction")
                 
-                # Check if we have all required fields
-                if 'chart_config' in visualization_data:
-                    # Return the visualization data
-                    return JsonResponse({
-                        'success': True,
-                        'chart_config': visualization_data.get('chart_config'),
-                        'insights': visualization_data.get('insights', '<p>No insights available</p>'),
-                        'alternatives': visualization_data.get('alternatives', [])
-                    })
+                # Try to extract just the chart_config section directly
+                chart_config_match = re.search(r'"chart_config"\s*:\s*({[\s\S]*?})(?:,|\s*})', response)
+                insights_match = re.search(r'"insights"\s*:\s*"([\s\S]*?)"(?:,|\s*})', response)
+                
+                if chart_config_match:
+                    # Get chart_config and clean it
+                    chart_config = chart_config_match.group(1)
+                    
+                    # Remove any trailing commas in objects (common JSON error)
+                    chart_config = re.sub(r',\s*}', '}', chart_config)
+                    
+                    # Handle insights if found
+                    insights = "No insights available due to formatting issues."
+                    if insights_match:
+                        insights = insights_match.group(1)
+                        # Unescape quotes in the insights string
+                        insights = insights.replace('\\"', '"')
+                    
+                    visualization_data = {
+                        'chart_config': chart_config,
+                        'insights': insights
+                    }
                 else:
-                    # If no chart config, assume Gemini is suggesting we can't fulfill the request
-                    return JsonResponse({
-                        'success': False,
-                        'error': visualization_data.get('error', 'Could not generate the requested visualization'),
-                        'alternatives': visualization_data.get('alternatives', [])
-                    })
+                    # If we still can't extract the chart config, raise the original error
+                    raise e
+            
+            # Check if we have all required fields
+            if 'chart_config' in visualization_data:
+                # Validate and clean up the chart_config to ensure it's valid JavaScript
+                chart_config = visualization_data.get('chart_config')
+                
+                # Ensure chart_config is a string before trying string operations
+                if not isinstance(chart_config, str):
+                    # If chart_config is not a string (e.g., it's already a dict), convert it to JSON string
+                    try:
+                        chart_config = json.dumps(chart_config)
+                    except Exception as e:
+                        logging.error(f"Error converting chart_config to string: {str(e)}")
+                        return JsonResponse({
+                            'success': False,
+                            'error': f'The {chart_type if chart_type else "selected"} chart type is not compatible with your request.',
+                            'alternatives': [
+                                f"Try a different visualization using a {chart_type if chart_type else 'bar'} chart",
+                                "Try a different chart type that better suits your data",
+                                "Simplify your request to focus on fewer data elements"
+                            ]
+                        })
+                
+                # Now that we're sure chart_config is a string, proceed with cleanup
+                # Remove any Object.assign references
+                chart_config = chart_config.replace('Object.assign', '')
+                
+                # Replace problematic characters in property names and values
+                chart_config = chart_config.replace("Master's", "Masters").replace("'s", "s")
+                
+                # Remove any template literals or expressions
+                chart_config = re.sub(r'`([^`]*)`', r"'\1'", chart_config)
+                chart_config = re.sub(r'\$\{[^}]*\}', '', chart_config)
+                
+                # Remove any wrapping quotes that would cause JavaScript evaluation errors
+                if (chart_config.startswith('"') and chart_config.endswith('"')) or \
+                   (chart_config.startswith("'") and chart_config.endswith("'")):
+                    chart_config = chart_config[1:-1]
+                
+                # Fix common string concatenation issues
+                chart_config = re.sub(r'[\'"][\s]*\+[\s]*[\'""]|[\'""][\s]*\+|[\'"][\s]*\+[\s]*[\'""]|\+[\s]*[\'""]', '', chart_config)
+                
+                # Fix trailing commas which can cause JSON parse errors
+                chart_config = re.sub(r',(\s*[}\]])', r'\1', chart_config)
+                
+                # Ensure the chart type matches what was requested - CRITICAL UPDATE
+                if chart_type:
+                    # Check if we need to adjust the chart type
+                    try:
+                        # First, ensure we have proper JSON format before trying to parse
+                        chart_config_cleaned = chart_config
+                        
+                        # Replace single quotes with double quotes for JSON parsing
+                        if not chart_config_cleaned.startswith('{'):
+                            chart_config_cleaned = '{' + chart_config_cleaned
+                        if not chart_config_cleaned.endswith('}'):
+                            chart_config_cleaned = chart_config_cleaned + '}'
+                            
+                        chart_config_cleaned = chart_config_cleaned.replace("'", '"')
+                        
+                        try:
+                            # Convert to object to check/set type
+                            config_obj = json.loads(chart_config_cleaned)
+                            
+                            # STRICTLY enforce the chart type selected by the user
+                            if 'type' not in config_obj or config_obj['type'] != chart_type:
+                                logging.info(f"Changing chart type from {config_obj.get('type', 'none')} to {chart_type} as explicitly requested by user")
+                                config_obj['type'] = chart_type
+                                
+                            # Check for problematic apostrophes in labels
+                            if 'data' in config_obj and 'labels' in config_obj['data']:
+                                for i, label in enumerate(config_obj['data']['labels']):
+                                    if isinstance(label, str) and "'" in label:
+                                        config_obj['data']['labels'][i] = label.replace("'", "")
+                            
+                            # Check for problematic apostrophes in dataset labels
+                            if 'data' in config_obj and 'datasets' in config_obj['data']:
+                                for dataset in config_obj['data']['datasets']:
+                                    if 'label' in dataset and isinstance(dataset['label'], str) and "'" in dataset['label']:
+                                        dataset['label'] = dataset['label'].replace("'", "")
+                            
+                            # Convert back to a properly formatted JSON string
+                            chart_config = json.dumps(config_obj, ensure_ascii=False)
+                        except json.JSONDecodeError as json_error:
+                            logging.warning(f"JSON parsing error during chart type enforcement: {str(json_error)}")
+                            
+                            # Fall back to direct string manipulation if we can't parse JSON
+                            if '"type"' in chart_config:
+                                chart_config = re.sub(r'"type"\s*:\s*"[^"]+"', f'"type": "{chart_type}"', chart_config)
+                            elif "'type'" in chart_config:
+                                chart_config = re.sub(r"'type'\s*:\s*'[^']+'", f"'type': '{chart_type}'", chart_config)
+                            else:
+                                if chart_config.startswith('{'):
+                                    chart_config = chart_config[:1] + f'"type": "{chart_type}", ' + chart_config[1:]
+                                else:
+                                    chart_config = '{' + f'"type": "{chart_type}", ' + chart_config + '}'
+                    except Exception as parse_error:
+                        # If we can't parse it, log the error but still try to provide a response
+                        logging.warning(f"Could not validate chart type in config for {chart_type}: {str(parse_error)}")
+                        
+                        # Create a basic valid chart configuration if all else fails
+                        chart_config = json.dumps({
+                            'type': chart_type,
+                            'data': {
+                                'labels': ["Please try a simpler request"],
+                                'datasets': [{
+                                    'label': 'Error in chart configuration',
+                                    'data': [0],
+                                    'backgroundColor': 'rgba(255, 99, 132, 0.2)',
+                                    'borderColor': 'rgba(255, 99, 132, 1)',
+                                    'borderWidth': 1
+                                }]
+                            },
+                            'options': {
+                                'responsive': True,
+                                'plugins': {
+                                    'title': {
+                                        'display': True,
+                                        'text': 'Chart configuration error - please try again'
+                                    }
+                                }
+                            }
+                        })
+            
+                # Check if insights mention institutions not in the dataset
+                insights = visualization_data.get('insights', '<p>No insights available</p>')
+                
+                # Flag to track if the chart type is compatible with the data
+                chart_compatibility_issue = False
+                compatibility_warning = ""
+                
+                # Evaluate compatibility of the selected chart type with the data
+                if chart_type:
+                    # Check for common compatibility issues
+                    if chart_type == 'line' and not dataset_characteristics["has_multiple_years"]:
+                        chart_compatibility_issue = True
+                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Line charts are typically best for showing trends over time. This dataset only contains a single year, which limits the effectiveness of a line chart.</p></div>"
+                    elif chart_type == 'pie' and len([col for col in columns if col not in ['HE provider', 'Academic Year']]) > 5:
+                        chart_compatibility_issue = True
+                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Pie charts work best with a small number of categories (5 or fewer). This visualization may be difficult to interpret due to the number of categories shown.</p></div>"
+                    elif chart_type == 'pie' and dataset_characteristics["has_multiple_institutions"] and len(institutions) > 3:
+                        chart_compatibility_issue = True
+                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Pie charts work best when comparing parts of a whole rather than multiple institutions. This visualization may be difficult to interpret.</p></div>"
+                
+                # Add compatibility warning to insights if needed
+                if chart_compatibility_issue and compatibility_warning:
+                    insights = compatibility_warning + insights
+                
+                # Add a note if we updated the request to use available institutions
+                if len(referenced_institutions) == 0 and any(institution.lower() in user_request.lower() for institution in ["university", "college", "school"]):
+                    institution_note = "<div class='bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4'><p><strong>Note:</strong> The visualization was adapted to use institutions available in the dataset: " + ', '.join(institutions[:3]) + ".</p></div>"
+                    insights = institution_note + insights
+                
+                # Add a note if we needed to adapt to available institutions
+                if len(mentioned_institutions) > 0 and len(referenced_institutions) == 0:
+                    # User requested institution(s) not in dataset
+                    institution_note = "<div class='bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4'>"
+                    institution_note += "<p><strong>Important:</strong> The institution(s) mentioned in your request could not be found in the dataset.</p>"
+                    institution_note += f"<p>Available institutions in this dataset include: {', '.join(institutions[:5])}"
+                    institution_note += f"{' and others' if len(institutions) > 5 else ''}.</p>"
+                    institution_note += "</div>"
+                    insights = institution_note + insights
+                elif any(university_term in user_request.lower() for university_term in ["university", "college", "school"]) and len(referenced_institutions) == 0:
+                    # Generic request with institutions
+                    institution_note = "<div class='bg-blue-100 border-l-4 border-blue-500 text-blue-700 p-4 mb-4'>"
+                    institution_note += "<p><strong>Note:</strong> Your request mentioned educational institutions, but I couldn't determine which specific ones you were interested in.</p>"
+                    institution_note += f"<p>This visualization includes data from: {', '.join(institutions[:3])}{' and others' if len(institutions) > 3 else ''}.</p>"
+                    institution_note += "</div>"
+                    insights = institution_note + insights
+                
+                # Return the visualization data with potentially cleaned chart_config
+                return JsonResponse({
+                    'success': True,
+                    'chart_config': chart_config,
+                    'insights': insights,
+                    'alternatives': visualization_data.get('alternatives', []),
+                    'has_compatibility_warning': chart_compatibility_issue,
+                    'compatibility_warning': compatibility_warning if 'compatibility_warning' in locals() else None
+                })
             else:
-                # Fallback if JSON pattern not found
-                logging.warning("Could not find JSON pattern in Gemini response for visualization")
+                # If no chart config, assume Gemini is suggesting we can't fulfill the request
                 return JsonResponse({
                     'success': False,
-                    'error': 'Failed to generate visualization. Please try a different request.',
-                    'alternatives': ['Show data for The University of Leicester across all years', 
-                                    'Compare University of Leicester with other institutions in the most recent year',
-                                    'Show trends for University of Leicester across multiple years']
+                    'error': visualization_data.get('error', 'Could not generate the requested visualization with the selected chart type'),
+                    'alternatives': visualization_data.get('alternatives', [
+                        f"Try a different visualization request that would work better with a {chart_type} chart" if chart_type else "Try a different visualization request",
+                        "Focus your request on the institutions and years available in the dataset",
+                        "Try a visualization that compares different categories within the same time period" if chart_type == 'pie' else "Try a visualization that shows trends over time" if chart_type == 'line' else "Try comparing specific metrics across institutions"
+                    ])
                 })
         except json.JSONDecodeError as e:
             logging.error("Failed to parse Gemini's JSON response for visualization: %s", str(e))
             return JsonResponse({
                 'success': False,
-                'error': 'Could not generate the visualization. Please try a simpler request.',
-                'alternatives': ['Show basic counts for University of Leicester in a single year', 
-                                'Compare University of Leicester with one other institution in the most recent year', 
-                                'Show data for a specific year only']
+                'error': f'Error generating visualization: The {chart_type if chart_type else "selected"} chart type may not be suitable for this data or request.',
+                'alternatives': [
+                    "Try using a bar chart to compare values across categories",
+                    "Try using a bar chart to compare institutions",
+                    "Try visualizing fewer institutions at once",
+                    "Compare specific metrics like 'Total' or 'Female' enrollment across institutions"
+                ]
             })
-        
     except Exception as e:
         logging.exception("Error generating visualization: %s", str(e))
+        
+        # Create a user-friendly error message based on the exception type
+        error_message = "An error occurred while generating your visualization."
+        alternatives = []
+        
+        if "TypeError" in str(e) and "replace is not a function" in str(e):
+            error_message = "The chart couldn't be generated with the current settings."
+            alternatives = [
+                "Try a different chart type that better suits your data",
+                "Try visualizing fewer data elements at once",
+                "Try one of the example suggestions below"
+            ]
+        elif chart_type:
+            error_message = f"The {chart_type} chart type may not be suitable for your request."
+            alternatives = [
+                f"Try a different visualization using a {chart_type} chart",
+                "Try a different chart type",
+                "Try one of the example suggestions provided"
+            ]
+        else:
+            alternatives = [
+                "Try a simpler visualization request",
+                "Try a different chart type",
+                "Focus on comparing fewer institutions"
+            ]
+        
         return JsonResponse({
             'success': False,
-            'error': f'Error generating visualization: {str(e)}'
+            'error': error_message,
+            'alternatives': alternatives
         })
 
 def format_sample_rows(columns, rows):
@@ -3492,6 +4093,296 @@ def format_sample_rows(columns, rows):
     
     return "\n".join(formatted_rows)
 
+def change_chart_type(client, dataset_info, chart_type, original_recommendation, current_request=''):
+    """
+    Generate a new chart recommendation and examples for a different chart type
+    """
+    try:
+        # Extract relevant information from dataset_info
+        title = dataset_info.get('title', '')
+        columns = dataset_info.get('columns', [])
+        sample_rows = dataset_info.get('rows', [])[:5]  # Use up to 5 rows as a sample
+        query = dataset_info.get('query', '')
+        institutions = dataset_info.get('institutions', [])
+        years = dataset_info.get('years', [])
+        all_year_data = dataset_info.get('allYearData', [])
+        
+        # Log information about the request
+        logging.info(f"Chart type change request for dataset: {title}")
+        logging.info(f"Changing to chart type: {chart_type}")
+        logging.info(f"Original recommendation: {original_recommendation}")
+        logging.info(f"Current visualization request: {current_request}")
+        
+        # Extract institution names directly from the dataset
+        dataset_institutions = []
+        if sample_rows and len(sample_rows) > 0:
+            # Find the institution/provider column index
+            provider_col_idx = -1
+            for i, col in enumerate(columns):
+                if col.lower() in ['he provider', 'institution', 'provider', 'university']:
+                    provider_col_idx = i
+                    break
+                    
+            if provider_col_idx >= 0:
+                # Extract unique institution names from rows
+                for row in sample_rows:
+                    if len(row) > provider_col_idx and row[provider_col_idx]:
+                        inst_name = row[provider_col_idx].strip()
+                        if inst_name and inst_name not in dataset_institutions:
+                            dataset_institutions.append(inst_name)
+        
+        # If we found institutions in the dataset, use those instead of the provided list
+        if dataset_institutions:
+            logging.info(f"Using {len(dataset_institutions)} institutions extracted directly from dataset")
+            institutions = dataset_institutions
+        else:
+            # If no institutions found in the sample, validate the provided institutions
+            valid_institutions = []
+            for inst in institutions:
+                if inst and isinstance(inst, str) and len(inst.strip()) > 0:
+                    valid_institutions.append(inst.strip())
+            institutions = valid_institutions
+        
+        # Parse the original recommendation if provided
+        recommended_chart_type = ""
+        recommendation_reason = ""
+        original_example_prompts = []
+        if original_recommendation:
+            try:
+                rec_data = json.loads(original_recommendation)
+                recommended_chart_type = rec_data.get('recommended_chart_type', '')
+                recommendation_reason = rec_data.get('recommendation_reason', '')
+                original_example_prompts = rec_data.get('example_prompts', [])
+            except:
+                logging.warning("Failed to parse original recommendation")
+        
+        # Check if the selected chart type is the recommended one
+        is_recommended = False
+        if chart_type.lower() in recommended_chart_type.lower():
+            is_recommended = True
+            
+        # Ensure 'The University of Leicester' is always considered
+        leicester_variants = ['university of leicester', 'the university of leicester', 'leicester university']
+        leicester_included = False
+        for inst in institutions:
+            if inst.lower() in leicester_variants:
+                leicester_included = True
+                break
+                
+        if not leicester_included and 'leicester' not in ' '.join(institutions).lower():
+            institutions.append('The University of Leicester')
+            logging.info("Added University of Leicester to institutions list")
+        
+        # Analyze dataset characteristics
+        dataset_characteristics = {
+            "has_multiple_years": len(years) > 1,
+            "has_multiple_institutions": len(institutions) > 1,
+            "number_of_numeric_columns": len([col for col in columns if col not in ['HE provider', 'Academic Year']]),
+            "total_rows": len(sample_rows),
+            "available_institutions": institutions,
+            "available_years": years
+        }
+        
+        logging.info(f"Dataset characteristics for chart type change: {dataset_characteristics}")
+        
+        # Check for chart type compatibility issues
+        compatibility_warning = None
+        
+        # Special case checks for incompatible chart types
+        if chart_type == 'pie' and current_request and ('axis' in current_request.lower() or 'axes' in current_request.lower() or 'swap' in current_request.lower()):
+            compatibility_warning = "Pie charts don't have traditional X and Y axes, so axis swapping or specific axis assignments don't apply to this chart type."
+        elif chart_type == 'line' and not dataset_characteristics["has_multiple_years"] and 'year' in current_request.lower():
+            compatibility_warning = "Line charts work best with multiple time periods. Your request involves a time-based comparison but the dataset might not have enough time periods to show meaningful trends."
+        
+        # If we have a compatibility warning, include it in the response
+        compatibility_note = ""
+        if compatibility_warning:
+            compatibility_note = f"<div class='text-amber-600 mb-2 font-medium'><strong>Note:</strong> {compatibility_warning}</div>"
+        
+        # Format information about multi-year data if available
+        multi_year_info = ""
+        if years and len(years) > 0:
+            multi_year_info = f"\nThis dataset contains data for multiple academic years: {', '.join(years)}."
+            multi_year_info += "\nConsider suggesting visualizations that could compare trends across these years or focus on specific years."
+        
+        # Prepare a prompt for Gemini
+        if is_recommended:
+            # If the selected chart type is the recommended one, return the original recommendation
+            logging.info("Selected chart type is the originally recommended one, returning original data")
+            
+            # Validate the original examples to ensure they use exact institution names
+            validated_examples = []
+            for example in original_example_prompts:
+                valid = True
+                
+                # For each example, check if it mentions only valid institutions
+                for institution in institutions:
+                    # If the institution name is in the example, validate it matches exactly
+                    if institution.lower() in example.lower():
+                        # Check if the full exact name is used (not just a substring)
+                        if institution not in example:
+                            # If exact name not found, mark as invalid
+                            valid = False
+                            logging.warning(f"Original example uses invalid institution reference: '{example}'")
+                            break
+                
+                # If the example passed validation, include it
+                if valid:
+                    validated_examples.append(example)
+                else:
+                    logging.warning(f"Rejecting original example: {example}")
+            
+            # If we don't have enough valid examples, generate defaults
+            if len(validated_examples) < 3:
+                validated_examples = get_default_example_prompts(title, columns, institutions, years, chart_type)
+            
+            return JsonResponse({
+                'success': True,
+                'is_recommended': True,
+                'recommended_chart_type': recommended_chart_type,
+                'selected_chart_type': chart_type,  # Add the selected chart type to the response
+                'recommendation_reason': recommendation_reason,
+                'example_prompts': validated_examples[:3]  # Limit to 3 examples
+            })
+        else:
+            # If a different chart type is selected, generate examples for that chart type but keep original recommendation
+            prompt = f"""
+            I have a dataset titled "{title}" with the following columns:
+            {', '.join(columns)}
+            
+            Here are some sample rows from the dataset:
+            {format_sample_rows(columns, sample_rows)}
+            
+            The institutions in this dataset are: {', '.join(institutions)}
+            The academic years in the dataset are: {', '.join(years)}
+            
+            IMPORTANT INSTRUCTIONS:
+            1. I need examples SPECIFICALLY for a {chart_type.upper()} CHART. Every example MUST work with this chart type.
+            2. ONLY use the EXACT institution names from the list I provided - do not modify, abbreviate or combine them.
+            3. If a {chart_type} chart isn't ideal for some aspects of the data, still create examples that WILL WORK with a {chart_type} chart.
+            4. Your examples will be used as-is and rendered as a {chart_type} chart, so they MUST be appropriate for this chart type.
+            5. Focus on what {chart_type} charts do best:
+               - LINE CHARTS: Show trends over time/years
+               - BAR CHARTS: Compare values across categories/institutions
+               - PIE CHARTS: Show proportions of a whole for a single period
+            
+            Please provide:
+            1. A brief explanation of how a {chart_type} chart could be used with this specific dataset, noting its strengths and limitations.
+            2. 3 example visualization requests that:
+               - Are SPECIFICALLY designed to work with a {chart_type} chart
+               - ONLY use institutions and years that are actually available in this dataset (as listed above)
+               - Are realistic and can be fulfilled with the available data
+               - Make sure to verify that all institutions mentioned actually exist in the dataset list
+            
+            Return your response as a JSON object with the following structure:
+            {{{{
+                "recommendation_reason": "An explanation of how a {chart_type} chart could be used with this data",
+                "example_prompts": [
+                    "Example 1 for {chart_type} chart using only available institutions and years",
+                    "Example 2 for {chart_type} chart using only available institutions and years",
+                    "Example 3 for {chart_type} chart using only available institutions and years"
+                ]
+            }}}}
+            """
+            
+            # Call Gemini API for chart recommendation
+            response = client.generate_text(prompt)
+            
+            # Extract and parse the JSON response
+            try:
+                # Look for JSON pattern in the response
+                match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+                if match:
+                    json_str = match.group(0)
+                    chart_data = json.loads(json_str)
+                    
+                    # Validate example prompts to ensure they only mention available institutions
+                    validated_examples = []
+                    for example in chart_data.get('example_prompts', []):
+                        valid = True
+                        
+                        # For each example, check if it mentions only valid institutions
+                        for institution in institutions:
+                            # If the institution name is in the example, validate it matches exactly
+                            if institution.lower() in example.lower():
+                                # Check if the full exact name is used (not just a substring)
+                                if institution not in example:
+                                    # If exact name not found, mark as invalid
+                                    valid = False
+                                    logging.warning(f"Example uses invalid institution reference: '{example}'")
+                                    break
+                        
+                        # If the example passed validation, include it
+                        if valid:
+                            validated_examples.append(example)
+                        else:
+                            logging.warning(f"Rejecting example: {example}")
+                    
+                    # If we don't have enough valid examples, generate defaults
+                    if len(validated_examples) < 3:
+                        logging.info("Not enough valid examples from Gemini, generating defaults")
+                        validated_examples = get_default_example_prompts(title, columns, institutions, years, chart_type)
+                    
+                    return JsonResponse({
+                        'success': True,
+                        'is_recommended': is_recommended,
+                        'recommended_chart_type': recommended_chart_type,  # Original recommendation - this is still the best recommendation
+                        'selected_chart_type': chart_type,  # User selection
+                        'recommendation_reason': chart_data.get('recommendation_reason', 
+                            f"A {chart_type} chart can be used for visualizing certain aspects of this data"),
+                        'example_prompts': validated_examples[:3],  # Limit to 3 examples
+                        'compatibility_warning': compatibility_warning
+                    })
+                else:
+                    # Fallback if JSON pattern not found
+                    logging.warning("Could not find JSON pattern in Gemini response for chart type change")
+                    return JsonResponse({
+                        'success': True,
+                        'is_recommended': False,
+                        'recommended_chart_type': recommended_chart_type,
+                        'selected_chart_type': chart_type,
+                        'recommendation_reason': get_chart_type_explanation(chart_type, dataset_characteristics),
+                        'example_prompts': get_default_example_prompts(title, columns, institutions, years, chart_type),
+                        'compatibility_warning': compatibility_warning
+                    })
+            except json.JSONDecodeError as e:
+                logging.error(f"Failed to parse Gemini's JSON response for chart type change: {str(e)}")
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Could not generate examples for this chart type. Please try again.'
+                })
+                
+    except Exception as e:
+        logging.exception(f"Error changing chart type: {str(e)}")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error changing chart type: {str(e)}'
+        })
+
+def get_chart_type_explanation(chart_type, dataset_characteristics):
+    """
+    Get a specific explanation for the requested chart type based on dataset characteristics
+    """
+    if chart_type == 'line':
+        if not dataset_characteristics.get("has_multiple_years", False):
+            return "Line charts are most effective for showing trends over time. Since this dataset only contains data for a single year, you should focus on comparing values across different categories or institutions rather than showing trends over time."
+        else:
+            return "Line charts work best for showing trends over time or continuous data. Focus on how values change across the available years for one or more institutions."
+    
+    elif chart_type == 'bar':
+        if dataset_characteristics.get("has_multiple_institutions", False) and dataset_characteristics.get("has_multiple_years", False):
+            return "Bar charts are excellent for comparing values across categories. You can compare institutions side by side, or show change over time by grouping bars by year."
+        else:
+            return "Bar charts are ideal for comparing values across categories. Focus on comparing different metrics or institutions within the available data."
+    
+    elif chart_type == 'pie':
+        if dataset_characteristics.get("has_multiple_institutions", False) and len(dataset_characteristics.get("available_institutions", [])) > 5:
+            return "Pie charts work best with a small number of categories (5 or fewer) and when showing parts of a whole. Consider focusing on just a few key institutions or categories to maintain clarity."
+        else:
+            return "Pie charts are best for showing proportions or percentages of a whole. Focus on the distribution of a single metric across categories for a specific time period rather than comparisons over time."
+    
+    return None
+
 # Configure logging to prevent duplicate handlers
 logger = logging.getLogger('core.views')
 # Remove all handlers to avoid duplicates
@@ -3504,3 +4395,120 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(messag
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 logger.propagate = False  # Prevent propagation to root logger
+
+def sanitize_json_string(json_string):
+    """
+    Sanitize a JSON string to fix common issues with escape sequences and formatting.
+    """
+    # Replace smart/curly quotes with straight quotes
+    sanitized = json_string.replace(''', "'").replace(''', "'").replace('"', '"').replace('"', '"')
+    
+    # Replace escaped quotes with temporary markers
+    sanitized = sanitized.replace('\\"', '___QUOTE___')
+    
+    # Remove invalid backslash escapes
+    sanitized = re.sub(r'\\(?!["\\/bfnrtu]|u[0-9a-fA-F]{4})', '', sanitized)
+    
+    # Fix invalid escape sequences
+    sanitized = (sanitized
+                .replace('\\n', ' ')  # Replace newlines with spaces
+                .replace('\\t', ' ')  # Replace tabs with spaces
+                .replace('\\\\"', '\\"')  # Fix double escaped quotes
+                .replace('\\\\', '\\')  # Fix double backslashes
+                )
+    
+    # Restore escaped quotes
+    sanitized = sanitized.replace('___QUOTE___', '\\"')
+    
+    return sanitized
+
+def extract_and_sanitize_json(response):
+    """
+    Extract JSON from an LLM response and sanitize it for parsing.
+    First checks for JSON in code blocks, then falls back to general pattern matching.
+    Returns the sanitized JSON string.
+    """
+    # First check for JSON in a code block (preferred format)
+    code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response)
+    if code_block_match:
+        json_str = code_block_match.group(1)
+        logging.info("Found JSON in code block")
+    else:
+        # Fallback: Look for any JSON-like content - find the largest matching braces
+        json_pattern = r'(\{(?:[^{}]|(?1))*\})'  # Recursive pattern to match nested braces
+        matches = re.finditer(json_pattern, response, re.DOTALL)
+        
+        # Find the largest match by length
+        best_match = None
+        max_length = 0
+        
+        for match in matches:
+            matched_text = match.group(0)
+            if len(matched_text) > max_length:
+                max_length = len(matched_text)
+                best_match = matched_text
+        
+        if best_match:
+            json_str = best_match
+            logging.info(f"Found JSON pattern using fallback method (length: {len(json_str)})")
+        else:
+            # Last resort: try to find any object-like structure
+            simple_match = re.search(r'\{.*\}', response.replace('\n', ' '), re.DOTALL)
+            if simple_match:
+                json_str = simple_match.group(0)
+                logging.info("Found simple JSON pattern as last resort")
+            else:
+                json_str = response
+                logging.warning("No JSON pattern found in response, using entire response")
+    
+    # Sanitize the JSON string to fix common issues
+    sanitized = sanitize_json_string(json_str)
+    
+    # Final validation check and cleanup
+    try:
+        # Try to parse the JSON to ensure it's valid
+        parsed = json.loads(sanitized)
+        # Convert back to string for consistent formatting
+        return json.dumps(parsed)
+    except json.JSONDecodeError as e:
+        logging.warning(f"Sanitized JSON is still invalid: {str(e)}")
+        # Try to extract just the specific fields we need
+        try:
+            # Extract chart_config field if present
+            chart_config_match = re.search(r'"chart_config"\s*:\s*(\{.*?\}),?\s*(?:"|\n)', sanitized, re.DOTALL)
+            insights_match = re.search(r'"insights"\s*:\s*"(.*?)",?\s*(?:"|\n)', sanitized, re.DOTALL)
+            alternatives_match = re.search(r'"alternatives"\s*:\s*(\[.*?\]),?\s*(?:"|\n)', sanitized, re.DOTALL)
+            
+            result = {}
+            if chart_config_match:
+                try:
+                    # Clean up the chart config string
+                    chart_config = chart_config_match.group(1).strip()
+                    # Remove trailing commas
+                    chart_config = re.sub(r',\s*}', '}', chart_config)
+                    result['chart_config'] = chart_config
+                except Exception:
+                    pass
+            
+            if insights_match:
+                try:
+                    result['insights'] = insights_match.group(1)
+                except Exception:
+                    pass
+                    
+            if alternatives_match:
+                try:
+                    alternatives = alternatives_match.group(1)
+                    # Clean up the alternatives
+                    alternatives = re.sub(r',\s*]', ']', alternatives)
+                    result['alternatives'] = alternatives
+                except Exception:
+                    pass
+            
+            if result:
+                return json.dumps(result)
+        except Exception as extract_error:
+            logging.error(f"Error extracting specific fields: {str(extract_error)}")
+        
+        # If we still can't parse it, return the sanitized string anyway
+        return sanitized
