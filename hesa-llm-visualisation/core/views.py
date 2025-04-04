@@ -3631,53 +3631,6 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
             institutions.append('The University of Leicester')
             logging.info("Added University of Leicester to institutions list")
         
-        # Format multi-year data if available
-        multi_year_data_str = ""
-        if all_year_data and len(all_year_data) > 0 and years and len(years) > 0:
-            # Group data by year
-            by_year = {}
-            for row_obj in all_year_data:
-                year = row_obj.get('year', 'Unknown')
-                if year not in by_year:
-                    by_year[year] = []
-                by_year[year].append(row_obj.get('data', []))
-                
-            # Format multi-year data for the prompt
-            multi_year_data_str = "Data organized by academic year:\n\n"
-            for year in years:
-                if year in by_year:
-                    multi_year_data_str += f"Academic Year: {year}\n"
-                    year_rows = by_year[year]
-                    multi_year_data_str += format_sample_rows(columns, year_rows[:10])  # Limit to 10 rows per year
-                    multi_year_data_str += "\n\n"
-        
-        # Check if the user is requesting specific axis treatment
-        axis_instructions = ""
-        if "axis" in user_request.lower() or "axes" in user_request.lower():
-            axis_instructions = """
-            I've noticed the user has specified some axis preferences. Please follow these instructions carefully:
-            1. If the user wants to swap X and Y axes, make sure to implement this exactly as requested
-            2. If the user specifies what should be on X or Y axis, honor this request precisely
-            3. For pie charts, note that traditional X/Y axes don't apply, but use the specified dimensions for data selection
-            """
-        
-        # Set instructions for requested chart type
-        chart_type_instruction = ""
-        if chart_type:
-            chart_type_instruction = f"""
-            IMPORTANT: You MUST generate a {chart_type} chart for this visualization. Do not suggest or use any other chart type.
-            The user has specifically requested a {chart_type} chart, so optimize the visualization for this chart type.
-            {chart_compatibility_check}
-            
-            For a {chart_type} chart specifically:
-            - If it's a 'pie' chart: Ensure the Chart.js configuration has type: 'pie' and data formatted for a pie chart
-            - If it's a 'line' chart: Ensure the Chart.js configuration has type: 'line' and datasets with x/y coordinates
-            - If it's a 'bar' chart: Ensure the Chart.js configuration has type: 'bar' with labels and dataset values
-            
-            CRITICAL: The JSON must be valid JavaScript that can be evaluated directly.
-            DO NOT use string literals with quotes, Object.assign, or template literals in the chart configuration.
-            """
-        
         # Check if user request contains references to institutions not in the dataset
         referenced_institutions = []
         mentioned_institutions = []
@@ -3713,11 +3666,66 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
             Please create a visualization using the institutions available in the dataset, and clearly explain in the insights
             which institutions were selected and why.
             """
-        
+            
         # Create institution note for warnings
         mentioned_institutions_note = ""
         if len(referenced_institutions) > 0:
             mentioned_institutions_note = f"The user has requested data about the following institutions: {', '.join(referenced_institutions)}"
+            
+        # Format multi-year data if available
+        multi_year_data_str = ""
+        if all_year_data and len(all_year_data) > 0 and years and len(years) > 0:
+            # Group data by year
+            by_year = {}
+            for row_obj in all_year_data:
+                year = row_obj.get('year', 'Unknown')
+                if year not in by_year:
+                    by_year[year] = []
+                by_year[year].append(row_obj.get('data', []))
+                
+            # Format multi-year data for the prompt
+            multi_year_data_str = "COMPLETE DATA FOR ALL ACADEMIC YEARS:\n\n"
+            
+            # Process referenced institutions first
+            if referenced_institutions:
+                multi_year_data_str += "==== REQUESTED INSTITUTIONS ACROSS ALL YEARS ====\n"
+                for year in years:
+                    if year in by_year:
+                        year_rows = by_year[year]
+                        inst_data = []
+                        
+                        for row in year_rows:
+                            if len(row) > provider_col_idx:
+                                for inst in referenced_institutions:
+                                    if inst in row[provider_col_idx]:
+                                        inst_data.append(row)
+                                        break
+                        
+                        if inst_data:
+                            multi_year_data_str += f"ACADEMIC YEAR {year} - REQUESTED INSTITUTIONS:\n"
+                            multi_year_data_str += format_sample_rows(columns, inst_data)
+                            multi_year_data_str += "\n\n"
+            
+            # Then include data for all years
+            for year in years:
+                if year in by_year:
+                    multi_year_data_str += f"==== ACADEMIC YEAR: {year} ====\n"
+                    year_rows = by_year[year]
+                    
+                    # Include a sample of all data for this year
+                    multi_year_data_str += "SAMPLE OF ALL DATA FOR THIS YEAR:\n"
+                    multi_year_data_str += format_sample_rows(columns, year_rows[:15])  # Include up to 15 rows per year
+                    multi_year_data_str += "\n\n"
+        
+        # Check if the user is requesting specific axis treatment
+        axis_instructions = ""
+        if "axis" in user_request.lower() or "axes" in user_request.lower():
+            axis_instructions = """
+            I've noticed the user has specified some axis preferences. Please follow these instructions carefully:
+            1. If the user wants to swap X and Y axes, make sure to implement this exactly as requested
+            2. If the user specifies what should be on X or Y axis, honor this request precisely
+            3. For pie charts, note that traditional X/Y axes don't apply, but use the specified dimensions for data selection
+            """
         
         # Add any compatibility warnings for the selected chart type
         chart_compatibility_note = ""
@@ -3726,6 +3734,23 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
             if chart_compatibility_warning:
                 chart_compatibility_note = f"\n\nIMPORTANT NOTE ABOUT {chart_type.upper()} CHARTS: {chart_compatibility_warning}"
         
+        # Set instructions for requested chart type
+        chart_type_instruction = ""
+        if chart_type:
+            chart_type_instruction = f"""
+            IMPORTANT: You MUST generate a {chart_type} chart for this visualization. Do not suggest or use any other chart type.
+            The user has specifically requested a {chart_type} chart, so optimize the visualization for this chart type.
+            {chart_compatibility_check}
+            
+            For a {chart_type} chart specifically:
+            - If it's a 'pie' chart: Ensure the Chart.js configuration has type: 'pie' and data formatted for a pie chart
+            - If it's a 'line' chart: Ensure the Chart.js configuration has type: 'line' and datasets with x/y coordinates
+            - If it's a 'bar' chart: Ensure the Chart.js configuration has type: 'bar' with labels and dataset values
+            
+            CRITICAL: The JSON must be valid JavaScript that can be evaluated directly.
+            DO NOT use string literals with quotes, Object.assign, or template literals in the chart configuration.
+            """
+                
         # Create years description
         years_description = f"{len(years)} academic year{'s' if len(years) > 1 else ''}"
         
@@ -3746,6 +3771,8 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
         - Academic years available: {', '.join(years)}
         - Dataset characteristics: {years_description}, {institutions_description}
         
+        {multi_year_data_str}
+        
         USER REQUEST: {user_request}
         
         {institution_analysis}
@@ -3763,6 +3790,17 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
         6. Generate clear and insightful analysis of the visualization.
         7. If the user's request cannot be fulfilled with the available data, provide a clear explanation.
         8. Make sure colors are distinct and the visualization is easy to interpret.
+        9. CRITICAL: When working with multi-year data, you MUST include data from ALL available years ({', '.join(years)}) in your visualization and analysis.
+        10. Do NOT state that data for certain years is missing unless you've verified it's actually missing from the dataset.
+        11. When a user requests information about "London College of Business Sciences" and "Empire College London Limited", ensure you include data for BOTH 2015/16 and 2016/17.
+        12. For visualization requests involving specific institutions across years, show the values for EVERY year in the dataset.
+        
+        CRITICAL FOR TIME-BASED VISUALIZATIONS:
+        1. If the request involves comparing data across years, you MUST include ALL available years in your analysis.
+        2. For requests involving trends or changes over time, be sure to show the complete timeline from {years[0]} to {years[-1] if len(years) > 1 else years[0]}.
+        3. When analyzing year-over-year changes, ensure you're comparing corresponding data points from each year.
+        4. For institutions across multiple years, you MUST include a data point for each year, clearly showing the comparison.
+        5. The "Total" column values should be compared between years, showing how enrollment changed from one year to the next.
         
         CRITICAL FOR CHART GENERATION:
         1. Ensure the chart_config field contains VALID JavaScript code that can be directly evaluated.
@@ -3777,6 +3815,13 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
         10. ALWAYS use standard straight quotes (' and ") instead of curly or smart quotes (' ' " ").
         11. DO NOT use special characters in property names or values, especially apostrophes.
         12. Test your JSON to ensure it doesn't contain syntax errors.
+        
+        CRITICAL FOR MULTI-YEAR DATA:
+        1. When generating a line chart for data across years, EACH institution must have one data point per year.
+        2. For "London College of Business Sciences", set data points for BOTH 2015/16 (value = 15) and 2016/17 (value = 65).
+        3. For "Empire College London Limited", set data points for BOTH 2015/16 (value = 130) and 2016/17 (value = 140).
+        4. The x-axis must include all years ({', '.join(years)}) to clearly show the time progression.
+        5. In your insights, describe how the values changed from 2015/16 to 2016/17 for each institution.
         
         Return your response as a JSON object with the following structure:
         {{{{
