@@ -38,34 +38,70 @@ from collections import defaultdict
 # Mission groups for institution filtering
 MISSION_GROUPS = {
     "Russell Group": [
-        "University of Birmingham", "University of Bristol", "University of Cambridge",
-        "Cardiff University", "Durham University", "University of Edinburgh",
-        "University of Exeter", "University of Glasgow", "Imperial College London",
-        "King's College London", "University of Leeds", "University of Liverpool",
-        "London School of Economics and Political Science", "University of Manchester",
-        "Newcastle University", "University of Nottingham", "University of Oxford",
-        "Queen Mary University of London", "Queen's University Belfast",
-        "University of Sheffield", "University of Southampton", "University College London",
-        "University of Warwick", "University of York"
+        "The University of Birmingham",
+        "The University of Bristol",
+        "The University of Cambridge",
+        "Cardiff University",
+        "University of Durham",
+        "The University of Edinburgh",
+        "The University of Exeter",
+        "The University of Glasgow",
+        "Imperial College of Science, Technology and Medicine",
+        "King's College London",
+        "The University of Leeds",
+        "The University of Liverpool",
+        "London School of Economics and Political Science",
+        "The University of Manchester",
+        "Newcastle University",
+        "The University of Nottingham",
+        "The University of Oxford",
+        "Queen Mary University of London",
+        "Queen's University Belfast",
+        "The University of Sheffield",
+        "The University of Southampton",
+        "University College London",
+        "The University of Warwick",
+        "The University of York"
     ],
     "Million+": [
-        "University of Bolton", "University of Central Lancashire", "Coventry University",
-        "De Montfort University", "University of Derby", "University of East London",
-        "University of Greenwich", "University of Hertfordshire", "University of Lincoln",
-        "Liverpool John Moores University", "Manchester Metropolitan University",
-        "Middlesex University", "University of Northampton", "University of South Wales",
-        "University of West London", "University of the West of England, Bristol",
-        "University of Wolverhampton"
+        "The University of Bolton",
+        "The University of Central Lancashire",
+        "Coventry University",
+        "De Montfort University",
+        "University of Derby",
+        "The University of East London",
+        "The University of Greenwich",
+        "University of Hertfordshire",
+        "The University of Lincoln",
+        "Liverpool John Moores University",
+        "The Manchester Metropolitan University",
+        "Middlesex University",
+        "The University of Northampton",
+        "The University of South Wales",
+        "The University of West London",
+        "The University of the West of England, Bristol",
+        "The University of Wolverhampton"
     ],
     "University Alliance": [
-        "Anglia Ruskin University", "Birmingham City University", "Coventry University",
-        "De Montfort University", "University of Derby", "University of East London",
-        "University of Hertfordshire", "University of Lincoln", "Liverpool John Moores University",
-        "Manchester Metropolitan University", "Middlesex University", "University of Northampton",
-        "University of South Wales", "University of West London", "University of the West of England, Bristol",
+        "Anglia Ruskin University",
+        "Birmingham City University",
+        "Coventry University",
+        "De Montfort University",
+        "University of Derby",
+        "The University of East London",
+        "University of Hertfordshire",
+        "The University of Lincoln",
+        "Liverpool John Moores University",
+        "The Manchester Metropolitan University",
+        "Middlesex University",
+        "The University of Northampton",
+        "The University of South Wales",
+        "The University of West London",
+        "The University of the West of England, Bristol",
         "University of Worcester"
     ]
 }
+
 
 # University of Leicester - always included
 LEICESTER = "University of Leicester"
@@ -1308,7 +1344,7 @@ def find_file_for_year(file_matches, year):
     
     return None
 
-def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, mission_group=None):
+def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, mission_group=None, exact_match_institutions=None):
     """
     Generate a preview of a CSV file, optionally filtering for specific institutions.
     
@@ -1318,6 +1354,7 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
         institutions: Comma-separated string of institution names to filter for
         institution: Deprecated - use institutions instead. Comma-separated string of institution names.
         mission_group: Mission group to filter for
+        exact_match_institutions: List of institution names that should be matched exactly, not using fuzzy logic
     
     Returns:
         dict: Dictionary containing columns and data for the preview
@@ -1343,6 +1380,11 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
     
     logger.info(f"Filtering by institutions: {institutions}")
     
+    # Handle exact match institutions (mainly from mission groups)
+    if exact_match_institutions is None:
+        exact_match_institutions = []
+    logger.info(f"Using exact matching for these institutions: {exact_match_institutions}")
+    
     # Extract academic year from the file name
     year_match = re.search(r'(\d{4})(?:&|_)(\d{2})', os.path.basename(file_path))
     academic_year = None
@@ -1352,10 +1394,23 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
     
     try:
         institution_list = []
+        exact_match_inst_list = []
+        fuzzy_match_inst_list = []
+        
         if institutions:
             # Split the comma-separated list into individual institution names
             institution_list = [inst.strip() for inst in institutions.split(',')]
             logger.info(f"Parsed institution list: {institution_list}")
+            
+            # Separate institutions into exact and fuzzy match lists
+            for inst in institution_list:
+                if inst in exact_match_institutions:
+                    exact_match_inst_list.append(inst)
+                else:
+                    fuzzy_match_inst_list.append(inst)
+            
+            logger.info(f"Exact match institutions: {exact_match_inst_list}")
+            logger.info(f"Fuzzy match institutions: {fuzzy_match_inst_list}")
         
         logger.info(f"Opening file: {file_path}")
         with open(file_path, 'r', encoding='utf-8-sig') as f:
@@ -1422,14 +1477,14 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                           'education', 'school', 'academy', 'faculty', 'department', 'campus', 
                           'studies', 'centre', 'center', 'for'}
             
-            # Pre-normalize the requested institutions
-            normalized_requested = {}
-            for inst in institution_list:
+            # Pre-normalize the requested institutions for fuzzy matching
+            normalized_fuzzy_requested = {}
+            for inst in fuzzy_match_inst_list:
                 # Create normalized form (lowercase, remove common words)
                 words = [w.lower() for w in inst.split() if w.lower() not in common_words]
                 normalized = ' '.join(words)
-                normalized_requested[normalized] = inst
-                logger.info(f"Normalized institution '{inst}' to '{normalized}'")
+                normalized_fuzzy_requested[normalized] = inst
+                logger.info(f"Normalized fuzzy match institution '{inst}' to '{normalized}'")
             
             for row in reader:
                 # Add academic year to the row if needed, checking if it already contains the academic year
@@ -1442,15 +1497,26 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                 if institution_col < len(row):
                     inst_name = row[institution_col]
                     
-                    # Normalize the institution name from the dataset
-                    inst_words = [w.lower() for w in inst_name.split() if w.lower() not in common_words]
-                    normalized_name = ' '.join(inst_words)
+                    # First check for exact matches from mission groups
+                    exact_match_found = False
+                    for exact_inst in exact_match_inst_list:
+                        if inst_name.strip() == exact_inst.strip():
+                            important_rows[exact_inst] = row
+                            logger.info(f"Found EXACT match for mission group institution: {inst_name}")
+                            exact_match_found = True
+                            break
                     
-                    # Check if this is one of our requested institutions
-                    for normalized_req, original_req in normalized_requested.items():
-                        if normalized_req in normalized_name or normalized_name in normalized_req:
-                            important_rows[normalized_name] = row
-                            logger.info(f"Found important institution: {inst_name} (matches {original_req})")
+                    # If no exact match found, try fuzzy matching for institutions from query
+                    if not exact_match_found:
+                        # Normalize the institution name from the dataset
+                        inst_words = [w.lower() for w in inst_name.split() if w.lower() not in common_words]
+                        normalized_name = ' '.join(inst_words)
+                        
+                        # Check if this is one of our fuzzy matching institutions
+                        for normalized_req, original_req in normalized_fuzzy_requested.items():
+                            if normalized_req in normalized_name or normalized_name in normalized_req:
+                                important_rows[normalized_name] = row
+                                logger.info(f"Found fuzzy match for institution: {inst_name} (matches {original_req})")
                 
                 # Store all rows for processing
                 all_rows.append(row)
@@ -1536,12 +1602,20 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                     logger.info(f"Added important row for {row[institution_col]} to matched rows")
             
             # Check for exact matches against normalized requested institutions
-            for normalized_req in normalized_requested.keys():
+            for normalized_req in normalized_fuzzy_requested.keys():
                 if normalized_req in institution_rows:
                     row = institution_rows[normalized_req]
                     if row not in matched_rows:
                         matched_rows.append(row)
                         logger.info(f"Exact normalized match for '{normalized_req}'")
+                        
+            # Ensure exact matches for mission group institutions
+            for exact_inst in exact_match_inst_list:
+                for row in all_rows:
+                    if institution_col < len(row) and row[institution_col].strip() == exact_inst.strip():
+                        if row not in matched_rows:
+                            matched_rows.append(row)
+                            logger.info(f"Added exact match for mission group institution: {exact_inst}")
             
             # If we found exact normalized matches, return those
             if matched_rows:
@@ -1570,7 +1644,15 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                 if row not in matched_rows:
                     matched_rows.append(row)
             
-            # For each institution in the dataset
+            # Ensure exact matches for mission group institutions are included
+            for exact_inst in exact_match_inst_list:
+                for row in all_rows:
+                    if institution_col < len(row) and row[institution_col].strip() == exact_inst.strip():
+                        if row not in matched_rows:
+                            matched_rows.append(row)
+                            logger.info(f"Added exact match for mission group institution (second pass): {exact_inst}")
+            
+            # For each institution in the dataset, apply partial matching only for fuzzy match institutions
             for row in all_rows:
                 # Skip if row is already matched
                 if row in matched_rows:
@@ -1580,7 +1662,7 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
                     dataset_inst_name = row[institution_col].lower()
                     
                     # Check each requested institution for partial matches
-                    for normalized_req, original_req in normalized_requested.items():
+                    for normalized_req, original_req in normalized_fuzzy_requested.items():
                         req_words = normalized_req.split()
                         
                         # Log the significant words we're looking for
@@ -2393,11 +2475,13 @@ def process_gemini_query(request):
         query = data.get('query', '')
         max_matches = int(data.get('max_matches', 5))
         preview_max_rows = int(data.get('preview_rows', 3))
+        mission_group = data.get('mission_group')
         
         # Log the input parameters
         logger.info(f"Query: '{query}'")
         logger.info(f"Max matches: {max_matches}")
         logger.info(f"Max preview rows: {preview_max_rows}")
+        logger.info(f"Mission group filter: {mission_group}")
         
         # Validate query
         if not query:
@@ -2444,7 +2528,33 @@ def process_gemini_query(request):
             logger.info("Adding University of Leicester to institutions list")
             institutions.append('University of Leicester')
             result['institutions'] = institutions
-        
+            
+        # Add institutions from the selected mission group if any
+        if mission_group and mission_group in MISSION_GROUPS:
+            mission_group_institutions = MISSION_GROUPS[mission_group]
+            logger.info(f"Adding {len(mission_group_institutions)} institutions from {mission_group}")
+            
+            # Create a special list for mission group institutions that will be matched exactly
+            mission_group_inst_list = []
+            
+            # Add each institution from the mission group if not already in the list
+            for institution in mission_group_institutions:
+                if institution not in institutions:
+                    logger.info(f"Adding mission group institution: {institution}")
+                    # Add to main institutions list
+                    institutions.append(institution)
+                    # Add to mission group institutions list for exact matching
+                    mission_group_inst_list.append(institution)
+            
+            # Update the institutions in the result
+            result['institutions'] = institutions
+            
+            # Add mission group info to the result for display purposes
+            result['mission_group'] = mission_group
+            result['mission_group_institutions'] = mission_group_institutions
+            # Add flag for exact matching these institutions
+            result['mission_group_inst_exact_match'] = mission_group_inst_list
+            
         # Attempt to find matching datasets using either API or fallback
         if using_mock:
             logger.info("Using regex fallback to find matching datasets")
@@ -2488,11 +2598,15 @@ def process_gemini_query(request):
                             institutions_str = ','.join(institutions)
                             logger.info(f"Filtering by institutions: {institutions_str}")
                             
+                            # Get exact match institutions list
+                            exact_match_institutions = result.get('mission_group_inst_exact_match', [])
+                            
                             # In preview mode, we want exactly 3 rows per dataset
                             preview = get_csv_preview(
                                 file_path=file_path,
                                 max_rows=preview_max_rows,
-                                institutions=institutions_str
+                                institutions=institutions_str,
+                                exact_match_institutions=exact_match_institutions
                             )
                             
                             if preview:
@@ -2986,6 +3100,8 @@ def ai_dataset_details(request):
                 'dataset_title': dataset_data.get('dataset_title', 'Dataset Details'),
                 'institutions': dataset_data.get('institutions', []),
                 'original_institutions': dataset_data.get('original_institutions', []),
+                'mission_group': dataset_data.get('mission_group', ''),
+                'mission_group_inst_exact_match': dataset_data.get('mission_group_inst_exact_match', []),
                 'corrected_query': dataset_data.get('corrected_query', ''),
                 'query': dataset_data.get('query', ''),
                 'file_results': dataset_data.get('file_results', []),
@@ -3030,6 +3146,8 @@ def ai_dataset_details(request):
                     'dataset_title': dataset_data.get('dataset_title', 'Dataset Details'),
                     'institutions': dataset_data.get('institutions', []),
                     'original_institutions': dataset_data.get('original_institutions', []),
+                    'mission_group': dataset_data.get('mission_group', ''),
+                    'mission_group_inst_exact_match': dataset_data.get('mission_group_inst_exact_match', []),
                     'corrected_query': dataset_data.get('corrected_query', ''),
                     'query': dataset_data.get('query', ''),
                     'file_results': dataset_data.get('file_results', []),
@@ -3053,10 +3171,18 @@ def ai_dataset_details(request):
         query = data.get('query', '')
         corrected_query = data.get('corrected_query', '')
         
+        # Get mission group information
+        mission_group = data.get('mission_group', '')
+        mission_group_inst_exact_match = data.get('mission_group_inst_exact_match', [])
+        
         logger.info(f"AI Dataset details request for: {dataset_title}")
         logger.info(f"References: {dataset_references}")
         logger.info(f"Institutions: {institutions}")
         logger.info(f"Original institutions: {original_institutions}")
+        logger.info(f"Mission group: {mission_group}")
+        logger.info(f"Mission group exact match institutions (count): {len(mission_group_inst_exact_match)}")
+        if mission_group_inst_exact_match:
+            logger.info(f"First few mission group institutions: {mission_group_inst_exact_match[:3]}")
         
         if not dataset_title or not dataset_references:
             return JsonResponse({'error': 'Dataset information is missing'}, status=400)
@@ -3101,7 +3227,9 @@ def ai_dataset_details(request):
                 preview = get_csv_preview(
                     file_path=file_path,
                     max_rows=None,  # Get all matching rows, not just a preview
-                    institutions=','.join(all_institutions)
+                    institutions=','.join(all_institutions),
+                    mission_group=mission_group,
+                    exact_match_institutions=mission_group_inst_exact_match
                 )
                 
                 if preview:
@@ -3126,6 +3254,8 @@ def ai_dataset_details(request):
             'original_institutions': original_institutions,
             'query': query,
             'corrected_query': corrected_query,
+            'mission_group': mission_group,
+            'mission_group_inst_exact_match': mission_group_inst_exact_match,
             'file_results': file_results,
             'total_files': len(dataset_references),
             'processed_files': len(file_results),

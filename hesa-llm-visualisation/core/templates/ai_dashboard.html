@@ -57,7 +57,7 @@
             </p>
         </div>
         
-        <div class="flex items-center space-x-4 mb-4">
+        <div class="flex items-start space-x-4 mb-4">
             <div>
                 <label for="aiMaxMatches" class="block text-sm font-medium text-blue-700 mb-1">Number of matches to show:</label>
                 <input 
@@ -68,6 +68,31 @@
                     value="3" 
                     class="w-24 px-2 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
+            </div>
+            
+            <!-- Mission Group Filter -->
+            <div class="ml-auto">
+                <fieldset>
+                    <legend class="block text-sm font-medium text-blue-700 mb-1">Mission Group Filter:</legend>
+                    <div class="space-y-2">
+                        <div class="flex items-center">
+                            <input type="radio" id="missionGroupNone" name="missionGroup" value="none" class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500" checked>
+                            <label for="missionGroupNone" class="ml-2 block text-sm text-gray-700">None</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="radio" id="missionGroupRussell" name="missionGroup" value="Russell Group" class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <label for="missionGroupRussell" class="ml-2 block text-sm text-gray-700">Russell Group</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="radio" id="missionGroupMillion" name="missionGroup" value="Million+" class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <label for="missionGroupMillion" class="ml-2 block text-sm text-gray-700">Million+</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="radio" id="missionGroupAlliance" name="missionGroup" value="University Alliance" class="h-4 w-4 border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <label for="missionGroupAlliance" class="ml-2 block text-sm text-gray-700">University Alliance</label>
+                        </div>
+                    </div>
+                </fieldset>
             </div>
             
             <!-- Sample AI Queries Button -->
@@ -141,6 +166,17 @@
             <li>Plain years (e.g., "in 2017") → Treated as starting year (2017/18)</li>
             <li>Year ranges (e.g., "2016 to 2017") → Matches 2016/17-2017/18 academic years</li>
             <li>"Past 5 years" → Matches the last 5 academic years from the current year</li>
+        </ul>
+    </div>
+    
+    <!-- Add a note explaining mission group filtering -->
+    <div class="mt-2 text-sm text-gray-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+        <p class="font-medium mb-1">🎓 Mission Group Filtering:</p>
+        <p class="mb-1">When you select a mission group, data for all institutions in that group will be included in the results, in addition to any institutions mentioned in your query. This allows you to:</p>
+        <ul class="list-disc list-inside space-y-1">
+            <li><span class="font-medium">Russell Group</span>: Include data for all 24 research-intensive universities</li>
+            <li><span class="font-medium">Million+</span>: Include data for 17 modern universities</li>
+            <li><span class="font-medium">University Alliance</span>: Include data for 16 technical and professional universities</li>
         </ul>
     </div>
     

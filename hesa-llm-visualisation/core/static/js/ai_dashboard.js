@@ -104,6 +104,10 @@ document.addEventListener('DOMContentLoaded', function() {
             // Prepare max matches parameter
             const maxMatches = aiMaxMatches ? aiMaxMatches.value : 3;
             
+            // Get selected mission group
+            const selectedMissionGroup = document.querySelector('input[name="missionGroup"]:checked').value;
+            console.log('Selected mission group:', selectedMissionGroup);
+            
             // Call the Gemini API endpoint
             fetch('/process_gemini_query/', {
                 method: 'POST',
@@ -113,7 +117,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 },
                 body: JSON.stringify({
                     query: query,
-                    max_matches: maxMatches
+                    max_matches: maxMatches,
+                    mission_group: selectedMissionGroup === 'none' ? null : selectedMissionGroup
                 })
             })
             .then(response => {
@@ -222,6 +227,9 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayQueryAnalysis(data) {
         console.log('Displaying query analysis:', data);
         
+        // Store the data for later use
+        window.currentQueryData = data;
+        
         if (!aiQueryResults) {
             console.error('Query results container not found');
             return;
@@ -304,6 +312,14 @@ document.addEventListener('DOMContentLoaded', function() {
                         </p>
                     </div>
                 </div>
+                
+                ${data.mission_group ? `
+                <div class="mt-4 border rounded p-3 bg-blue-50">
+                    <p class="font-medium text-gray-700">Mission Group Filter:</p>
+                    <p class="font-semibold text-blue-700">${data.mission_group}</p>
+                    <p class="text-sm mt-1">Including data for ${data.mission_group_institutions?.length || 0} institutions from this group</p>
+                </div>
+                ` : ''}
                 
                 <div class="mt-4 border rounded p-3">
                     <p class="font-medium text-gray-700">Data requested:</p>
@@ -706,41 +722,103 @@ document.addEventListener('DOMContentLoaded', function() {
             // Show loading state
             showLoading('Loading complete dataset...');
             
-            // Gather institutions from the query analysis
-            const queryResults = document.getElementById('aiQueryResults');
+            // Use the stored query data if available
             let institutions = [];
             let originalInstitutions = [];
             let query = '';
             let correctedQuery = '';
+            let missionGroup = '';
+            let missionGroupInstExactMatch = [];
             
-            // Try to extract this information from the data attributes on the page
-            const institutionsElem = queryResults.querySelector('[data-institutions]');
-            const originalInstitutionsElem = queryResults.querySelector('[data-original-institutions]');
-            const queryElem = queryResults.querySelector('[data-query]');
-            const correctedQueryElem = queryResults.querySelector('[data-corrected-query]');
+            // Try to get data from the global variable first (most reliable)
+            if (window.currentQueryData) {
+                console.log("Using stored query data:", window.currentQueryData);
+                
+                query = window.currentQueryData.query || '';
+                institutions = window.currentQueryData.institutions || [];
+                originalInstitutions = window.currentQueryData.original_institutions || [];
+                missionGroup = window.currentQueryData.mission_group || '';
+                missionGroupInstExactMatch = window.currentQueryData.mission_group_inst_exact_match || [];
+                
+                // If mission group exists but no exact match list, use the mission_group_institutions
+                if (missionGroup && (!missionGroupInstExactMatch || missionGroupInstExactMatch.length === 0)) {
+                    missionGroupInstExactMatch = window.currentQueryData.mission_group_institutions || [];
+                }
+                
+                console.log("Using data from stored query analysis:");
+                console.log("- Mission group:", missionGroup);
+                console.log("- Mission group exact match list:", missionGroupInstExactMatch);
+                console.log("- Institutions:", institutions);
+            } else {
+                // Fallback to data attributes (older method)
+                // ... [existing code for data attributes] ...
+            }
             
-            if (institutionsElem) {
-                try {
-                    institutions = JSON.parse(institutionsElem.getAttribute('data-institutions'));
-                } catch (e) {
-                    console.error('Error parsing institutions:', e);
+            // Fallback to selecting the radio button directly
+            if (!missionGroup) {
+                // Find the selected radio button directly
+                const selectedMissionGroup = document.querySelector('input[name="missionGroup"]:checked');
+                if (selectedMissionGroup && selectedMissionGroup.value && selectedMissionGroup.value !== 'none') {
+                    missionGroup = selectedMissionGroup.value;
+                    console.log("Retrieved mission group from radio button:", missionGroup);
                 }
             }
             
-            if (originalInstitutionsElem) {
-                try {
-                    originalInstitutions = JSON.parse(originalInstitutionsElem.getAttribute('data-original-institutions'));
-                } catch (e) {
-                    console.error('Error parsing original institutions:', e);
+            // As a last resort, if we have mission group but not the institution list, use hardcoded lists
+            if (missionGroup && (!missionGroupInstExactMatch || missionGroupInstExactMatch.length === 0)) {
+                if (missionGroup === 'Russell Group') {
+                    missionGroupInstExactMatch = [
+                        "The University of Birmingham",
+                        "The University of Bristol",
+                        "The University of Cambridge",
+                        "Cardiff University",
+                        "University of Durham",
+                        "The University of Edinburgh",
+                        "The University of Exeter",
+                        "The University of Glasgow",
+                        "Imperial College of Science, Technology and Medicine",
+                        "King's College London",
+                        "The University of Leeds",
+                        "The University of Liverpool",
+                        "London School of Economics and Political Science",
+                        "The University of Manchester",
+                        "Newcastle University",
+                        "The University of Nottingham",
+                        "The University of Oxford",
+                        "Queen Mary University of London",
+                        "Queen's University Belfast",
+                        "The University of Sheffield",
+                        "The University of Southampton",
+                        "University College London",
+                        "The University of Warwick",
+                        "The University of York"
+                    ];
+                    console.log("Applied hardcoded Russell Group institutions as fallback");
+                } else if (missionGroup === 'Million+') {
+                    missionGroupInstExactMatch = [
+                        "The University of Bolton",
+                        "The University of Central Lancashire",
+                        "Coventry University",
+                        "De Montfort University",
+                        "University of Derby",
+                        "The University of East London",
+                        "The University of Greenwich",
+                        "University of Hertfordshire",
+                        "The University of Lincoln",
+                        "Liverpool John Moores University",
+                        "The Manchester Metropolitan University",
+                        "Middlesex University",
+                        "The University of Northampton",
+                        "The University of South Wales",
+                        "The University of West London",
+                        "The University of the West of England, Bristol",
+                        "The University of Wolverhampton"
+                    ];
+                    console.log("Applied hardcoded Million+ institutions as fallback");
+                } else if (missionGroup === 'University Alliance') {
+                    // Add University Alliance institutions here if needed
+                    console.log("Would need to add University Alliance institutions list");
                 }
-            }
-            
-            if (queryElem) {
-                query = queryElem.getAttribute('data-query') || '';
-            }
-            
-            if (correctedQueryElem) {
-                correctedQuery = correctedQueryElem.getAttribute('data-corrected-query') || '';
             }
             
             // Call the AI dataset details endpoint
@@ -756,7 +834,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     institutions: institutions,
                     original_institutions: originalInstitutions,
                     query: query,
-                    corrected_query: correctedQuery
+                    corrected_query: correctedQuery,
+                    mission_group: missionGroup,
+                    mission_group_inst_exact_match: missionGroupInstExactMatch
                 })
             })
             .then(response => {
@@ -814,6 +894,15 @@ document.addEventListener('DOMContentLoaded', function() {
         const queryResults = document.getElementById('aiQueryResults');
         if (!queryResults) return;
         
+        // Log all the data for debugging
+        console.log("Adding data attributes with data:", {
+            institutions: data.institutions || [],
+            original_institutions: data.original_institutions || [],
+            mission_group: data.mission_group || "",
+            mission_group_institutions: data.mission_group_institutions || [],
+            mission_group_inst_exact_match: data.mission_group_inst_exact_match || []
+        });
+        
         // Generate corrected query if needed
         let correctedQuery = '';
         if (data.has_institution_typos || data.has_year_typos) {
@@ -828,6 +917,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <span data-original-institutions='${JSON.stringify(data.original_institutions || [])}' id="data-original-institutions"></span>
             <span data-query='${data.query || ""}' id="data-query"></span>
             <span data-corrected-query='${correctedQuery}' id="data-corrected-query"></span>
+            <span data-mission-group='${data.mission_group || ""}' id="data-mission-group"></span>
+            <span data-mission-group-inst-exact-match='${JSON.stringify(data.mission_group_inst_exact_match || [])}' id="data-mission-group-inst-exact-match"></span>
+            <span data-mission-group-institutions='${JSON.stringify(data.mission_group_institutions || [])}' id="data-mission-group-institutions"></span>
         `;
         
         // Remove any existing data elements
@@ -868,5 +960,57 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         return query;
+    }
+
+    // Look for functions like displayDataset, selectDataset, or similar
+    function selectDataset(dataset) {
+        // Show loading indicator
+        showLoading();
+        
+        console.log("Selecting dataset:", dataset.title);
+        
+        // Gather mission group information if available
+        const missionGroup = dataset.mission_group || '';
+        const missionGroupInstExactMatch = dataset.mission_group_inst_exact_match || [];
+        
+        // Prepare the request data
+        const requestData = {
+            dataset_title: dataset.title,
+            dataset_references: dataset.references || [],
+            institutions: dataset.institutions || [],
+            original_institutions: dataset.original_institutions || [],
+            query: dataset.query || '',
+            corrected_query: dataset.corrected_query || '',
+            mission_group: missionGroup,
+            mission_group_inst_exact_match: missionGroupInstExactMatch
+        };
+        
+        // Make API request to get dataset details
+        fetch('/ai_dataset_details/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken()
+            },
+            body: JSON.stringify(requestData)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Error: ${response.status} ${response.statusText}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Hide loading indicator
+            hideLoading();
+            
+            // Display the dataset details
+            displayDatasetDetails(data);
+        })
+        .catch(error => {
+            console.error('Error fetching dataset details:', error);
+            hideLoading();
+            showError('Error loading dataset details: ' + error.message);
+        });
     }
 }); 
