@@ -183,6 +183,15 @@
                                 </svg>
                                 Download PDF
                             </button>
+                            <button 
+                                class="download-excel-btn bg-green-800 hover:bg-green-900 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors duration-150 ease-in-out"
+                                data-table-id="dataset-table-{{ forloop.counter }}"
+                            >
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                                </svg>
+                                Download Excel
+                            </button>
                         </div>
                     </div>
                     
@@ -364,6 +373,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 
+<!-- Include SheetJS library for Excel generation -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 <!-- Add inline download CSV function -->
 <script>
 // Direct implementation of downloadTableAsCSV function for this page
@@ -485,6 +497,86 @@ function downloadTableAsPDF(tableId, filename) {
     }
 }
 
+// Function to download table as Excel
+function downloadTableAsExcel(tableId, filename) {
+    console.log('downloadTableAsExcel called with:', { tableId, filename });
+    
+    try {
+        // Get the table by ID
+        const table = document.getElementById(tableId);
+        if (!table) {
+            console.error('Table not found for ID:', tableId);
+            return;
+        }
+        
+        // Get headers from table
+        const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+        
+        // Get rows from table body
+        const rows = Array.from(table.querySelectorAll('tbody tr')).map(row => 
+            Array.from(row.querySelectorAll('td')).map(cell => cell.textContent.trim())
+        );
+        
+        console.log('Excel data extracted:', { headers, rows });
+        
+        // Create workbook 
+        const wb = XLSX.utils.book_new();
+        
+        // Get the dataset title and reference
+        const title = document.querySelector('h1').textContent.trim();
+        const reference = table.closest('.border.rounded-lg').querySelector('h3').textContent.trim();
+        
+        // Add title and reference as an info sheet with instructions
+        const infoData = [
+            ['Dataset Title', title],
+            ['Reference', reference],
+            ['Generated On', new Date().toLocaleString()],
+            [''],  // Empty row
+            ['NOTE:', 'The complete dataset is available in the "Data" sheet (click the Data tab at the bottom)'],
+            [''],  // Empty row
+            ['Rows:', rows.length],
+            ['Columns:', headers.length]
+        ];
+        const infoWs = XLSX.utils.aoa_to_sheet(infoData);
+        
+        // Style the info sheet cells
+        infoWs['A5'] = { t: 's', v: 'NOTE:', s: { font: { bold: true, color: { rgb: "FF0000" } } } };
+        infoWs['B5'] = { t: 's', v: 'The complete dataset is available in the "Data" sheet (click the Data tab at the bottom)', s: { font: { bold: true, color: { rgb: "FF0000" } } } };
+        
+        // Add the Info worksheet
+        XLSX.utils.book_append_sheet(wb, infoWs, 'Info');
+        
+        // Prepare data for the main worksheet - combining headers and rows
+        const wsData = [headers].concat(rows);
+        
+        // Create worksheet from data
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        
+        // Style the headers (adjust column widths)
+        const colWidths = headers.map(h => ({ wch: Math.max(h.length, 10) })); // Set width based on header text length
+        ws['!cols'] = colWidths;
+        
+        // Add the Data worksheet
+        XLSX.utils.book_append_sheet(wb, ws, 'Data');
+        
+        // Make Data sheet the active sheet when the file opens (works in most Excel versions)
+        wb.Workbook = { 
+            Views: [{ 
+                RTL: false,
+                ActiveTab: 1  // 0-based index: 1 = second sheet (Data)
+            }]
+        };
+        
+        // Generate Excel file and trigger download
+        XLSX.writeFile(wb, filename);
+        
+        console.log('Excel download triggered successfully');
+    } catch (err) {
+        console.error('Error in downloadTableAsExcel:', err);
+        alert('Error generating Excel file. See console for details.');
+    }
+}
+
 // Add event listeners to download buttons
 document.addEventListener('DOMContentLoaded', function() {
     // CSV download buttons
@@ -513,6 +605,22 @@ document.addEventListener('DOMContentLoaded', function() {
             const tableIndex = tableId.split('-').pop();
             const filename = `dataset_${tableIndex}.pdf`;
             downloadTableAsPDF(tableId, filename);
+            
+            // Prevent default button behavior
+            e.preventDefault();
+        });
+    });
+
+    // Excel download buttons
+    document.querySelectorAll('.download-excel-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            // Prevent event from propagating to document level handlers
+            e.stopPropagation();
+            
+            const tableId = this.getAttribute('data-table-id');
+            const tableIndex = tableId.split('-').pop();
+            const filename = `dataset_${tableIndex}.xlsx`;
+            downloadTableAsExcel(tableId, filename);
             
             // Prevent default button behavior
             e.preventDefault();
@@ -997,7 +1105,7 @@ function generateVisualization(datasetInfo, request, chartType) {
                     const cleanConfig = data.chart_config
                         .replace(/Object\.assign/g, '')  // Remove Object.assign calls
                         .replace(/['"]\s*\+\s*['"]|['"]\s*\+|['"]\+\s*['"]|\+\s*['"]/g, '') // Fix string concatenation
-                        .replace(/(['"])([\w\s]+)\1\s*:/g, '"$2":'); // Normalize property names to double quotes
+                        .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":'); // Normalize property names to double quotes
                     
                     chartConfig = eval('(' + cleanConfig + ')');
                 } catch (evalError) {
