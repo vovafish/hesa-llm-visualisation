@@ -162,7 +162,18 @@
         {% if has_data %}
             {% for result in file_results %}
                 <div class="border rounded-lg p-4 mb-6 hover:bg-gray-50 transition-colors">
-                    <h3 class="font-semibold text-blue-800 text-lg mb-3">{{ result.academic_year }} - {{ result.reference }}</h3>
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="font-semibold text-blue-800 text-lg">{{ result.academic_year }} - {{ result.reference }}</h3>
+                        <button 
+                            class="download-csv-btn bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm flex items-center transition-colors duration-150 ease-in-out"
+                            data-table-id="dataset-table-{{ forloop.counter }}"
+                        >
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            Download CSV
+                        </button>
+                    </div>
                     
                     {% if result.error %}
                         <div class="bg-red-100 text-red-700 p-4 rounded">
@@ -173,7 +184,7 @@
                         {% if result.data %}
                             {% with row_count=result.data|length %}
                             <div class="overflow-x-auto {% if row_count > 10 %}table-container scrollable{% else %}table-container{% endif %} border rounded">
-                                <table class="min-w-full border-collapse table-auto text-sm">
+                                <table id="dataset-table-{{ forloop.counter }}" class="min-w-full border-collapse table-auto text-sm">
                                     <thead>
                                         <tr>
                                             {% for column in result.columns %}
@@ -332,9 +343,83 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Include ai_dashboard.js file -->
+<script src="{% static 'js/ai_dashboard.js' %}"></script>
+
 <!-- Include Chart.js library -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 
+<!-- Add inline download CSV function -->
+<script>
+// Direct implementation of downloadTableAsCSV function for this page
+function downloadTableAsCSV(tableId, filename) {
+    console.log('downloadTableAsCSV called with:', { tableId, filename });
+    
+    try {
+        // Get the table by ID
+        const table = document.getElementById(tableId);
+        if (!table) {
+            console.error('Table not found for ID:', tableId);
+            return;
+        }
+        
+        // Get headers from table
+        const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
+        
+        // Get rows from table body
+        const rows = Array.from(table.querySelectorAll('tbody tr')).map(row => 
+            Array.from(row.querySelectorAll('td')).map(cell => cell.textContent.trim())
+        );
+        
+        // Combine headers and rows
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.join(','))
+        ].join('\n');
+        
+        console.log('CSV content generated:', csvContent);
+        
+        // Create blob and download link
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        
+        // Set up download
+        if (navigator.msSaveBlob) { // IE 10+
+            navigator.msSaveBlob(blob, filename);
+        } else {
+            link.href = URL.createObjectURL(blob);
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        console.log('Download triggered successfully');
+    } catch (err) {
+        console.error('Error in downloadTableAsCSV:', err);
+    }
+}
+
+// Add event listeners to download buttons
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.download-csv-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            // Prevent event from propagating to document level handlers
+            e.stopPropagation();
+            
+            const tableId = this.getAttribute('data-table-id');
+            const tableIndex = tableId.split('-').pop();
+            const filename = `dataset_${tableIndex}.csv`;
+            downloadTableAsCSV(tableId, filename);
+            
+            // Prevent default button behavior
+            e.preventDefault();
+        });
+    });
+});
+</script>
+
+<!-- Existing inline JavaScript code -->
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Get dataset information from the page
