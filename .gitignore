@@ -47,6 +47,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+hesa_files_index.json
 build/
 develop-eggs/
 dist/

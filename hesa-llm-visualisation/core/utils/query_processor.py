@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
 import pandas as pd
 import logging
-from ..llm.query_processor import QueryProcessor
+#from ..llm.query_processor import QueryProcessor
 import json
 
 # Configure logging

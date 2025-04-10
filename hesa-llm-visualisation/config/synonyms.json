@@ -1,6 +1,0 @@
-{
-  "university": ["he provider", "institution", "college", "higher education provider"],
-  "student": ["learner", "enrolment", "enrollment"],
-  "degree": ["qualification", "award", "certificate", "diploma"],
-  "graduate": ["qualifier", "alumni"]
-} 

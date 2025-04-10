@@ -141,22 +141,27 @@ def create_index_file(processor, results):
                             # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
                             academic_year_found = False
                             for line in lines:
+                                # Skip lines with "to" as they indicate a range of years
+                                if "to" in line:
+                                    continue
+                                    
                                 # Skip lines with "Subtitle:" that might contain "Academic years" text
                                 if "Subtitle:" in line:
                                     continue
                                     
-                                # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
-                                if re.search(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
-                                    year_match = re.search(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                                # Look for patterns like ",Academic year,YYYY/YY" or "Filters:,Academic year,YYYY/YY"
+                                if re.search(r'(?:,|\:)\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
+                                    year_match = re.search(r'(?:,|\:)\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
                                     metadata['academic_year'] = year_match.group(1).strip()
-                                    logger.info(f"Found exact academic year format in raw file: {metadata['academic_year']}")
+                                    logger.info(f"Found academic year format in raw file: {metadata['academic_year']}")
                                     academic_year_found = True
                                     break
                             
                             # If not found in raw file, try filename pattern
                             if not academic_year_found:
                                 import re
-                                year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                                # Check for common academic year patterns in filename
+                                year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', file_name)
                                 if year_match:
                                     metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
                                     logger.info(f"Extracted academic year from filename: {metadata['academic_year']}")
@@ -167,7 +172,7 @@ def create_index_file(processor, results):
                             logger.warning(f"Error extracting academic year from raw file: {str(e)}")
                             # Fall back to filename pattern
                             import re
-                            year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                            year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', file_name)
                             if year_match:
                                 metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
                             else:
@@ -175,7 +180,7 @@ def create_index_file(processor, results):
                     else:
                         # Fall back to filename pattern
                         import re
-                        year_match = re.search(r'(\d{4})&(\d{2})', file_name)
+                        year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', file_name)
                         if year_match:
                             metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
                         else:

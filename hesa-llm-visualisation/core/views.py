@@ -2,7 +2,6 @@ from django.shortcuts import render
 from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
-from .llm_utils import generate_response
 from .data_processing import CSVProcessor
 from .utils.query_processor import parse_llm_response, apply_data_operations
 from .utils.chart_generator import generate_chart
@@ -816,7 +815,7 @@ def select_file_source(request):
                                     # Fall back to using filename
                                     derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
                                     # Extract year from filename if possible
-                                    year_match = re.search(r'(20\d{2})', file_name)
+                                    year_match = re.search(r'(20\d{2})[\.\-&_]?(\d{2})?', file_name)
                                     if year_match:
                                         year = year_match.group(1)
                                         academic_year = f"{year}/{str(int(year)+1)[2:4]}"
@@ -833,7 +832,7 @@ def select_file_source(request):
                         # Fall back to filename matching
                         derived_title = file_name.replace('.csv', '').replace('_', ' ').title()
                         # Extract year from filename if possible
-                        year_match = re.search(r'(20\d{2})', file_name)
+                        year_match = re.search(r'(20\d{2})[\.\-&_]?(\d{2})?', file_name)
                         academic_year = f"{year_match.group(1)}/{str(int(year_match.group(1))+1)[2:]}" if year_match else 'Unknown'
                         
                         # Check if derived title matches target
@@ -1386,7 +1385,7 @@ def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, 
     logger.info(f"Using exact matching for these institutions: {exact_match_institutions}")
     
     # Extract academic year from the file name
-    year_match = re.search(r'(\d{4})(?:&|_)(\d{2})', os.path.basename(file_path))
+    year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', os.path.basename(file_path))
     academic_year = None
     if year_match:
         academic_year = f"{year_match.group(1)}/{year_match.group(2)}"
@@ -2159,7 +2158,7 @@ def dataset_details(request, group_id):
                    target_title.lower() in derived_title.lower() or \
                    derived_title.lower() in target_title.lower():
                     # Extract year from filename if possible
-                    year_match = re.search(r'(20\d{2})', file_name)
+                    year_match = re.search(r'(20\d{2})[\.\-&_]?(\d{2})?', file_name)
                     file_year = year_match.group(1) if year_match else 'Unknown'
                     academic_year = f"{file_year}/{str(int(file_year)+1)[2:4]}" if file_year.isdigit() else 'Unknown'
                     
@@ -3210,13 +3209,35 @@ def ai_dataset_details(request):
             file_path = os.path.join(CLEANED_FILES_DIR, reference)
             
             # Extract academic year from reference name
-            year_match = re.search(r'(20\d{2}).{0,4}(20\d{2}|[0-9]{2})', reference)
+            year_match = re.search(r'(20\d{2})[\.\-&_]?(20\d{2}|[0-9]{2})', reference)
             academic_year = None
             if year_match:
                 if len(year_match.group(2)) == 2:
                     academic_year = f"{year_match.group(1)}/{year_match.group(2)}"
                 else:
                     academic_year = f"{year_match.group(1)}/{year_match.group(2)[2:4]}"
+                logger.info(f"Extracted academic year from reference: {academic_year}")
+            else:
+                # Try to extract from Reference ID if present
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        for i, line in enumerate(f):
+                            if i > 5:  # Only check first few lines
+                                break
+                            if "Reference ID:" in line:
+                                ref_id_match = re.search(r'Reference ID:.*?(?:20(\d{2})[-/](\d{2})|\b(DT\d+)\b)', line)
+                                if ref_id_match:
+                                    if ref_id_match.group(1) and ref_id_match.group(2):
+                                        # Direct year reference
+                                        academic_year = f"20{ref_id_match.group(1)}/{ref_id_match.group(2)}"
+                                        logger.info(f"Extracted academic year from Reference ID year: {academic_year}")
+                                    elif ref_id_match.group(3):
+                                        # Try to parse DT code (e.g., DT031)
+                                        dt_code = ref_id_match.group(3)
+                                        logger.info(f"Found DT code in Reference ID: {dt_code}")
+                                break
+                except Exception as e:
+                    logger.warning(f"Error extracting year from Reference ID: {str(e)}")
             
             # Add to years set if valid
             if academic_year:

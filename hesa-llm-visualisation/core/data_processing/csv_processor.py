@@ -285,11 +285,15 @@ class CSVProcessor:
                     
                     # Extract academic year
                     for line in lines:
-                        # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
-                        if re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
-                            year_match = re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                        # Skip lines with "to" as they indicate a range of years (e.g., "Academic years 2020/21 to 2023/24")
+                        if "to" in line:
+                            continue
+                            
+                        # Look for patterns like ",Academic year,YYYY/YY" or "Filters:,Academic year,YYYY/YY"
+                        year_match = re.search(r'(?:,|\:)\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                        if year_match:
                             metadata['academic_year'] = year_match.group(1).strip()
-                            logger.info(f"Found exact academic year format: {metadata['academic_year']}")
+                            logger.info(f"Found academic year format: {metadata['academic_year']}")
                             break
                 except Exception as e:
                     logger.warning(f"Error extracting title/academic year: {str(e)}")
@@ -302,7 +306,14 @@ class CSVProcessor:
                 # If academic year not found, use "Unknown"
                 if 'academic_year' not in metadata:
                     logger.warning(f"Could not extract academic year from file content")
-                    metadata['academic_year'] = "Unknown"
+                    
+                    # Try to extract from filename before defaulting to Unknown
+                    year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', file_path.name)
+                    if year_match:
+                        metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                        logger.info(f"Extracted academic year from filename: {metadata['academic_year']}")
+                    else:
+                        metadata['academic_year'] = "Unknown"
                 
                 # Clean data
                 cleaned_df = self.clean_csv(file_path)
@@ -318,11 +329,20 @@ class CSVProcessor:
                 column_keywords = self.extract_keywords_from_columns(cleaned_df.columns)
                 metadata['keywords_columns'] = column_keywords
                 
+                # Generate new filename based on title and academic year
+                original_filename = file_path.name
+                new_filename = self.generate_clean_filename(metadata['title'], metadata['academic_year'], original_filename)
+                
+                # Store original filename in metadata
+                metadata['original_filename'] = original_filename
+                # Store new filename in metadata
+                metadata['new_filename'] = new_filename
+                
                 # Create metadata line
                 metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
                 
-                # Save cleaned file with metadata
-                cleaned_path = self.clean_dir / file_path.name
+                # Save cleaned file with metadata using new filename
+                cleaned_path = self.clean_dir / new_filename
                 
                 # Write metadata line first, then the data
                 with open(cleaned_path, 'w', encoding='utf-8') as f:
@@ -335,6 +355,7 @@ class CSVProcessor:
                 logger.info(f"Successfully processed {file_path.name} with metadata")
                 logger.info(f"Title: {metadata.get('title', 'Not found')}")
                 logger.info(f"Academic Year: {metadata.get('academic_year', 'Not found')}")
+                logger.info(f"New filename: {new_filename}")
                 logger.info(f"Title keywords: {title_keywords}")
                 logger.info(f"Column keywords: {column_keywords}")
                 
@@ -406,11 +427,15 @@ class CSVProcessor:
                 
                 # Extract academic year
                 for line in lines:
-                    # Look for the exact pattern with comma at the start: ",Academic year,YYYY/YY"
-                    if re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line):
-                        year_match = re.match(r',\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                    # Skip lines with "to" as they indicate a range of years (e.g., "Academic years 2020/21 to 2023/24")
+                    if "to" in line:
+                        continue
+                        
+                    # Look for patterns like ",Academic year,YYYY/YY" or "Filters:,Academic year,YYYY/YY"
+                    year_match = re.search(r'(?:,|\:)\s*Academic year\s*,\s*(20\d{2}/\d{2})', line)
+                    if year_match:
                         metadata['academic_year'] = year_match.group(1).strip()
-                        logger.info(f"Found exact academic year format: {metadata['academic_year']}")
+                        logger.info(f"Found academic year format: {metadata['academic_year']}")
                         break
             except Exception as e:
                 logger.warning(f"Error extracting title/academic year: {str(e)}")
@@ -423,7 +448,14 @@ class CSVProcessor:
             # If academic year not found, use "Unknown"
             if 'academic_year' not in metadata:
                 logger.warning(f"Could not extract academic year from file content")
-                metadata['academic_year'] = "Unknown"
+                
+                # Try to extract from filename before defaulting to Unknown
+                year_match = re.search(r'(\d{4})[\.\-&_](\d{2})', file_name)
+                if year_match:
+                    metadata['academic_year'] = f"{year_match.group(1)}/{year_match.group(2)}"
+                    logger.info(f"Extracted academic year from filename: {metadata['academic_year']}")
+                else:
+                    metadata['academic_year'] = "Unknown"
             
             # Clean data
             cleaned_df = self.clean_csv(file_path)
@@ -438,11 +470,20 @@ class CSVProcessor:
             column_keywords = self.extract_keywords_from_columns(cleaned_df.columns)
             metadata['keywords_columns'] = column_keywords
             
+            # Generate new filename based on title and academic year
+            original_filename = file_name
+            new_filename = self.generate_clean_filename(metadata['title'], metadata['academic_year'], original_filename)
+            
+            # Store original filename in metadata
+            metadata['original_filename'] = original_filename
+            # Store new filename in metadata
+            metadata['new_filename'] = new_filename
+            
             # Create metadata line
             metadata_line = f"#METADATA:{json.dumps(metadata)}\n"
             
-            # Save cleaned file with metadata
-            cleaned_path = self.clean_dir / file_name
+            # Save cleaned file with metadata using new filename
+            cleaned_path = self.clean_dir / new_filename
             
             # Write metadata line first, then the data
             with open(cleaned_path, 'w', encoding='utf-8') as f:
@@ -454,6 +495,7 @@ class CSVProcessor:
             logger.info(f"Successfully processed {file_name} with metadata")
             logger.info(f"Title: {metadata.get('title', 'Not found')}")
             logger.info(f"Academic Year: {metadata.get('academic_year', 'Not found')}")
+            logger.info(f"New filename: {new_filename}")
             logger.info(f"Title keywords: {title_keywords}")
             logger.info(f"Column keywords: {column_keywords}")
             return True
@@ -516,3 +558,20 @@ class CSVProcessor:
         unique_keywords = [x for x in all_keywords if not (x in seen or seen.add(x))]
         
         return unique_keywords 
+
+    def generate_clean_filename(self, title, academic_year, original_filename):
+        """Generate a new filename based on title and academic year."""
+        # Clean title for filename (remove special characters)
+        clean_title = title.strip()
+        
+        # Clean academic year (replace / with -)
+        clean_year = academic_year.replace('/', '-') if academic_year != "Unknown" else ""
+        
+        # Create new filename: "Title Year OriginalFilename"
+        if clean_year:
+            new_filename = f"{clean_title} {clean_year} {original_filename}"
+        else:
+            new_filename = f"{clean_title} {original_filename}"
+            
+        logger.info(f"Generated new filename: {new_filename}")
+        return new_filename 
