@@ -2331,7 +2331,7 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
         EXTRACTED INFORMATION:
         - Data requested: {data_request}
 
-        I have the following datasets (already filtered for relevance):
+        I have the following datasets (already filtered for relevance by year):
 
         {json.dumps([{
             "title": d.get("title", ""),
@@ -2340,17 +2340,42 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
             "reference": d.get("reference", "")
         } for d in datasets[:30]], indent=2)}
 
-        For each dataset, analyze how well it matches the user query semantically. 
-        Consider variations in terminology (e.g., "enrollment" vs "enrolment", "registration") 
-        and related concepts (e.g., if user asks for "postgraduates", datasets about "graduates" or "masters students" may be relevant).
+        TASK OVERVIEW:
+        Your task is to deeply understand what the user is trying to find out and match datasets that would answer their question.
+
+        STEP 1 - ANALYZE THE QUERY INTENT:
+        - First, understand what type of data the user is looking for
+        - Ignore institutions and years in the query (these are handled separately)
+        - Focus on the core data request (e.g., "postgraduates", "student demographics", "staff counts")
+        - Determine if the user wants specific metrics or categories (e.g., "by gender", "by qualification")
+
+        STEP 2 - MATCH DATASETS BY INTENT:
+        - Examine dataset titles and columns to determine if they contain the data needed to answer the query
+        - A dataset is relevant if it contains the specific data types the user is asking about
+        - For example, if the user asks about "postgraduates", prioritize datasets with columns or titles containing "postgraduate"
+        - Do NOT match based on generic terms or contextual words (e.g., don't match "staff" when user asks about "students")
+
+        STEP 3 - SCORE THE MATCHES:
+        Score each dataset from 0.0 to 0.95 based on how completely it answers the user's question:
+        - 0.8-0.95: Perfect match that directly answers the specific question
+        - 0.6-0.8: Strong match that contains the specific data type requested
+        - 0.4-0.6: Partial match that contains related information
+        - 0.2-0.4: Weak match with some relevant data but not exactly what was asked for
+        - 0.1-0.2: Minimal relevance, might be useful as context but doesn't answer the query
+
+        Examples:
+        - If user asks about "postgraduate students", a dataset about "HE qualifiers by level of qualification including postgraduate" would score 0.9
+        - If user asks about "undergraduate students by gender", a dataset just about "undergraduate students" without gender breakdown would score 0.6
+        - If user asks about "student enrollment" but dataset is about "staff", it should score 0.0 and not be returned
 
         Return a JSON array with the following format for each matching dataset:
         [
           {{
             "reference": "filename.csv",
             "score": 0.95,
-            "matched_terms": ["term1", "term2", "term3"],
-            "description": "Brief explanation of why this dataset matches"
+            "matched_intent": "Data about postgraduate students which directly answers the user's question",
+            "matched_terms": ["postgraduate", "student"],
+            "description": "Brief explanation of why this dataset helps answer the user's specific question"
           }}
         ]
 
@@ -2358,7 +2383,7 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
         """
         
         # Call Gemini API for semantic matching
-        logger.info("Calling Gemini API for semantic dataset matching")
+        logger.info("Calling Gemini API for intent-based dataset matching")
         ai_response = gemini_client.get_completion(prompt)
         
         # Extract JSON response from Gemini
@@ -2383,6 +2408,7 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
                             "score": match.get("score", 0),
                             "match_percentage": int(match.get("score", 0) * 100),
                             "matched_terms": match.get("matched_terms", []),
+                            "matched_intent": match.get("matched_intent", ""),
                             "description": match.get("description", "")
                         }
                         individual_matches.append(enhanced_match)
@@ -2402,9 +2428,12 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
                 
                 # Collect all unique matched terms
                 all_matched_terms = set()
+                all_matched_intents = set()
                 for match in matches_list:
                     if match.get('matched_terms'):
                         all_matched_terms.update(match.get('matched_terms', []))
+                    if match.get('matched_intent'):
+                        all_matched_intents.add(match.get('matched_intent', ''))
                 
                 # Collect all academic years
                 academic_years = [match['academic_year'] for match in matches_list]
@@ -2426,6 +2455,7 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
                     'academic_years': academic_years,
                     'references': references,
                     'matched_terms': list(all_matched_terms),
+                    'matched_intents': list(all_matched_intents),
                     'descriptions': descriptions,
                     'matches': matches_list,  # Include individual matches for reference
                     'columns': matches_list[0].get('columns', []) if matches_list else []
@@ -2567,6 +2597,11 @@ def process_gemini_query(request):
                 logger.error(f"Error finding matching datasets: {str(e)}", exc_info=True)
                 logger.info("Falling back to regex matching")
                 matching_datasets = regex_matching_fallback(query, data_request, datasets=None)
+        
+        # Apply max_matches limit
+        if matching_datasets and max_matches > 0 and len(matching_datasets) > max_matches:
+            matching_datasets = matching_datasets[:max_matches]
+            logger.info(f"Limited to {max_matches} highest-scoring dataset groups")
         
         # Generate CSV previews for each dataset
         for dataset in matching_datasets:
@@ -2894,25 +2929,58 @@ def regex_matching_fallback(query, data_request, datasets):
     Fallback method for dataset matching based on regex.
     Use when Gemini API is unavailable.
     Groups datasets with the same title as a single match.
+    Attempts to match based on intent rather than just keywords.
     """
     import re
     import logging
+    import json
     from collections import defaultdict
+    import difflib
     
     logger = logging.getLogger(__name__)
-    logger.info("Using regex fallback for dataset matching")
+    logger.info("Using regex fallback for intent-based dataset matching")
+    
+    # If datasets is not provided, load them from the index file
+    if not datasets:
+        import os
+        from django.conf import settings
+        
+        index_file_path = os.path.join(settings.BASE_DIR, 'hesa_files_index.json')
+        if os.path.exists(index_file_path):
+            try:
+                with open(index_file_path, 'r') as f:
+                    index_data = json.load(f)
+                    datasets = index_data.get('hesa_files', [])
+                    logger.info(f"Loaded {len(datasets)} datasets from index file")
+            except Exception as e:
+                logger.error(f"Error loading index file: {str(e)}")
+                datasets = []
+        else:
+            logger.error("Index file not found")
+            datasets = []
     
     # Case-insensitive matching
     query_lower = query.lower()
+    query_terms = [term.strip() for term in re.findall(r'\b\w+\b', query_lower) if len(term.strip()) > 2]
+    logger.info(f"Query terms: {query_terms}")
     
-    # Prepare regex patterns for common education terms
-    student_patterns = [r'student', r'pupil', r'learner', r'enrollment', r'enrolment']
-    staff_patterns = [r'staff', r'faculty', r'teacher', r'professor', r'lecturer']
-    research_patterns = [r'research', r'publication', r'study', r'project', r'academic']
+    # Extract main intents from data_request
+    main_intents = []
+    for req in data_request:
+        if isinstance(req, str):
+            # Clean up the request string
+            req = req.lower().strip()
+            main_intents.append(req)
+            
+            # Add variations for common data types
+            if req == 'undergraduate':
+                main_intents.extend(['bachelor', 'first degree', 'ug'])
+            elif req == 'postgraduate':
+                main_intents.extend(['master', 'phd', 'doctorate', 'pg'])
+            elif req == 'student_count' or req == 'student':
+                main_intents.extend(['enrollment', 'enrolment', 'student'])
     
-    # Postgraduate/undergraduate patterns
-    postgrad_patterns = [r'postgraduate', r'post-graduate', r'graduate', r'masters', r'phd', r'doctoral']
-    undergrad_patterns = [r'undergraduate', r'under-graduate', r'bachelor']
+    logger.info(f"Main intents extracted: {main_intents}")
     
     # Create dictionaries to track matches
     individual_matches = []
@@ -2920,6 +2988,7 @@ def regex_matching_fallback(query, data_request, datasets):
     # Process each dataset for matches
     for dataset in datasets:
         title = dataset.get('title', '').lower()
+        columns = [col.lower() for col in dataset.get('columns', [])]
         academic_year = dataset.get('academic_year', '')
         reference = dataset.get('reference', '')
         
@@ -2927,85 +2996,117 @@ def regex_matching_fallback(query, data_request, datasets):
         if not title or not reference:
             continue
             
-        # Check for title match with the query terms
-        score = 0
+        # Initialize matching variables
+        score = 0.1  # Base score
         matched_terms = []
+        matched_intent = ""
         description_points = []
         
-        # Add points for data request match
-        requested_data_found = False
-        if 'student' in ' '.join(data_request).lower():
-            for pattern in student_patterns:
-                if re.search(pattern, title):
-                    score += 0.2
+        # Check for intent matches in title and columns
+        intent_matched = False
+        
+        # First, look for direct matches of the main intents
+        for intent in main_intents:
+            # Check title for the intent
+            if intent in title:
+                score += 0.6
+                matched_terms.append(intent)
+                description_points.append(f"Title contains '{intent}' which directly relates to the query")
+                intent_matched = True
+                matched_intent = f"Data about {intent}"
+            
+            # Check columns for the intent
+            for col in columns:
+                if intent in col:
+                    score += 0.4
+                    if intent not in matched_terms:
+                        matched_terms.append(intent)
+                    description_points.append(f"Column '{col}' contains '{intent}' which matches the query intent")
+                    intent_matched = True
+                    if not matched_intent:
+                        matched_intent = f"Data containing {intent} information"
+        
+        # If no direct intent matches, look for related terms
+        if not intent_matched:
+            # Education level terms
+            education_levels = {
+                'undergraduate': ['bachelor', 'first degree', 'ug', 'undergraduate'],
+                'postgraduate': ['postgrad', 'pg', 'master', 'doctorate', 'phd', 'graduate'],
+                'doctoral': ['phd', 'doctorate'],
+                'master': ['ma', 'msc', 'masters', 'postgraduate']
+            }
+            
+            # Look for education level terms in query
+            for level, terms in education_levels.items():
+                if any(term in query_lower for term in terms):
+                    # Check if dataset has this education level
+                    if any(term in title for term in terms) or any(any(term in col for term in terms) for col in columns):
+                        score += 0.5
+                        matched_terms.append(level)
+                        matched_intent = f"Data about {level} education"
+                        description_points.append(f"Dataset contains information about {level} education")
+                        intent_matched = True
+                        break
+            
+            # Student/enrollment related
+            student_terms = ['student', 'learner', 'pupil', 'enrollment', 'enrolment']
+            if any(term in query_lower for term in student_terms) and not intent_matched:
+                if any(term in title for term in student_terms) or any(any(term in col for term in student_terms) for col in columns):
+                    score += 0.4
                     matched_terms.append('student data')
-                    description_points.append("Contains student data")
-                    requested_data_found = True
-                    break
-        
-        if 'staff' in ' '.join(data_request).lower():
-            for pattern in staff_patterns:
-                if re.search(pattern, title):
-                    score += 0.2
+                    matched_intent = "Data about student enrollment or numbers"
+                    description_points.append("Dataset contains information about students or enrollment")
+                    intent_matched = True
+            
+            # Staff related
+            staff_terms = ['staff', 'faculty', 'lecturer', 'professor', 'teacher']
+            if any(term in query_lower for term in staff_terms) and not intent_matched:
+                if any(term in title for term in staff_terms) or any(any(term in col for term in staff_terms) for col in columns):
+                    score += 0.4
                     matched_terms.append('staff data')
-                    description_points.append("Contains staff information")
-                    requested_data_found = True
+                    matched_intent = "Data about academic staff"
+                    description_points.append("Dataset contains information about academic staff")
+                    intent_matched = True
+        
+        # If still no matches but data_request has specific intents, try those
+        if not intent_matched and data_request and isinstance(data_request, list):
+            for req in data_request:
+                req_lower = req.lower() if isinstance(req, str) else ""
+                if req_lower in title or any(req_lower in col for col in columns):
+                    score += 0.3
+                    matched_terms.append(req_lower)
+                    matched_intent = f"Data related to {req_lower}"
+                    description_points.append(f"Dataset contains information related to {req_lower}")
+                    intent_matched = True
                     break
-                    
-        if 'research' in ' '.join(data_request).lower():
-            for pattern in research_patterns:
-                if re.search(pattern, title):
-                    score += 0.2
-                    matched_terms.append('research data')
-                    description_points.append("Contains research information")
-                    requested_data_found = True
-                    break
         
-        # Add points for education level match
-        if any(re.search(pattern, query_lower) for pattern in postgrad_patterns):
-            if any(re.search(pattern, title) for pattern in postgrad_patterns):
-                score += 0.3
-                matched_terms.append('postgraduate')
-                description_points.append("Specifically includes postgraduate data")
+        # If we found any intent match, give a slight bonus for relevance
+        if intent_matched:
+            score += 0.1
+        else:
+            # If no direct intent match, but there is some terminology overlap
+            # Look for common education terminology
+            edu_terms = ['qualification', 'degree', 'education', 'academic', 'study', 'course']
+            if any(term in title for term in edu_terms) or any(any(term in col for term in edu_terms) for col in columns):
+                score += 0.2
+                matched_intent = "General education data"
+                matched_terms.append('education data')
+                description_points.append("Dataset contains general education information that might be relevant")
         
-        if any(re.search(pattern, query_lower) for pattern in undergrad_patterns):
-            if any(re.search(pattern, title) for pattern in undergrad_patterns):
-                score += 0.3
-                matched_terms.append('undergraduate')
-                description_points.append("Specifically includes undergraduate data")
-        
-        # Add points for title keywords matching query
-        title_keywords = re.findall(r'\w+', title)
-        query_keywords = re.findall(r'\w+', query_lower)
-        
-        common_keywords = set(title_keywords) & set(query_keywords)
-        if common_keywords:
-            score += 0.1 * len(common_keywords)
-            matched_terms.extend(list(common_keywords))
-            description_points.append(f"Matches query keywords: {', '.join(common_keywords)}")
-        
-        # Adjust score if data request wasn't found but title seems relevant
-        if not requested_data_found and score > 0:
-            score *= 0.7  # Reduce score if specific data type not found
-        
-        # Add bonus for key HESA data types if they appear in title
-        key_types = ['enrollment', 'enrolment', 'qualification', 'demographics', 'finance']
-        for key_type in key_types:
-            if key_type in title:
-                score += 0.1
-                if key_type not in matched_terms:
-                    matched_terms.append(key_type)
+        # Cap the score at 0.95
+        score = min(score, 0.95)
         
         # Only include if it has some meaningful score
         if score > 0.1:
-            # Create a match object similar to Gemini AI output
+            # Create a match object
             match = {
                 'title': dataset.get('title', 'Untitled'),
                 'reference': reference,
                 'academic_year': academic_year,
-                'score': min(score, 0.95),  # Cap at 0.95 to avoid perfect scores
-                'match_percentage': int(min(score, 0.95) * 100),
-                'matched_terms': matched_terms,
+                'score': score,
+                'match_percentage': int(score * 100),
+                'matched_terms': list(set(matched_terms)),
+                'matched_intent': matched_intent,
                 'description': " ".join(description_points),
                 'columns': dataset.get('columns', [])
             }
@@ -3026,9 +3127,12 @@ def regex_matching_fallback(query, data_request, datasets):
         
         # Collect all unique matched terms
         all_matched_terms = set()
+        all_matched_intents = set()
         for match in matches_list:
             if match.get('matched_terms'):
                 all_matched_terms.update(match.get('matched_terms', []))
+            if match.get('matched_intent'):
+                all_matched_intents.add(match.get('matched_intent', ''))
         
         # Collect all academic years
         academic_years = [match['academic_year'] for match in matches_list]
@@ -3050,6 +3154,7 @@ def regex_matching_fallback(query, data_request, datasets):
             'academic_years': academic_years,
             'references': references,
             'matched_terms': list(all_matched_terms),
+            'matched_intents': list(all_matched_intents),
             'descriptions': descriptions,
             'matches': matches_list,  # Include individual matches for reference
             'columns': matches_list[0].get('columns', []) if matches_list else []
@@ -3059,6 +3164,16 @@ def regex_matching_fallback(query, data_request, datasets):
     
     # Sort by score (highest first)
     grouped_matches.sort(key=lambda x: x['score'], reverse=True)
+    
+    # Apply max_matches limit if available in context
+    try:
+        max_matches = data_request.get('max_matches', 5) if isinstance(data_request, dict) else 5  # Default to 5 if not specified
+        if max_matches > 0 and max_matches < len(grouped_matches):
+            grouped_matches = grouped_matches[:max_matches]
+            logger.info(f"Limited to {max_matches} highest-scoring dataset groups")
+    except:
+        # If no max_matches available, continue with all matches
+        pass
     
     logger.info(f"Found {len(individual_matches)} individual matching datasets grouped into {len(grouped_matches)} dataset groups using regex fallback")
     return grouped_matches

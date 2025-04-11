@@ -368,6 +368,30 @@ document.addEventListener('DOMContentLoaded', function() {
                         </span>
                     </h3>
                     <p class="text-sm text-gray-600 mb-4">The following datasets were found to be relevant to your query:</p>
+                    
+                    <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                        <h4 class="font-medium text-blue-800">How Datasets Are Matched</h4>
+                        <p class="text-sm text-gray-700 mt-1">Results are ranked based on how well they answer your specific question:</p>
+                        <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                            <div class="flex items-start">
+                                <span class="inline-block w-3 h-3 bg-green-500 rounded-full mt-1 mr-2"></span>
+                                <span><strong class="text-green-700">80-95%:</strong> Perfect match for your question</span>
+                            </div>
+                            <div class="flex items-start">
+                                <span class="inline-block w-3 h-3 bg-blue-500 rounded-full mt-1 mr-2"></span>
+                                <span><strong class="text-blue-700">60-80%:</strong> Strong match with the data you need</span>
+                            </div>
+                            <div class="flex items-start">
+                                <span class="inline-block w-3 h-3 bg-purple-500 rounded-full mt-1 mr-2"></span>
+                                <span><strong class="text-purple-700">40-60%:</strong> Partial match with related data</span>
+                            </div>
+                            <div class="flex items-start">
+                                <span class="inline-block w-3 h-3 bg-orange-500 rounded-full mt-1 mr-2"></span>
+                                <span><strong class="text-orange-700">10-40%:</strong> Minimal relevance to your question</span>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="space-y-4" id="datasets-list">
                         <!-- Datasets will be inserted here -->
                         <div class="text-center p-4">
@@ -475,6 +499,17 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="flex flex-wrap gap-1 mt-1">
                                         ${dataset.matched_terms.map(term => 
                                             `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
+                                        ).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${dataset.matched_intents && dataset.matched_intents.length > 0 ? `
+                                <div class="mt-3">
+                                    <span class="font-medium text-sm text-gray-700">Dataset Contains:</span>
+                                    <div class="flex flex-wrap gap-1 mt-1">
+                                        ${dataset.matched_intents.map(intent => 
+                                            `<span class="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-full">${intent}</span>`
                                         ).join('')}
                                     </div>
                                 </div>

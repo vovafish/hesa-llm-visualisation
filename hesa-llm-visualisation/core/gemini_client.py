@@ -94,6 +94,15 @@ class GeminiClient:
         - If there's no clarification, assume a year refers to the starting year of an academic year.
         - For "past X years", calculate the years based on the current year (2025).
         
+        For the data_request field, use the SPECIFIC TERMS from the query whenever possible:
+        - If the query mentions "undergraduates", use ["undergraduate"] not ["student_enrollment"]
+        - If the query mentions "postgraduates", use ["postgraduate"] not ["student_enrollment"]
+        - If the query mentions "student numbers", use ["student_count"]
+        - If the query mentions "enrollment" or "enrolment", use ["enrollment"]
+        - If the query mentions "staff" or "teachers", use ["staff_data"]
+        - If the query mentions "research", use ["research_data"]
+        - NEVER generalize specific educational levels - keep them exactly as requested
+        
         Output format:
         {
           "institutions": ["University X", "london"],
@@ -104,20 +113,12 @@ class GeminiClient:
           "has_year_typos": true,
           "start_year": "2019",
           "end_year": "2020",
-          "data_request": ["student_enrollment", "graduation_rates"]
+          "data_request": ["undergraduate", "graduation_rates"]
         }
         
         If no specific institutions are mentioned, return an empty list for institutions and original_institutions.
         If no typos were detected, original_institutions should match institutions, and has_institution_typos should be false.
         The same applies to years and original_years.
-        
-        For the data_request field, categorize the request into one of these categories:
-        - student_enrollment
-        - student_demographics
-        - graduation_rates
-        - staff_data
-        - research_data
-        - general_data (default if no specific category is identified)
         """
         
         # The actual user query
