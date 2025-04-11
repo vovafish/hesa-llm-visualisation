@@ -23,7 +23,7 @@ from .data_processor import transform_chart_data, prepare_chart_data
 import seaborn as sns
 import base64
 import logging
-from .data_processing.storage.storage_service import StorageService
+#from .data_processing.storage.storage_service import StorageService
 from .data_processing.csv_processor import CLEANED_FILES_DIR, RAW_FILES_DIR  # Import the constants
 from django.views.decorators.csrf import csrf_exempt
 import re
