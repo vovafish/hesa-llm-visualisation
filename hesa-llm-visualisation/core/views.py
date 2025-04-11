@@ -3,9 +3,9 @@ from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from .data_processing import CSVProcessor
-from .utils.query_processor import parse_llm_response, apply_data_operations
-from .utils.chart_generator import generate_chart
-from .visualization.chart_generator import ChartGenerator
+#from .utils.query_processor import parse_llm_response, apply_data_operations
+#from .utils.chart_generator import generate_chart
+#from .visualization.chart_generator import ChartGenerator
 import json
 import pandas as pd
 import numpy as np
@@ -19,7 +19,7 @@ from pathlib import Path
 from django.conf import settings
 import os
 import re
-from .data_processor import transform_chart_data, prepare_chart_data
+#from .data_processor import transform_chart_data, prepare_chart_data
 import seaborn as sns
 import base64
 import logging
@@ -30,7 +30,7 @@ import re
 import json
 import glob
 from .gemini_client import GeminiClient, get_llm_client
-from .mock_ai_client import MockAIClient
+#from .mock_ai_client import MockAIClient
 import fnmatch
 from collections import defaultdict
 
