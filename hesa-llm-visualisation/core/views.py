@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
@@ -173,11 +173,8 @@ def documentation(request):
     return render(request, 'documentation.html')
 
 def dashboard(request):
-    """Render the main dashboard page."""
-    import random
-    # Add a random number for cache busting
-    random_cache_buster = random.randint(10000, 99999)
-    return render(request, 'dashboard.html', {'random_cache_buster': random_cache_buster})
+    """Redirect to the AI dashboard page."""
+    return redirect('core:ai_dashboard')
 
 def ai_dashboard(request):
     """Render the AI-powered dashboard page."""

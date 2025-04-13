@@ -8,7 +8,8 @@
     
 #     Args:
 #         data: DataFrame containing the data to visualize
-#         parameters: Dictionary containing chart parameters
+#         parame
+# ters: Dictionary containing chart parameters
         
 #     Returns:
 #         Dictionary containing Chart.js configuration

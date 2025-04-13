@@ -233,7 +233,7 @@ def main():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.StreamHandler(),
-            logging.FileHandler('csv_cleaning.log')
+            # Removed FileHandler to prevent creating csv_cleaning.log
         ]
     )
     

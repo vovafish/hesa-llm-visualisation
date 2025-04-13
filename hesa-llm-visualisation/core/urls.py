@@ -4,7 +4,10 @@ from . import views
 app_name = 'core'
 
 urlpatterns = [
-    path('', views.dashboard, name='dashboard'),
+    # Make AI dashboard the default landing page
+    path('', views.ai_dashboard, name='home'),
+    # Keep old dashboard path for backward compatibility but redirect to AI dashboard
+    #path('dashboard/', views.dashboard, name='dashboard'),
     path('documentation/', views.documentation, name='documentation'),
     path('process_query/', views.process_query, name='process_query'),
     path('process_hesa_query/', views.process_hesa_query, name='process_hesa_query'),
@@ -16,6 +19,7 @@ urlpatterns = [
     path('api/chart/<str:chart_type>/', views.get_chart_data, name='get_chart_data'),
     path('api/process-hesa-query/', views.process_hesa_query, name='api_process_hesa_query'),
     path('api/select-file-source/', views.select_file_source, name='api_select_file_source'),
+    # Keep AI dashboard at its original URL too for consistency
     path('ai-dashboard/', views.ai_dashboard, name='ai_dashboard'),
     path('process_gemini_query/', views.process_gemini_query, name='process_gemini_query'),
     path('ai_dataset_details/', views.ai_dataset_details, name='ai_dataset_details'),
