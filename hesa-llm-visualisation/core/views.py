@@ -33,6 +33,7 @@ from .gemini_client import GeminiClient, get_llm_client
 #from .mock_ai_client import MockAIClient
 import fnmatch
 from collections import defaultdict
+from core.utils.query_cache import QueryCache
 
 # Mission groups for institution filtering
 MISSION_GROUPS = {
@@ -2475,7 +2476,6 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
         # Fallback to regex matching
         return regex_matching_fallback(query, data_request, datasets)
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def process_gemini_query(request):
     """Process a query using the Gemini API to extract entities and find matching datasets."""
@@ -2483,6 +2483,7 @@ def process_gemini_query(request):
     import logging
     import os
     from django.conf import settings
+    from core.utils.query_cache import QueryCache
     
     logger = logging.getLogger(__name__)
     logger.info("=== STARTING GEMINI QUERY PROCESSING ===")
@@ -2513,6 +2514,20 @@ def process_gemini_query(request):
         if not query:
             logger.warning("Empty query received")
             return JsonResponse({'error': 'Query is required'}, status=400)
+        
+        # Initialize query cache
+        query_cache = QueryCache()
+        
+        # Create a cache key that includes the query parameters
+        cache_key = f"{query}|{max_matches}|{preview_max_rows}|{mission_group}"
+        
+        # Check if the result is in cache
+        cached_result = query_cache.get(cache_key)
+        if cached_result:
+            logger.info(f"Cache hit for query: '{query}'")
+            return JsonResponse(cached_result)
+        
+        logger.info(f"Cache miss for query: '{query}', processing...")
         
         # Initialize Gemini client
         gemini_client = GeminiClient(settings.GEMINI_API_KEY)
@@ -2706,6 +2721,12 @@ def process_gemini_query(request):
         
         # Add missing years information to the response data
         response_data['missing_years'] = missing_years
+        
+        # Add cache information
+        response_data['cached'] = False
+        
+        # Store the result in the cache
+        query_cache.set(cache_key, response_data)
         
         logger.info(f"Gemini query analysis complete with {len(matching_datasets)} datasets and {len(missing_years)} missing years")
         return JsonResponse(response_data)

@@ -272,6 +272,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     ${data.using_mock ? 
                         '<span class="text-xs font-normal bg-yellow-100 text-yellow-800 px-2 py-1 rounded ml-2">Using offline AI simulation</span>' : 
                         '<span class="text-xs font-normal bg-green-100 text-green-800 px-2 py-1 rounded ml-2">Using Google Gemini API</span>'}
+                    ${data.cached === true ? 
+                        '<span class="text-xs font-normal bg-purple-100 text-purple-800 px-2 py-1 rounded ml-2">⚡ Retrieved from cache</span>' : ''}
                 </h3>
                 
                 <div class="mb-4">
@@ -332,6 +334,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <p>Entity extraction performed by ${data.using_mock ? 
                         'local AI simulation (Gemini API unavailable)' : 
                         'Google\'s Gemini AI'}</p>
+                    ${data.cached === true ? 
+                        '<p>Results retrieved from cache. Last processed: ' + new Date().toLocaleString() + '</p>' : ''}
                 </div>
             </div>
         `;
