@@ -4320,20 +4320,29 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
                     'success': True,
                     'chart_config': chart_config,
                     'insights': insights,
-                    'alternatives': visualization_data.get('alternatives', []),
+                    'alternatives': visualization_data.get('alternatives', []) if isinstance(visualization_data.get('alternatives', []), list) else [visualization_data.get('alternatives', '')],
                     'has_compatibility_warning': chart_compatibility_issue,
                     'compatibility_warning': compatibility_warning if 'compatibility_warning' in locals() else None
                 })
             else:
                 # If no chart config, assume Gemini is suggesting we can't fulfill the request
-                return JsonResponse({
-                    'success': False,
-                    'error': visualization_data.get('error', 'Could not generate the requested visualization with the selected chart type'),
-                    'alternatives': visualization_data.get('alternatives', [
+                alternatives = visualization_data.get('alternatives', [])
+                # Ensure alternatives is an array
+                if not isinstance(alternatives, list):
+                    alternatives = [alternatives] if alternatives else []
+                
+                # If alternatives is empty, provide default suggestions
+                if not alternatives:
+                    alternatives = [
                         f"Try a different visualization request that would work better with a {chart_type} chart" if chart_type else "Try a different visualization request",
                         "Focus your request on the institutions and years available in the dataset",
                         "Try a visualization that compares different categories within the same time period" if chart_type == 'pie' else "Try a visualization that shows trends over time" if chart_type == 'line' else "Try comparing specific metrics across institutions"
-                    ])
+                    ]
+                
+                return JsonResponse({
+                    'success': False,
+                    'error': visualization_data.get('error', 'Could not generate the requested visualization with the selected chart type'),
+                    'alternatives': alternatives
                 })
         except json.JSONDecodeError as e:
             logging.error("Failed to parse Gemini's JSON response for visualization: %s", str(e))

@@ -1205,7 +1205,7 @@ function generateVisualization(datasetInfo, request, chartType) {
             errorMsgEl.textContent = data.error || "Failed to generate visualization";
             errorEl.classList.remove('hidden');
             
-            if (data.alternatives && data.alternatives.length > 0) {
+            if (data.alternatives && Array.isArray(data.alternatives) && data.alternatives.length > 0) {
                 // Clear previous suggestions
                 suggestionsListEl.innerHTML = '';
                 
@@ -1218,6 +1218,19 @@ function generateVisualization(datasetInfo, request, chartType) {
                 });
                 
                 alternativesEl.classList.remove('hidden');
+            } else if (data.alternatives && !Array.isArray(data.alternatives)) {
+                // If alternatives exists but is not an array, log an error
+                console.error('Alternatives is not an array:', data.alternatives);
+                // Try to convert a string to an array if possible
+                if (typeof data.alternatives === 'string') {
+                    const suggestion = data.alternatives;
+                    suggestionsListEl.innerHTML = '';
+                    const li = document.createElement('li');
+                    li.textContent = suggestion;
+                    li.classList.add('cursor-pointer', 'hover:text-blue-700', 'mb-1');
+                    suggestionsListEl.appendChild(li);
+                    alternativesEl.classList.remove('hidden');
+                }
             }
         }
     })
