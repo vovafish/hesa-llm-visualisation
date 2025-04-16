@@ -1793,8 +1793,26 @@ def find_relevant_csv_files(file_pattern, keywords=None, requested_years=None):
                 continue
             
             # If years are specified and this file doesn't match, skip it
-            if requested_years and not any(year.startswith(req_year) for req_year in requested_years):
-                continue
+            if requested_years:
+                # Try both exact match and academic year format match
+                academic_year_matches = False
+                for req_year in requested_years:
+                    # Exact match on academic year (2015/16 == 2015/16)
+                    if req_year == academic_year:
+                        academic_year_matches = True
+                        break
+                    # Match on starting year of academic year (2015 == 2015/16)
+                    if req_year == year:
+                        academic_year_matches = True
+                        break
+                    # Handle case where requested year is in academic format but file uses plain year
+                    req_year_start = req_year.split('/')[0] if '/' in req_year else req_year
+                    if req_year_start == year:
+                        academic_year_matches = True
+                        break
+                
+                if not academic_year_matches:
+                    continue
             
             # Calculate relevance score
             # Start with base score
@@ -2297,15 +2315,23 @@ def find_matching_datasets(query, data_request, start_year=None, end_year=None):
             dataset_year = year_match.group(1)
             
             # Check if the dataset's year is within the requested range
-            if start_year and end_year:
+            year_match = False
+            
+            # If only a start year is provided (e.g., "2015"), it should match exactly to 2015/16
+            if start_year and not end_year:
+                if start_year == dataset_year:
+                    year_match = True
+            # If both start and end years are provided, check if it falls within the range
+            elif start_year and end_year:
                 if int(start_year) <= int(dataset_year) <= int(end_year):
-                    filtered_datasets.append(dataset)
-            elif start_year:
-                if int(start_year) <= int(dataset_year):
-                    filtered_datasets.append(dataset)
+                    year_match = True
+            # If only end year is provided
             elif end_year:
                 if int(dataset_year) <= int(end_year):
-                    filtered_datasets.append(dataset)
+                    year_match = True
+            
+            if year_match:
+                filtered_datasets.append(dataset)
         
         logger.info(f"Filtered down to {len(filtered_datasets)} datasets based on year range")
         datasets = filtered_datasets
@@ -2562,6 +2588,21 @@ def process_gemini_query(request):
         data_request = result.get('data_request', ['general_data'])
         start_year = result.get('start_year')
         end_year = result.get('end_year')
+        
+        # Important: If only one year is specified, ensure we don't treat it as a range start
+        # but match that exact year only
+        if start_year and not end_year:
+            # Check if years array exists and has exactly one year
+            if len(result.get('years', [])) == 1:
+                year = result.get('years')[0]
+                # If it's an academic year format, extract just the start year
+                if '/' in year:
+                    start_year = year.split('/')[0]
+                    # Don't set end_year - this ensures exact year matching
+                else:
+                    # Plain year format - use as is
+                    start_year = year
+                logger.info(f"Using exact year matching for single year: {start_year}")
         
         # Always ensure University of Leicester is included
         institutions = result.get('institutions', [])
@@ -4903,7 +4944,7 @@ def extract_and_sanitize_json(response):
 @csrf_exempt
 @require_http_methods(["POST"])
 def save_feedback(request):
-    """Save user feedback on query results to a JSON file."""
+    """Save user feedback on query results to a JSON file with detailed dataset information."""
     import json
     import os
     import time
@@ -4916,6 +4957,7 @@ def save_feedback(request):
         query = data.get('query', '')
         feedback = data.get('feedback', '')
         comment = data.get('comment', '')  # Add support for optional comment
+        dataset_info = data.get('dataset_info', {})  # Get dataset information
         
         # Validate input
         if not query or not feedback or feedback not in ['Very Helpful', 'Helpful', 'Not Helpful']:
@@ -4942,6 +4984,63 @@ def save_feedback(request):
         # Add comment to data if provided
         if comment:
             feedback_data['comment'] = comment
+            
+        # Add dataset information if available
+        if dataset_info:
+            feedback_data['dataset_info'] = dataset_info
+        
+        # Add detailed query result information if available
+        query_cache = QueryCache().get(query)
+        if query_cache:
+            # Store the entire query result data
+            feedback_data['result'] = query_cache
+        else:
+            # If query not in cache, try to extract data from request
+            dataset_info = data.get('dataset_info', {})
+            if dataset_info and 'details' in dataset_info:
+                # Extract query result data from dataset_info.details
+                query_details = dataset_info.get('details', {})
+                if query_details:
+                    # Create a result structure similar to cached queries
+                    result_data = {
+                        'query': query,
+                        'institutions': query_details.get('institutions', []),
+                        'original_institutions': query_details.get('original_institutions', []),
+                        'has_institution_typos': query_details.get('has_institution_typos', False),
+                        'years': query_details.get('years', []),
+                        'original_years': query_details.get('original_years', []),
+                        'has_year_typos': query_details.get('has_year_typos', False),
+                        'start_year': query_details.get('start_year'),
+                        'end_year': query_details.get('end_year'),
+                        'data_request': query_details.get('data_request', []),
+                        'matching_datasets': query_details.get('matching_datasets', []),
+                        'grouped_datasets': query_details.get('grouped_datasets', []),
+                        'total_matches': query_details.get('total_matches', 0),
+                        'missing_years': query_details.get('missing_years', []),
+                        'using_mock': query_details.get('using_mock', False)
+                    }
+                    feedback_data['result'] = result_data
+            
+            # If we still don't have result data, try to get it from window.currentQueryData
+            if 'result' not in feedback_data and 'window_query_data' in data:
+                feedback_data['result'] = data.get('window_query_data', {})
+        
+        # Try to get visualization data if available
+        visualization_data = data.get('visualization_data', {})
+        if visualization_data:
+            # Only include visualization data if it has meaningful content
+            has_chart_type = visualization_data.get('chart_type')
+            has_request = visualization_data.get('request')
+            
+            if has_chart_type or has_request:
+                # Extract only the relevant parts of visualization data
+                viz_info = {
+                    'chart_type': visualization_data.get('chart_type'),
+                    'request': visualization_data.get('request'),
+                    'has_compatibility_warning': visualization_data.get('has_compatibility_warning', False),
+                    'success': visualization_data.get('success', False)
+                }
+                feedback_data['visualization'] = viz_info
         
         # Write to file
         with open(file_path, 'w', encoding='utf-8') as f:

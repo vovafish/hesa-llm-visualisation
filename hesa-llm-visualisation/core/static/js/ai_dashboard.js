@@ -4,6 +4,10 @@
  * This file contains the JavaScript code for the AI-powered dashboard.
  */
 
+// Add these global variables at the top of the file to store dataset and visualization info
+window.currentDatasetInfo = null;
+window.lastVisualizationData = null;
+
 // Function to get CSRF token from cookies
 function getCsrfToken() {
     const cookieValue = document.cookie
@@ -443,6 +447,9 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Set up feedback button event listeners
         setupFeedbackButtons(data.query);
+        
+        // Store the query result data for feedback
+        window.queryResultData = data;
         
         // Process datasets in a separate step
         if (data.grouped_datasets && data.grouped_datasets.length > 0) {
@@ -1060,6 +1067,9 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Display the dataset details
             displayDatasetDetails(data);
+            
+            // Store current dataset info for feedback
+            window.currentDatasetInfo = dataset;
         })
         .catch(error => {
             console.error('Error fetching dataset details:', error);
@@ -1148,6 +1158,45 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.disabled = true;
             }
             
+            // Collect dataset information
+            let datasetInfo = {};
+            const selectedDataset = document.querySelector('.dataset-item.selected');
+            if (selectedDataset) {
+                const datasetId = selectedDataset.getAttribute('data-dataset-id');
+                const datasetTitle = selectedDataset.querySelector('.dataset-title')?.textContent;
+                const datasetYears = selectedDataset.querySelector('.dataset-years')?.textContent;
+                
+                datasetInfo = {
+                    id: datasetId,
+                    title: datasetTitle,
+                    years: datasetYears
+                };
+                
+                // Add any dataset data attributes
+                if (window.currentDatasetInfo) {
+                    datasetInfo.details = window.currentDatasetInfo;
+                }
+            }
+            
+            // Collect visualization information if available
+            let visualizationData = {};
+            if (window.lastVisualizationData) {
+                visualizationData = window.lastVisualizationData;
+            } else {
+                // Try to gather visualization info from UI
+                const chartTypeButtons = document.querySelectorAll('.chart-type-button');
+                const selectedChartType = Array.from(chartTypeButtons).find(btn => btn.classList.contains('selected'))?.getAttribute('data-chart-type');
+                
+                const visualizationRequest = document.getElementById('visualizationRequest')?.value;
+                
+                if (selectedChartType) {
+                    visualizationData = {
+                        chart_type: selectedChartType,
+                        request: visualizationRequest
+                    };
+                }
+            }
+            
             // Send feedback to the backend
             fetch('/save_feedback/', {
                 method: 'POST',
@@ -1158,7 +1207,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     query: query,
                     feedback: feedback,
-                    comment: comment
+                    comment: comment,
+                    dataset_info: datasetInfo,
+                    visualization_data: visualizationData,
+                    window_query_data: window.currentQueryData || {}
                 })
             })
             .then(response => {
@@ -1175,6 +1227,17 @@ document.addEventListener('DOMContentLoaded', function() {
                         <p class="text-sm">Your input helps us improve our search results.</p>
                     </div>
                 `;
+                
+                // Store visualization data for feedback
+                const chartTypeButtons = document.querySelectorAll('.chart-type-button');
+                const currentChartType = Array.from(chartTypeButtons).find(btn => btn.classList.contains('selected'))?.getAttribute('data-chart-type');
+                
+                window.lastVisualizationData = {
+                    chart_type: visualizationData?.chart_type || currentChartType,
+                    request: document.getElementById('visualizationRequest')?.value || '',
+                    success: data.success,
+                    has_compatibility_warning: data.has_compatibility_warning || false
+                };
             })
             .catch(error => {
                 console.error('Error submitting feedback:', error);

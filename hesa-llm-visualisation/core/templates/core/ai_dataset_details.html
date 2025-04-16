@@ -358,6 +358,24 @@
                 <div id="insightsContent" class="p-4 bg-gray-50 rounded-md border border-gray-200"></div>
             </div>
         </div>
+
+        <!-- Add this after the visualization container section -->
+        <section id="feedbackSection" class="mt-8 p-4 border border-gray-200 rounded-lg hidden">
+            <h3 class="text-lg font-semibold mb-2">Feedback</h3>
+            <p class="mb-2">Was this visualization helpful?</p>
+            <div id="feedbackContainer" class="mt-2">
+                <div class="flex space-x-2 mb-2">
+                    <button class="feedback-btn px-3 py-1 border border-gray-300 rounded-md hover:bg-blue-50" data-value="Very Helpful">Very Helpful</button>
+                    <button class="feedback-btn px-3 py-1 border border-gray-300 rounded-md hover:bg-blue-50" data-value="Helpful">Helpful</button>
+                    <button class="feedback-btn px-3 py-1 border border-gray-300 rounded-md hover:bg-blue-50" data-value="Not Helpful">Not Helpful</button>
+                </div>
+                <div id="commentContainer" class="mt-2 hidden">
+                    <p class="text-sm mb-1">Would you like to add a comment? (optional)</p>
+                    <textarea id="feedbackComment" class="w-full p-2 border border-gray-300 rounded-md" rows="2" placeholder="Add your comments here..."></textarea>
+                    <button id="submitFeedbackBtn" class="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">Submit Feedback</button>
+                </div>
+            </div>
+        </section>
     </div>
 </div>
 {% endblock %}
@@ -1093,6 +1111,15 @@ function generateVisualization(datasetInfo, request, chartType) {
         // Hide loading state
         loadingEl.classList.add('hidden');
         
+        // Store visualization data for feedback
+        window.lastVisualizationData = {
+            chart_type: chartType || 'auto',
+            request: request,
+            success: data.success,
+            has_compatibility_warning: data.has_compatibility_warning || false,
+            timestamp: new Date().toISOString()
+        };
+        
         if (data.success) {
             // If successful, render the chart
             try {
@@ -1263,6 +1290,9 @@ function renderChart(chartConfig) {
         // Ensure chart is visible
         document.getElementById('visualizationContainer').classList.remove('hidden');
         document.getElementById('visualizationError').classList.add('hidden');
+        
+        // Show feedback section after successful chart rendering
+        setupFeedback();
     } catch (error) {
         console.error("Error rendering chart:", error);
         
@@ -1347,5 +1377,129 @@ function updateChartTypeInfo(data) {
         updateExamplePrompts(data.example_prompts);
     }
 }
+
+// Set up feedback functionality
+function setupFeedback() {
+    const feedbackSection = document.getElementById('feedbackSection');
+    const feedbackBtns = document.querySelectorAll('.feedback-btn');
+    const commentContainer = document.getElementById('commentContainer');
+    const feedbackComment = document.getElementById('feedbackComment');
+    const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
+    
+    // Show feedback section after visualization is displayed
+    if (feedbackSection) {
+        // Only show feedback for successful visualizations
+        if (window.lastVisualizationData && window.lastVisualizationData.success) {
+            feedbackSection.classList.remove('hidden');
+        }
+    }
+    
+    // Handle feedback button clicks
+    feedbackBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            // Mark this button as selected
+            feedbackBtns.forEach(b => b.classList.remove('bg-blue-100', 'border-blue-300'));
+            this.classList.add('bg-blue-100', 'border-blue-300');
+            
+            // Show comment area
+            commentContainer.classList.remove('hidden');
+            
+            // Store the selected feedback value
+            window.selectedFeedback = this.getAttribute('data-value');
+            
+            // If feedback is 'Not Helpful', focus the comment area
+            if (window.selectedFeedback === 'Not Helpful') {
+                feedbackComment.focus();
+            }
+        });
+    });
+    
+    // Handle feedback submission
+    if (submitFeedbackBtn) {
+        submitFeedbackBtn.addEventListener('click', function() {
+            if (!window.selectedFeedback) return;
+            
+            const feedback = window.selectedFeedback;
+            const comment = feedbackComment.value.trim();
+            const originalQuery = new URLSearchParams(window.location.search).get('query') || '';
+            
+            submitFeedback(feedback, originalQuery, comment);
+        });
+    }
+}
+
+// Function to submit feedback
+function submitFeedback(feedback, query, comment) {
+    // Show loading state
+    const submitBtn = document.getElementById('submitFeedbackBtn');
+    const feedbackContainer = document.getElementById('feedbackContainer');
+    
+    if (submitBtn) {
+        submitBtn.innerHTML = `
+            <div class="flex items-center">
+                <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Submitting...
+            </div>
+        `;
+        submitBtn.disabled = true;
+    }
+    
+    // Prepare data for submission
+    const feedbackData = {
+        query: query,
+        feedback: feedback,
+        comment: comment,
+        dataset_info: window.datasetInfo || {},
+        visualization_data: window.lastVisualizationData || {}
+    };
+    
+    // Send to server
+    fetch('/save_feedback/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken()
+        },
+        body: JSON.stringify(feedbackData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Error ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (feedbackContainer) {
+            feedbackContainer.innerHTML = `
+                <div class="text-green-700">
+                    <p class="font-medium">Thanks for your feedback!</p>
+                    <p class="text-sm">Your input helps us improve our results.</p>
+                </div>
+            `;
+        }
+    })
+    .catch(error => {
+        console.error('Error submitting feedback:', error);
+        if (feedbackContainer) {
+            feedbackContainer.innerHTML += `
+                <div class="text-red-600 mt-2">
+                    <p>Failed to submit feedback. Please try again.</p>
+                </div>
+            `;
+        }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Feedback';
+        }
+    });
+}
+
+// Call setupFeedback when visualization is rendered
+document.addEventListener('DOMContentLoaded', function() {
+    setupFeedback();
+});
 </script>
 {% endblock %} 
