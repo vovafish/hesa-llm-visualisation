@@ -1081,62 +1081,110 @@ document.addEventListener('DOMContentLoaded', function() {
             button.addEventListener('click', function() {
                 const feedback = this.textContent.trim();
                 
-                // Show loading state in the button
-                const originalText = this.textContent;
-                this.innerHTML = `
+                // Disable all buttons to prevent multiple selections
+                feedbackButtons.forEach(btn => btn.disabled = true);
+                
+                // If "Helpful" or "Not Helpful" is clicked, show comment textarea
+                if (feedback === "Helpful" || feedback === "Not Helpful") {
+                    // Create comment section
+                    const commentSection = document.createElement('div');
+                    commentSection.className = 'mt-4';
+                    commentSection.innerHTML = `
+                        <p class="mb-2 font-medium text-gray-700">How could we improve these results?</p>
+                        <textarea id="feedbackComment" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                            rows="3" placeholder="Your comments will help us improve our search results (optional)"></textarea>
+                        <div class="mt-2 flex justify-end">
+                            <button id="submitFeedbackBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md">
+                                Submit Feedback
+                            </button>
+                        </div>
+                    `;
+                    
+                    // Add to container
+                    feedbackContainer.appendChild(commentSection);
+                    
+                    // Enable the selected button with visual indication
+                    this.disabled = false;
+                    this.classList.add('ring-2', 'ring-blue-500');
+                    
+                    // Handle submit button click
+                    document.getElementById('submitFeedbackBtn').addEventListener('click', function() {
+                        const commentText = document.getElementById('feedbackComment').value;
+                        submitFeedback(feedback, query, commentText);
+                    });
+                } else {
+                    // If "Very Helpful" is clicked, submit immediately without comment
+                    // Show loading state in the button
+                    const originalText = this.textContent;
+                    this.innerHTML = `
+                        <div class="flex items-center">
+                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Submitting...
+                        </div>
+                    `;
+                    
+                    submitFeedback(feedback, query, "");
+                }
+            });
+        });
+        
+        // Function to submit feedback to the server
+        function submitFeedback(feedback, query, comment) {
+            // If submitting with comment, show loading state in the submit button
+            const submitBtn = document.getElementById('submitFeedbackBtn');
+            if (submitBtn) {
+                submitBtn.innerHTML = `
                     <div class="flex items-center">
-                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                         Submitting...
                     </div>
                 `;
-                
-                // Disable all buttons
-                feedbackButtons.forEach(btn => btn.disabled = true);
-                
-                // Send feedback to the backend
-                fetch('/save_feedback/', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': getCsrfToken(),
-                    },
-                    body: JSON.stringify({
-                        query: query,
-                        feedback: feedback
-                    })
+                submitBtn.disabled = true;
+            }
+            
+            // Send feedback to the backend
+            fetch('/save_feedback/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCsrfToken(),
+                },
+                body: JSON.stringify({
+                    query: query,
+                    feedback: feedback,
+                    comment: comment
                 })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error(`Network response was not ok: ${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // Replace the entire feedback container with a thank you message
-                    feedbackContainer.innerHTML = `
-                        <div class="text-green-700">
-                            <p class="font-medium">Thanks for your feedback!</p>
-                            <p class="text-sm">Your input helps us improve our search results.</p>
-                        </div>
-                    `;
-                })
-                .catch(error => {
-                    console.error('Error submitting feedback:', error);
-                    // Restore the button text and re-enable buttons
-                    this.textContent = originalText;
-                    feedbackButtons.forEach(btn => btn.disabled = false);
-                    
-                    // Show error message
-                    feedbackContainer.innerHTML += `
-                        <div class="text-red-600 mt-2">
-                            <p>Failed to submit feedback. Please try again.</p>
-                        </div>
-                    `;
-                });
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Replace the entire feedback container with a thank you message
+                feedbackContainer.innerHTML = `
+                    <div class="text-green-700">
+                        <p class="font-medium">Thanks for your feedback!</p>
+                        <p class="text-sm">Your input helps us improve our search results.</p>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                console.error('Error submitting feedback:', error);
+                // Show error message
+                feedbackContainer.innerHTML += `
+                    <div class="text-red-600 mt-2">
+                        <p>Failed to submit feedback. Please try again.</p>
+                    </div>
+                `;
             });
-        });
+        }
     }
 }); 

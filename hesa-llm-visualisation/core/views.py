@@ -4211,6 +4211,24 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
                 # Fix trailing commas which can cause JSON parse errors
                 chart_config = re.sub(r',(\s*[}\]])', r'\1', chart_config)
                 
+                # Fix common issues with extra closing brackets in data property
+                chart_config = re.sub(r'(\]\s*\})\s*\](\s*,\s*options)', r'\1\2', chart_config)
+                
+                # Fix unescaped single quotes in JSON strings
+                if chart_type == 'pie':
+                    try:
+                        # Attempt to convert single quotes to double quotes for proper JSON format
+                        # First, convert the config to a properly formatted JSON string
+                        chart_config_obj = eval("({})".format(chart_config))
+                        chart_config = json.dumps(chart_config_obj)
+                    except Exception as e:
+                        logging.warning(f"Error fixing pie chart config: {str(e)}")
+                        # Fall back to regex-based cleanup
+                        # Convert property names with single quotes to double quotes
+                        chart_config = re.sub(r"'([^']+)'(\s*:)", r'"\1"\2', chart_config)
+                        # Remove extra brackets that might exist in the data section
+                        chart_config = re.sub(r'datasets\s*:\s*\[\s*\{(.+?)\}\s*\]\s*\]', r'datasets: [{\1}]', chart_config, flags=re.DOTALL)
+                
                 # Ensure the chart type matches what was requested - CRITICAL UPDATE
                 if chart_type:
                     # Check if we need to adjust the chart type
@@ -4336,6 +4354,37 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
                     institution_note += "</div>"
                     insights = institution_note + insights
                 
+                # Final validation for pie charts to ensure configuration is valid JavaScript
+                if chart_type == 'pie':
+                    try:
+                        # Add special validation for pie charts
+                        # First, check for the extra brackets issue
+                        chart_config = re.sub(r'(\]\s*\})\s*\](\s*,\s*options)', r'\1\2', chart_config)
+                        
+                        # Convert to a valid JavaScript object
+                        try:
+                            # Try to parse it as JSON first
+                            parsed_config = json.loads(chart_config)
+                            # Ensure it's a pie chart
+                            if 'type' in parsed_config and parsed_config['type'] != 'pie':
+                                parsed_config['type'] = 'pie'
+                            # Convert back to JSON
+                            chart_config = json.dumps(parsed_config)
+                        except json.JSONDecodeError:
+                            # If JSON parsing fails, try to clean up common issues
+                            logging.warning("JSON parsing failed for pie chart, applying additional cleanup")
+                            
+                            # Remove extra brackets if present
+                            chart_config = re.sub(r'datasets\s*:\s*\[\s*\{(.+?)\}\s*\]\s*\]', r'datasets: [{\1}]', chart_config, flags=re.DOTALL)
+                            
+                            # Fix single quotes in property names
+                            chart_config = re.sub(r"'([^']+)'(\s*:)", r'"\1"\2', chart_config)
+                            
+                            # Remove any trailing commas
+                            chart_config = re.sub(r',(\s*[}\]])', r'\1', chart_config)
+                    except Exception as pie_validation_error:
+                        logging.error(f"Pie chart validation error: {str(pie_validation_error)}")
+                
                 # Return the visualization data with potentially cleaned chart_config
                 return JsonResponse({
                     'success': True,
@@ -4343,7 +4392,7 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
                     'insights': insights,
                     'alternatives': visualization_data.get('alternatives', []) if isinstance(visualization_data.get('alternatives', []), list) else [visualization_data.get('alternatives', '')],
                     'has_compatibility_warning': chart_compatibility_issue,
-                    'compatibility_warning': compatibility_warning if 'compatibility_warning' in locals() else None
+                    'compatibility_warning': compatibility_warning if chart_compatibility_issue else None
                 })
             else:
                 # If no chart config, assume Gemini is suggesting we can't fulfill the request
@@ -4858,6 +4907,7 @@ def save_feedback(request):
     import json
     import os
     import time
+    import datetime
     from pathlib import Path
     
     try:
@@ -4865,6 +4915,7 @@ def save_feedback(request):
         data = json.loads(request.body.decode('utf-8'))
         query = data.get('query', '')
         feedback = data.get('feedback', '')
+        comment = data.get('comment', '')  # Add support for optional comment
         
         # Validate input
         if not query or not feedback or feedback not in ['Very Helpful', 'Helpful', 'Not Helpful']:
@@ -4874,17 +4925,23 @@ def save_feedback(request):
         logs_dir = Path(__file__).resolve().parent.parent / 'data' / 'logs'
         os.makedirs(logs_dir, exist_ok=True)
         
-        # Create timestamp for filename
+        # Create timestamp for filename - include seconds for uniqueness
+        now = datetime.datetime.now()
         timestamp = int(time.time())
-        file_path = logs_dir / f"{timestamp}.json"
+        formatted_time = now.strftime('%Y%m%d_%H%M%S')
+        file_path = logs_dir / f"{formatted_time}.json"
         
         # Create feedback data structure
         feedback_data = {
             'query': query,
             'feedback': feedback,
             'timestamp': timestamp,
-            'date': time.strftime('%Y-%m-%d %H:%M:%S')
+            'date': now.strftime('%Y-%m-%d %H:%M:%S')
         }
+        
+        # Add comment to data if provided
+        if comment:
+            feedback_data['comment'] = comment
         
         # Write to file
         with open(file_path, 'w', encoding='utf-8') as f:
