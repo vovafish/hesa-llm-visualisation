@@ -340,6 +340,18 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         
+        // Add feedback component at the top
+        resultsHTML = `
+            <div id="feedbackContainer" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+                <h4 class="text-lg font-semibold mb-2">How helpful were these results?</h4>
+                <div class="flex flex-wrap gap-2">
+                    <button id="veryHelpfulBtn" class="feedback-btn bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded-md">Very Helpful</button>
+                    <button id="helpfulBtn" class="feedback-btn bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-md">Helpful</button>
+                    <button id="notHelpfulBtn" class="feedback-btn bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded-md">Not Helpful</button>
+                </div>
+            </div>
+        ` + resultsHTML;
+        
         // Add warning for missing years if applicable
         if (data.missing_years && data.missing_years.length > 0) {
             resultsHTML += `
@@ -428,6 +440,9 @@ document.addEventListener('DOMContentLoaded', function() {
         // Update the query results container
         aiQueryResults.innerHTML = resultsHTML;
         addDataAttributes(data);
+        
+        // Set up feedback button event listeners
+        setupFeedbackButtons(data.query);
         
         // Process datasets in a separate step
         if (data.grouped_datasets && data.grouped_datasets.length > 0) {
@@ -1050,6 +1065,78 @@ document.addEventListener('DOMContentLoaded', function() {
             console.error('Error fetching dataset details:', error);
             hideLoading();
             showError('Error loading dataset details: ' + error.message);
+        });
+    }
+
+    // Additional functions can be added here
+    
+    // Function to set up feedback button event listeners
+    function setupFeedbackButtons(query) {
+        const feedbackContainer = document.getElementById('feedbackContainer');
+        if (!feedbackContainer) return;
+        
+        const feedbackButtons = document.querySelectorAll('.feedback-btn');
+        
+        feedbackButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const feedback = this.textContent.trim();
+                
+                // Show loading state in the button
+                const originalText = this.textContent;
+                this.innerHTML = `
+                    <div class="flex items-center">
+                        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Submitting...
+                    </div>
+                `;
+                
+                // Disable all buttons
+                feedbackButtons.forEach(btn => btn.disabled = true);
+                
+                // Send feedback to the backend
+                fetch('/save_feedback/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': getCsrfToken(),
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        feedback: feedback
+                    })
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Network response was not ok: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    // Replace the entire feedback container with a thank you message
+                    feedbackContainer.innerHTML = `
+                        <div class="text-green-700">
+                            <p class="font-medium">Thanks for your feedback!</p>
+                            <p class="text-sm">Your input helps us improve our search results.</p>
+                        </div>
+                    `;
+                })
+                .catch(error => {
+                    console.error('Error submitting feedback:', error);
+                    // Restore the button text and re-enable buttons
+                    this.textContent = originalText;
+                    feedbackButtons.forEach(btn => btn.disabled = false);
+                    
+                    // Show error message
+                    feedbackContainer.innerHTML += `
+                        <div class="text-red-600 mt-2">
+                            <p>Failed to submit feedback. Please try again.</p>
+                        </div>
+                    `;
+                });
+            });
         });
     }
 }); 

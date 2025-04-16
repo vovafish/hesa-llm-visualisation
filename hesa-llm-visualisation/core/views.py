@@ -4850,3 +4850,49 @@ def extract_and_sanitize_json(response):
         
         # If we still can't parse it, return the sanitized string anyway
         return sanitized
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def save_feedback(request):
+    """Save user feedback on query results to a JSON file."""
+    import json
+    import os
+    import time
+    from pathlib import Path
+    
+    try:
+        # Parse request data
+        data = json.loads(request.body.decode('utf-8'))
+        query = data.get('query', '')
+        feedback = data.get('feedback', '')
+        
+        # Validate input
+        if not query or not feedback or feedback not in ['Very Helpful', 'Helpful', 'Not Helpful']:
+            return JsonResponse({'status': 'error', 'message': 'Invalid input'}, status=400)
+        
+        # Ensure logs directory exists
+        logs_dir = Path(__file__).resolve().parent.parent / 'data' / 'logs'
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        # Create timestamp for filename
+        timestamp = int(time.time())
+        file_path = logs_dir / f"{timestamp}.json"
+        
+        # Create feedback data structure
+        feedback_data = {
+            'query': query,
+            'feedback': feedback,
+            'timestamp': timestamp,
+            'date': time.strftime('%Y-%m-%d %H:%M:%S')
+        }
+        
+        # Write to file
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(feedback_data, f, indent=2)
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error saving feedback: {str(e)}", exc_info=True)
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

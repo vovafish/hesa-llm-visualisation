@@ -26,5 +26,6 @@ urlpatterns = [
     path('api/select-file-source/<str:file_id>/', views.select_file_source, name='select_file_source'),
     path('ai_dataset_details/<int:dataset_id>/', views.ai_dataset_details, name='ai_dataset_details'),
     path('visualization_api/', views.visualization_api, name='visualization_api'),
+    path('save_feedback/', views.save_feedback, name='save_feedback'),
 #    path('test-gemini-analysis/', views.test_gemini_analysis, name='test_gemini_analysis'),
 ]
