@@ -303,7 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="border rounded p-3">
                             <p class="font-medium text-gray-700">Institutions:</p>
                             <ul class="list-disc list-inside">
-                                ${data.institutions && data.institutions.length ? 
+                                ${data.institutions && data.institutions.length > 0 ? 
                                     data.institutions.map(inst => `<li>${inst}</li>`).join('') : 
                                     '<li class="text-gray-500">None specified</li>'}
                             </ul>
@@ -312,7 +312,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <div class="border rounded p-3">
                             <p class="font-medium text-gray-700">Years:</p>
                             <ul class="list-disc list-inside">
-                                ${data.years && data.years.length ? 
+                                ${data.years && data.years.length > 0 ? 
                                     data.years.map(year => `<li>${year}</li>`).join('') : 
                                     '<li class="text-gray-500">All available years</li>'}
                             </ul>
@@ -357,9 +357,9 @@ document.addEventListener('DOMContentLoaded', function() {
             <div id="feedbackContainer" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
                 <h4 class="text-lg font-semibold mb-2">How helpful were these results?</h4>
                 <div class="flex flex-wrap gap-2">
-                    <button id="veryHelpfulBtn" class="feedback-btn bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded-md">Very Helpful</button>
-                    <button id="helpfulBtn" class="feedback-btn bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-md">Helpful</button>
-                    <button id="notHelpfulBtn" class="feedback-btn bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded-md">Not Helpful</button>
+                    <button id="veryHelpfulBtn" class="feedback-btn bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded-md" data-value="Very Helpful">Very Helpful</button>
+                    <button id="helpfulBtn" class="feedback-btn bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-md" data-value="Helpful">Helpful</button>
+                    <button id="notHelpfulBtn" class="feedback-btn bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded-md" data-value="Not Helpful">Not Helpful</button>
                 </div>
             </div>
         ` + resultsHTML;
@@ -480,7 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     contentDiv.classList.add('animate-fade-in');
                     setTimeout(() => {
                         contentDiv.classList.remove('animate-fade-in');
-                    }, 500);
+                    }, 300);
                 }
             });
         }
@@ -542,46 +542,57 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </span>
                             </div>
                             
-                            <div class="mt-2 text-gray-600 text-sm">
-                                <div class="px-2 py-1 bg-gray-100 rounded mb-2">
-                                    <span class="font-medium">Academic Years:</span> ${academicYearsDisplay}
-                                </div>
-                                
-                                <div class="px-2 py-1 bg-gray-100 rounded">
-                                    <span class="font-medium">References:</span>
-                                    <div class="mt-1">${referencesDisplay}</div>
-                                </div>
+                            <!-- Dataset Toggle Button -->
+                            <div class="flex justify-between items-center mt-2">
+                                <p class="text-sm text-gray-500">Academic Years: ${academicYearsDisplay}</p>
+                                <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm" id="datasetToggle-${index}">
+                                    <span class="show-details">Show Details</span>
+                                    <span class="hide-details hidden">Hide Details</span>
+                                </button>
                             </div>
                             
-                            ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
-                                <div class="mt-3">
-                                    <span class="font-medium text-sm text-gray-700">Matched Terms:</span>
-                                    <div class="flex flex-wrap gap-1 mt-1">
-                                        ${dataset.matched_terms.map(term => 
-                                            `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
-                                        ).join('')}
+                            <!-- Dataset Details (hidden by default) -->
+                            <div id="datasetDetails-${index}" class="hidden mt-4">
+                                <div class="mb-4">
+                                    <p class="font-medium text-gray-700 mb-1">References:</p>
+                                    <div class="px-2 py-1 bg-gray-100 rounded">
+                                        <div class="mt-1">${referencesDisplay}</div>
                                     </div>
                                 </div>
-                            ` : ''}
-                            
-                            ${dataset.matched_intents && dataset.matched_intents.length > 0 ? `
-                                <div class="mt-3">
-                                    <span class="font-medium text-sm text-gray-700">Dataset Contains:</span>
-                                    <div class="flex flex-wrap gap-1 mt-1">
-                                        ${dataset.matched_intents.map(intent => 
-                                            `<span class="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-full">${intent}</span>`
-                                        ).join('')}
+                                
+                                ${dataset.matched_terms && dataset.matched_terms.length > 0 ? `
+                                    <div class="mb-4">
+                                        <p class="font-medium text-gray-700 mb-1">Matched Terms:</p>
+                                        <div class="flex flex-wrap gap-1 mt-1">
+                                            ${dataset.matched_terms.map(term => 
+                                                `<span class="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded-full">${term}</span>`
+                                            ).join('')}
+                                        </div>
                                     </div>
-                                </div>
-                            ` : ''}
+                                ` : ''}
+                                
+                                ${dataset.matched_intents && dataset.matched_intents.length > 0 ? `
+                                    <div class="mb-4">
+                                        <p class="font-medium text-gray-700 mb-1">Dataset Contains:</p>
+                                        <div class="flex flex-wrap gap-1 mt-1">
+                                            ${dataset.matched_intents.map(intent => 
+                                                `<span class="text-xs px-2 py-1 bg-green-50 text-green-700 rounded-full">${intent}</span>`
+                                            ).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                                
+                                ${combinedDescription ? `
+                                    <div class="mb-4">
+                                        <p class="font-medium text-gray-700 mb-1">Why this matches:</p>
+                                        <div class="text-sm bg-gray-50 p-2 rounded">
+                                            <div class="mt-1">${combinedDescription}</div>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
                             
-                            ${combinedDescription ? `
-                                <div class="mt-3 text-sm text-gray-700 bg-gray-50 p-2 rounded">
-                                    <span class="font-medium">Why this matches:</span>
-                                    <div class="mt-1">${combinedDescription}</div>
-                                </div>
-                            ` : ''}
-                            
+                            <!-- File Previews -->
                             <div class="mt-3">
                                 <div class="border-t pt-3">
                                     <span class="font-medium text-sm">Available Files:</span>
@@ -610,6 +621,44 @@ document.addEventListener('DOMContentLoaded', function() {
                     setTimeout(() => {
                         renderFilePreview(dataset, index);
                     }, 10);
+                });
+                
+                // Set up dataset toggle functionality
+                data.grouped_datasets.forEach((dataset, index) => {
+                    const datasetToggleBtn = document.getElementById(`datasetToggle-${index}`);
+                    const datasetDetailsDiv = document.getElementById(`datasetDetails-${index}`);
+                    
+                    if (datasetToggleBtn && datasetDetailsDiv) {
+                        const showDetailsText = datasetToggleBtn.querySelector('.show-details');
+                        const hideDetailsText = datasetToggleBtn.querySelector('.hide-details');
+                        
+                        datasetToggleBtn.addEventListener('click', function() {
+                            // Toggle content visibility with animation
+                            if (datasetDetailsDiv.classList.contains('hidden')) {
+                                // Show the details
+                                datasetDetailsDiv.classList.remove('hidden');
+                                datasetDetailsDiv.classList.add('animate-fade-in');
+                                setTimeout(() => {
+                                    datasetDetailsDiv.classList.remove('animate-fade-in');
+                                }, 300);
+                                
+                                // Toggle button text
+                                showDetailsText.classList.add('hidden');
+                                hideDetailsText.classList.remove('hidden');
+                            } else {
+                                // Hide the details
+                                datasetDetailsDiv.classList.add('animate-fade-out');
+                                setTimeout(() => {
+                                    datasetDetailsDiv.classList.add('hidden');
+                                    datasetDetailsDiv.classList.remove('animate-fade-out');
+                                }, 300);
+                                
+                                // Toggle button text
+                                hideDetailsText.classList.add('hidden');
+                                showDetailsText.classList.remove('hidden');
+                            }
+                        });
+                    }
                 });
             }, 0);
         }
@@ -1116,9 +1165,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Function to set up feedback button event listeners
     function setupFeedbackButtons(query) {
-        const feedbackContainer = document.getElementById('feedbackContainer');
-        if (!feedbackContainer) return;
-        
         const feedbackButtons = document.querySelectorAll('.feedback-btn');
         
         feedbackButtons.forEach(button => {
@@ -1145,7 +1191,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     `;
                     
                     // Add to container
-                    feedbackContainer.appendChild(commentSection);
+                    document.getElementById('feedbackContainer').appendChild(commentSection);
                     
                     // Enable the selected button with visual indication
                     this.disabled = false;
@@ -1255,12 +1301,15 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
                 // Replace the entire feedback container with a thank you message
-                feedbackContainer.innerHTML = `
-                    <div class="text-green-700">
-                        <p class="font-medium">Thanks for your feedback!</p>
-                        <p class="text-sm">Your input helps us improve our search results.</p>
-                    </div>
-                `;
+                const feedbackContainer = document.getElementById('feedbackContainer');
+                if (feedbackContainer) {
+                    feedbackContainer.innerHTML = `
+                        <div class="text-green-700">
+                            <p class="font-medium">Thanks for your feedback!</p>
+                            <p class="text-sm">Your input helps us improve our search results.</p>
+                        </div>
+                    `;
+                }
                 
                 // Store visualization data for feedback
                 const chartTypeButtons = document.querySelectorAll('.chart-type-button');
@@ -1276,11 +1325,14 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => {
                 console.error('Error submitting feedback:', error);
                 // Show error message
-                feedbackContainer.innerHTML += `
-                    <div class="text-red-600 mt-2">
-                        <p>Failed to submit feedback. Please try again.</p>
-                    </div>
-                `;
+                const feedbackContainer = document.getElementById('feedbackContainer');
+                if (feedbackContainer) {
+                    feedbackContainer.innerHTML += `
+                        <div class="text-red-600 mt-2">
+                            <p>Failed to submit feedback. Please try again.</p>
+                        </div>
+                    `;
+                }
             });
         }
     }

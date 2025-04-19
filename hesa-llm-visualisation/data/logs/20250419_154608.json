@@ -1,0 +1,257 @@
+{
+  "query": "How many postgraduates are in University of Cambridge in 2017?",
+  "feedback": "Helpful",
+  "timestamp": 1745073968,
+  "date": "2025-04-19 15:46:08",
+  "comment": "asddasda",
+  "result": {
+    "query": "How many postgraduates are in University of Cambridge in 2017?",
+    "institutions": [
+      "University of Cambridge",
+      "University of Leicester"
+    ],
+    "original_institutions": [
+      "University of Cambridge"
+    ],
+    "has_institution_typos": false,
+    "years": [
+      "2017/18"
+    ],
+    "original_years": [
+      "2017"
+    ],
+    "has_year_typos": false,
+    "start_year": "2017",
+    "end_year": null,
+    "data_request": [
+      "postgraduate"
+    ],
+    "matching_datasets": [
+      "HE qualifiers by HE provider and level of qualification obtained 2017-18 dt051-table-16 (3).csv"
+    ],
+    "grouped_datasets": [
+      {
+        "title": "HE qualifiers by HE provider and level of qualification obtained",
+        "score": 0.9,
+        "match_percentage": 90,
+        "academic_years": [
+          "2017/18"
+        ],
+        "references": [
+          "HE qualifiers by HE provider and level of qualification obtained 2017-18 dt051-table-16 (3).csv"
+        ],
+        "matched_terms": [
+          "postgraduate"
+        ],
+        "matched_intents": [
+          "Data about postgraduate qualifiers, including a total count, which directly addresses the user's question about the number of postgraduates."
+        ],
+        "descriptions": [
+          "This dataset provides the number of postgraduates at each HE provider, broken down by qualification type (Doctorate research, Master's taught, etc.) and a total postgraduate count. This allows for a direct answer to the user's question about postgraduate numbers."
+        ],
+        "matches": [
+          {
+            "title": "HE qualifiers by HE provider and level of qualification obtained",
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2017-18 dt051-table-16 (3).csv",
+            "academic_year": "2017/18",
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "postgraduate"
+            ],
+            "matched_intent": "Data about postgraduate qualifiers, including a total count, which directly addresses the user's question about the number of postgraduates.",
+            "description": "This dataset provides the number of postgraduates at each HE provider, broken down by qualification type (Doctorate research, Master's taught, etc.) and a total postgraduate count. This allows for a direct answer to the user's question about postgraduate numbers.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Doctorate research",
+                "Other postgraduate research",
+                "Master's taught",
+                "Postgraduate Certificate in Education",
+                "Other postgraduate taught",
+                "Total postgraduate",
+                "First degree",
+                "Foundation degree",
+                "HNC/HND",
+                "Professional Graduate Certificate in Education",
+                "Other undergraduate",
+                "Total undergraduate",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Cambridge Arts and Sciences Limited",
+                  "0",
+                  "0",
+                  "15",
+                  "0",
+                  "0",
+                  "15",
+                  "15",
+                  "0",
+                  "0",
+                  "0",
+                  "95",
+                  "110",
+                  "120",
+                  "2017/18"
+                ],
+                [
+                  "The University of Cambridge",
+                  "1,115",
+                  "940",
+                  "1,860",
+                  "265",
+                  "220",
+                  "4,400",
+                  "3,275",
+                  "0",
+                  "0",
+                  "0",
+                  "40",
+                  "3,315",
+                  "7,715",
+                  "2017/18"
+                ],
+                [
+                  "The Cambridge Theological Federation",
+                  "0",
+                  "0",
+                  "10",
+                  "0",
+                  "10",
+                  "20",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "60",
+                  "60",
+                  "85",
+                  "2017/18"
+                ]
+              ],
+              "matched_rows": 4,
+              "has_more": true
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Doctorate research",
+          "Other postgraduate research",
+          "Master's taught",
+          "Postgraduate Certificate in Education",
+          "Other postgraduate taught",
+          "Total postgraduate",
+          "First degree",
+          "Foundation degree",
+          "HNC/HND",
+          "Professional Graduate Certificate in Education",
+          "Other undergraduate",
+          "Total undergraduate",
+          "Total"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Cambridge Arts and Sciences Limited",
+                "0",
+                "0",
+                "15",
+                "0",
+                "0",
+                "15",
+                "15",
+                "0",
+                "0",
+                "0",
+                "95",
+                "110",
+                "120",
+                "2017/18"
+              ],
+              [
+                "The University of Cambridge",
+                "1,115",
+                "940",
+                "1,860",
+                "265",
+                "220",
+                "4,400",
+                "3,275",
+                "0",
+                "0",
+                "0",
+                "40",
+                "3,315",
+                "7,715",
+                "2017/18"
+              ],
+              [
+                "The Cambridge Theological Federation",
+                "0",
+                "0",
+                "10",
+                "0",
+                "10",
+                "20",
+                "0",
+                "0",
+                "0",
+                "0",
+                "60",
+                "60",
+                "85",
+                "2017/18"
+              ]
+            ],
+            "matched_rows": 4,
+            "has_more": true,
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2017-18 dt051-table-16 (3).csv",
+            "academic_year": "2017/18"
+          }
+        ]
+      }
+    ],
+    "total_matches": 1,
+    "using_mock": false,
+    "missing_years": [],
+    "cached": false
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "query": "Show carbon emissions for Coventry University ending in 2016",
+  "feedback": "Very Helpful",
+  "timestamp": 1745071799,
+  "date": "2025-04-19 15:09:59",
+  "result": {
+    "query": "Show carbon emissions for Coventry University ending in 2016",
+    "institutions": [
+      "Coventry University",
+      "University of Leicester"
+    ],
+    "original_institutions": [
+      "Coventry University"
+    ],
+    "has_institution_typos": false,
+    "years": [
+      "2015/16"
+    ],
+    "original_years": [
+      "2016"
+    ],
+    "has_year_typos": false,
+    "start_year": null,
+    "end_year": "2016",
+    "data_request": [
+      "carbon emissions"
+    ],
+    "matching_datasets": [
+      "Emissions and waste 2015-16 dt042-table-3.csv"
+    ],
+    "grouped_datasets": [
+      {
+        "title": "Emissions and waste",
+        "score": 0.9,
+        "match_percentage": 90,
+        "academic_years": [
+          "2015/16"
+        ],
+        "references": [
+          "Emissions and waste 2015-16 dt042-table-3.csv"
+        ],
+        "matched_terms": [
+          "carbon emissions"
+        ],
+        "matched_intents": [
+          "Data about carbon emissions, directly answering the user's question."
+        ],
+        "descriptions": [
+          "This dataset provides the total scope 1 and 2 carbon emissions for HE providers, directly addressing the user's request for carbon emissions data."
+        ],
+        "matches": [
+          {
+            "title": "Emissions and waste",
+            "reference": "Emissions and waste 2015-16 dt042-table-3.csv",
+            "academic_year": "2015/16",
+            "columns": [
+              "HE provider",
+              "Total scope 1 and 2 carbon emissions (Kg CO2e)",
+              "Total volume of wastewater (m3)",
+              "Total scope 3 carbon emissions from waste (tonnes CO2e)",
+              "Total scope 3 carbon emissions from water supply (tonnes CO2e)",
+              "Total scope 3 carbon emissions from wastewater treatment (tonnes CO2e)",
+              "Total waste mass (tonnes)"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "carbon emissions"
+            ],
+            "matched_intent": "Data about carbon emissions, directly answering the user's question.",
+            "description": "This dataset provides the total scope 1 and 2 carbon emissions for HE providers, directly addressing the user's request for carbon emissions data.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Total scope 1 and 2 carbon emissions (Kg CO2e)",
+                "Total volume of wastewater (m3)",
+                "Total scope 3 carbon emissions from waste (tonnes CO2e)",
+                "Total scope 3 carbon emissions from water supply (tonnes CO2e)",
+                "Total scope 3 carbon emissions from wastewater treatment (tonnes CO2e)",
+                "Total waste mass (tonnes)",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Coventry University",
+                  "12,660,085.525",
+                  "105,562.000",
+                  "",
+                  "36.313",
+                  "76.324",
+                  "1,965.240",
+                  "2015/16"
+                ],
+                [
+                  "The University of Leicester",
+                  "26,733,190.177",
+                  "281,727.540",
+                  "38,736.320",
+                  "96.914",
+                  "199.792",
+                  "1,774.897",
+                  "2015/16"
+                ]
+              ],
+              "matched_rows": 2,
+              "has_more": false
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Total scope 1 and 2 carbon emissions (Kg CO2e)",
+          "Total volume of wastewater (m3)",
+          "Total scope 3 carbon emissions from waste (tonnes CO2e)",
+          "Total scope 3 carbon emissions from water supply (tonnes CO2e)",
+          "Total scope 3 carbon emissions from wastewater treatment (tonnes CO2e)",
+          "Total waste mass (tonnes)"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Total scope 1 and 2 carbon emissions (Kg CO2e)",
+              "Total volume of wastewater (m3)",
+              "Total scope 3 carbon emissions from waste (tonnes CO2e)",
+              "Total scope 3 carbon emissions from water supply (tonnes CO2e)",
+              "Total scope 3 carbon emissions from wastewater treatment (tonnes CO2e)",
+              "Total waste mass (tonnes)",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Coventry University",
+                "12,660,085.525",
+                "105,562.000",
+                "",
+                "36.313",
+                "76.324",
+                "1,965.240",
+                "2015/16"
+              ],
+              [
+                "The University of Leicester",
+                "26,733,190.177",
+                "281,727.540",
+                "38,736.320",
+                "96.914",
+                "199.792",
+                "1,774.897",
+                "2015/16"
+              ]
+            ],
+            "matched_rows": 2,
+            "has_more": false,
+            "reference": "Emissions and waste 2015-16 dt042-table-3.csv",
+            "academic_year": "2015/16"
+          }
+        ]
+      }
+    ],
+    "total_matches": 1,
+    "using_mock": false,
+    "missing_years": [],
+    "cached": false
+  }
+}
