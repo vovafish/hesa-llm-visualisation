@@ -1,0 +1,416 @@
+{
+  "query": "Compare teaching and research income",
+  "feedback": "Very Helpful",
+  "timestamp": 1745062536,
+  "date": "2025-04-19 12:35:36",
+  "result": {
+    "query": "Compare teaching and research income",
+    "institutions": [],
+    "original_institutions": [],
+    "has_institution_typos": false,
+    "years": [],
+    "original_years": [],
+    "has_year_typos": false,
+    "start_year": null,
+    "end_year": null,
+    "data_request": [
+      "staff_data",
+      "research_data"
+    ],
+    "matching_datasets": [
+      "Finances and people 2015-16 dt042-table-5.csv"
+    ],
+    "grouped_datasets": [
+      {
+        "title": "Finances and people",
+        "score": 0.9,
+        "match_percentage": 90,
+        "academic_years": [
+          "2015/16",
+          "2016/17",
+          "2017/18"
+        ],
+        "references": [
+          "Finances and people 2015-16 dt042-table-5.csv",
+          "Finances and people 2016-17 dt042-table-5 (1).csv",
+          "Finances and people 2017-18 dt042-table-5 (2).csv"
+        ],
+        "matched_terms": [
+          "Teaching income",
+          "Research income"
+        ],
+        "matched_intents": [
+          "Data about teaching and research income"
+        ],
+        "descriptions": [
+          "This dataset provides a direct comparison of teaching and research income, allowing the user to analyze the relative contributions of each."
+        ],
+        "matches": [
+          {
+            "title": "Finances and people",
+            "reference": "Finances and people 2015-16 dt042-table-5.csv",
+            "academic_year": "2015/16",
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "Teaching income",
+              "Research income"
+            ],
+            "matched_intent": "Data about teaching and research income",
+            "description": "This dataset provides a direct comparison of teaching and research income, allowing the user to analyze the relative contributions of each.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "HE provider",
+                  "Total income (\u00a3)",
+                  "Teaching income (\u00a3)",
+                  "Research income (\u00a3)",
+                  "Other non-residential income (\u00a3)",
+                  "Non-residential income total (\u00a3)",
+                  "Total expenditure (\u00a3)",
+                  "2015/16"
+                ],
+                [
+                  "The University of Aberdeen",
+                  "229,962,000",
+                  "104,969,000",
+                  "87,619,000",
+                  "22,820,000",
+                  "215,408,000",
+                  "234,533,000",
+                  "2015/16"
+                ],
+                [
+                  "Abertay University",
+                  "34,300,000",
+                  "28,806,000",
+                  "1,939,000",
+                  "1,668,000",
+                  "32,413,000",
+                  "33,030,000",
+                  "2015/16"
+                ]
+              ],
+              "matched_rows": 3,
+              "has_more": true
+            }
+          },
+          {
+            "title": "Finances and people",
+            "reference": "Finances and people 2016-17 dt042-table-5 (1).csv",
+            "academic_year": "2016/17",
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "Teaching income",
+              "Research income"
+            ],
+            "matched_intent": "Data about teaching and research income",
+            "description": "This dataset provides a direct comparison of teaching and research income, allowing the user to analyze the relative contributions of each.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "HE provider",
+                  "Total income (\u00a3)",
+                  "Teaching income (\u00a3)",
+                  "Research income (\u00a3)",
+                  "Other non-residential income (\u00a3)",
+                  "Non-residential income total (\u00a3)",
+                  "Total expenditure (\u00a3)",
+                  "2016/17"
+                ],
+                [
+                  "The University of Aberdeen",
+                  "222,462,000",
+                  "104,335,000",
+                  "84,149,000",
+                  "20,288,000",
+                  "208,772,000",
+                  "229,250,000",
+                  "2016/17"
+                ],
+                [
+                  "Abertay University",
+                  "34,671,000",
+                  "27,970,000",
+                  "2,363,000",
+                  "3,300,000",
+                  "33,633,000",
+                  "34,256,000",
+                  "2016/17"
+                ]
+              ],
+              "matched_rows": 3,
+              "has_more": true
+            }
+          },
+          {
+            "title": "Finances and people",
+            "reference": "Finances and people 2017-18 dt042-table-5 (2).csv",
+            "academic_year": "2017/18",
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "Teaching income",
+              "Research income"
+            ],
+            "matched_intent": "Data about teaching and research income",
+            "description": "This dataset provides a direct comparison of teaching and research income, allowing the user to analyze the relative contributions of each.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "HE provider",
+                  "Total income (\u00a3)",
+                  "Teaching income (\u00a3)",
+                  "Research income (\u00a3)",
+                  "Other non-residential income (\u00a3)",
+                  "Non-residential income total (\u00a3)",
+                  "Total expenditure (\u00a3)",
+                  "2017/18"
+                ],
+                [
+                  "The University of Aberdeen",
+                  "219,471,000",
+                  "107,977,000",
+                  "78,696,000",
+                  "21,315,000",
+                  "207,988,000",
+                  "226,949,000",
+                  "2017/18"
+                ],
+                [
+                  "Abertay University",
+                  "33,558,000",
+                  "27,247,000",
+                  "2,608,000",
+                  "2,624,000",
+                  "32,479,000",
+                  "33,331,000",
+                  "2017/18"
+                ]
+              ],
+              "matched_rows": 3,
+              "has_more": true
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Total income (\u00a3)",
+          "Teaching income (\u00a3)",
+          "Research income (\u00a3)",
+          "Other non-residential income (\u00a3)",
+          "Non-residential income total (\u00a3)",
+          "Total expenditure (\u00a3)"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "2015/16"
+              ],
+              [
+                "The University of Aberdeen",
+                "229,962,000",
+                "104,969,000",
+                "87,619,000",
+                "22,820,000",
+                "215,408,000",
+                "234,533,000",
+                "2015/16"
+              ],
+              [
+                "Abertay University",
+                "34,300,000",
+                "28,806,000",
+                "1,939,000",
+                "1,668,000",
+                "32,413,000",
+                "33,030,000",
+                "2015/16"
+              ]
+            ],
+            "matched_rows": 3,
+            "has_more": true,
+            "reference": "Finances and people 2015-16 dt042-table-5.csv",
+            "academic_year": "2015/16"
+          },
+          {
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "2016/17"
+              ],
+              [
+                "The University of Aberdeen",
+                "222,462,000",
+                "104,335,000",
+                "84,149,000",
+                "20,288,000",
+                "208,772,000",
+                "229,250,000",
+                "2016/17"
+              ],
+              [
+                "Abertay University",
+                "34,671,000",
+                "27,970,000",
+                "2,363,000",
+                "3,300,000",
+                "33,633,000",
+                "34,256,000",
+                "2016/17"
+              ]
+            ],
+            "matched_rows": 3,
+            "has_more": true,
+            "reference": "Finances and people 2016-17 dt042-table-5 (1).csv",
+            "academic_year": "2016/17"
+          },
+          {
+            "columns": [
+              "HE provider",
+              "Total income (\u00a3)",
+              "Teaching income (\u00a3)",
+              "Research income (\u00a3)",
+              "Other non-residential income (\u00a3)",
+              "Non-residential income total (\u00a3)",
+              "Total expenditure (\u00a3)",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "HE provider",
+                "Total income (\u00a3)",
+                "Teaching income (\u00a3)",
+                "Research income (\u00a3)",
+                "Other non-residential income (\u00a3)",
+                "Non-residential income total (\u00a3)",
+                "Total expenditure (\u00a3)",
+                "2017/18"
+              ],
+              [
+                "The University of Aberdeen",
+                "219,471,000",
+                "107,977,000",
+                "78,696,000",
+                "21,315,000",
+                "207,988,000",
+                "226,949,000",
+                "2017/18"
+              ],
+              [
+                "Abertay University",
+                "33,558,000",
+                "27,247,000",
+                "2,608,000",
+                "2,624,000",
+                "32,479,000",
+                "33,331,000",
+                "2017/18"
+              ]
+            ],
+            "matched_rows": 3,
+            "has_more": true,
+            "reference": "Finances and people 2017-18 dt042-table-5 (2).csv",
+            "academic_year": "2017/18"
+          }
+        ]
+      }
+    ],
+    "total_matches": 1,
+    "using_mock": false,
+    "missing_years": [],
+    "cached": false
+  }
+}
