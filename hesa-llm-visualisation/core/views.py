@@ -2844,30 +2844,30 @@ def local_analyze_query(query):
     for match in matches:
         if match.group(2):  # academic year format (e.g., 2020/21)
             years.append(f"{match.group(1)}/{match.group(2)}")
-        else:  # plain year format (e.g., 2020)
-            years.append(match.group(1))
-    
+        # Removed the else branch that added plain years to the list
+        # We'll convert plain years to academic years in the code below
+
     # Extract start and end years
     start_year = None
     end_year = None
-    
+
     # Extract years with context
     query_lower = query.lower()
-    
+
     # Start year patterns
     start_patterns = [
         r'start(?:ing|s|ed)?\s+(?:in|from|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
         r'begin(?:ning|s)?\s+(?:in|from|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
         r'from\s+(?:the\s+)?(?:year\s+)?(\d{4})'
     ]
-    
+
     # End year patterns
     end_patterns = [
         r'end(?:ing|s|ed)?\s+(?:in|at|of)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
         r'finish(?:ing|es|ed)?\s+(?:in|at)?\s+(?:the\s+)?(?:year\s+)?(\d{4})',
         r'(?:in|at)\s+(?:the\s+)?end\s+of\s+(?:the\s+)?(?:year\s+)?(\d{4})'
     ]
-    
+
     # Process years with "start" context
     for pattern in start_patterns:
         start_match = re.search(pattern, query_lower)
@@ -2878,7 +2878,7 @@ def local_analyze_query(query):
             if academic_year not in years:
                 years.append(academic_year)
             logger.info(f"Processed starting year {year} as academic year {academic_year}")
-    
+
     # Process years with "end" context
     for pattern in end_patterns:
         end_match = re.search(pattern, query_lower)
@@ -2890,7 +2890,7 @@ def local_analyze_query(query):
             if academic_year not in years:
                 years.append(academic_year)
             logger.info(f"Processed ending year {year} as academic year {academic_year}")
-    
+
     # Look for year ranges like "2019 to 2022" or "between 2019 and 2022"
     range_pattern = r"(?:between|from)?\s*(20\d{2})\s*(?:to|and|[-])\s*(20\d{2})"
     range_match = re.search(range_pattern, query, re.IGNORECASE)
@@ -2917,7 +2917,7 @@ def local_analyze_query(query):
         # Replace years with academic years for the range
         years = []
         for year in range(current_year - num_years, current_year + 1):
-            years.append(str(year))
+            # Only add the academic year format, not the plain year
             years.append(f"{year}/{str(year+1)[2:4]}")
     
     # For any plain years without context, treat as starting years

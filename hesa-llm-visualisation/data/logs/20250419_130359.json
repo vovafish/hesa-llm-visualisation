@@ -1,0 +1,728 @@
+{
+  "query": "Show total student enrollment by level of study for Birmingham City University in 2019",
+  "feedback": "Helpful",
+  "timestamp": 1745064239,
+  "date": "2025-04-19 13:03:59",
+  "comment": "tedt",
+  "result": {
+    "query": "Show total student enrollment by level of study for Birmingham City University in 2019",
+    "institutions": [
+      "Birmingham City University",
+      "University of Leicester"
+    ],
+    "original_institutions": [
+      "Birmingham City University"
+    ],
+    "has_institution_typos": false,
+    "years": [
+      "2019/20"
+    ],
+    "original_years": [
+      "2019"
+    ],
+    "has_year_typos": false,
+    "start_year": "2019",
+    "end_year": null,
+    "data_request": [
+      "enrollment"
+    ],
+    "matching_datasets": [
+      "HE qualifiers by HE provider and level of qualification obtained 2019-20 dt051-table-16 (5).csv",
+      "HE student enrolments by HE provider 2019-20 dt051-table-1 (15).csv",
+      "Full-time HE student enrolments by HE provider and term-time accommodation 2019-20 dt051-table-57 (5).csv"
+    ],
+    "grouped_datasets": [
+      {
+        "title": "HE qualifiers by HE provider and level of qualification obtained",
+        "score": 0.85,
+        "match_percentage": 85,
+        "academic_years": [
+          "2019/20"
+        ],
+        "references": [
+          "HE qualifiers by HE provider and level of qualification obtained 2019-20 dt051-table-16 (5).csv"
+        ],
+        "matched_terms": [
+          "level of study",
+          "enrollment"
+        ],
+        "matched_intents": [
+          "Data about student qualifiers by level of qualification, including postgraduate and undergraduate levels."
+        ],
+        "descriptions": [
+          "This dataset provides a breakdown of student qualifiers by level of qualification obtained, allowing for analysis of enrollments at different levels of study (postgraduate, undergraduate, etc.). While it doesn't directly show total enrollment, it offers a close proxy by presenting the number of qualifiers at each level."
+        ],
+        "matches": [
+          {
+            "title": "HE qualifiers by HE provider and level of qualification obtained",
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2019-20 dt051-table-16 (5).csv",
+            "academic_year": "2019/20",
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total"
+            ],
+            "score": 0.85,
+            "match_percentage": 85,
+            "matched_terms": [
+              "enrollment",
+              "level of study"
+            ],
+            "matched_intent": "Data about student qualifiers by level of qualification, including postgraduate and undergraduate levels.",
+            "description": "This dataset provides a breakdown of student qualifiers by level of qualification obtained, allowing for analysis of enrollments at different levels of study (postgraduate, undergraduate, etc.). While it doesn't directly show total enrollment, it offers a close proxy by presenting the number of qualifiers at each level.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Doctorate research",
+                "Other postgraduate research",
+                "Master's taught",
+                "Postgraduate Certificate in Education",
+                "Other postgraduate taught",
+                "Total postgraduate",
+                "First degree",
+                "Foundation degree",
+                "HNC/HND",
+                "Professional Graduate Certificate in Education",
+                "Other undergraduate",
+                "Total undergraduate",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Birmingham City University",
+                  "55",
+                  "0",
+                  "1,580",
+                  "520",
+                  "715",
+                  "2,865",
+                  "5,090",
+                  "115",
+                  "110",
+                  "0",
+                  "460",
+                  "5,775",
+                  "8,640",
+                  "2019/20"
+                ],
+                [
+                  "University College Birmingham",
+                  "0",
+                  "0",
+                  "220",
+                  "30",
+                  "40",
+                  "290",
+                  "1,025",
+                  "420",
+                  "0",
+                  "0",
+                  "110",
+                  "1,560",
+                  "1,850",
+                  "2019/20"
+                ],
+                [
+                  "The City College",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "70",
+                  "0",
+                  "30",
+                  "100",
+                  "100",
+                  "2019/20"
+                ]
+              ],
+              "matched_rows": 4,
+              "has_more": true
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Doctorate research",
+          "Other postgraduate research",
+          "Master's taught",
+          "Postgraduate Certificate in Education",
+          "Other postgraduate taught",
+          "Total postgraduate",
+          "First degree",
+          "Foundation degree",
+          "HNC/HND",
+          "Professional Graduate Certificate in Education",
+          "Other undergraduate",
+          "Total undergraduate",
+          "Total"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Birmingham City University",
+                "55",
+                "0",
+                "1,580",
+                "520",
+                "715",
+                "2,865",
+                "5,090",
+                "115",
+                "110",
+                "0",
+                "460",
+                "5,775",
+                "8,640",
+                "2019/20"
+              ],
+              [
+                "University College Birmingham",
+                "0",
+                "0",
+                "220",
+                "30",
+                "40",
+                "290",
+                "1,025",
+                "420",
+                "0",
+                "0",
+                "110",
+                "1,560",
+                "1,850",
+                "2019/20"
+              ],
+              [
+                "The City College",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "70",
+                "0",
+                "30",
+                "100",
+                "100",
+                "2019/20"
+              ]
+            ],
+            "matched_rows": 4,
+            "has_more": true,
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2019-20 dt051-table-16 (5).csv",
+            "academic_year": "2019/20"
+          }
+        ]
+      },
+      {
+        "title": "HE student enrolments by HE provider",
+        "score": 0.7,
+        "match_percentage": 70,
+        "academic_years": [
+          "2019/20",
+          "2019/20"
+        ],
+        "references": [
+          "HE student enrolments by HE provider 2019-20 dt051-table-1 (15).csv",
+          "HE student enrolments by HE provider 2019-20 dt051-table-1 (5).csv"
+        ],
+        "matched_terms": [
+          "enrollment"
+        ],
+        "matched_intents": [
+          "Data about total student enrolments by HE provider and gender.",
+          "Data about total student enrolments by HE provider and region/nationality."
+        ],
+        "descriptions": [
+          "This dataset provides the total number of student enrolments by HE provider, broken down by region/nationality. While it doesn't directly provide enrollment by level of study, it offers the total enrollment figures for Birmingham City University, which can be used in conjunction with other datasets or as a general overview of student numbers.",
+          "This dataset provides the total number of student enrolments by HE provider, broken down by gender. While it doesn't directly provide enrollment by level of study, it offers the total enrollment figures for Birmingham City University, which can be used in conjunction with other datasets or as a general overview of student numbers."
+        ],
+        "matches": [
+          {
+            "title": "HE student enrolments by HE provider",
+            "reference": "HE student enrolments by HE provider 2019-20 dt051-table-1 (15).csv",
+            "academic_year": "2019/20",
+            "columns": [
+              "HE provider",
+              "England",
+              "Scotland",
+              "Wales",
+              "Northern Ireland",
+              "Other UK",
+              "Total UK",
+              "European Union",
+              "Non-European Union",
+              "Total Non-UK",
+              "Not known",
+              "Total"
+            ],
+            "score": 0.7,
+            "match_percentage": 70,
+            "matched_terms": [
+              "enrollment"
+            ],
+            "matched_intent": "Data about total student enrolments by HE provider and region/nationality.",
+            "description": "This dataset provides the total number of student enrolments by HE provider, broken down by region/nationality. While it doesn't directly provide enrollment by level of study, it offers the total enrollment figures for Birmingham City University, which can be used in conjunction with other datasets or as a general overview of student numbers.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "England",
+                "Scotland",
+                "Wales",
+                "Northern Ireland",
+                "Other UK",
+                "Total UK",
+                "European Union",
+                "Non-European Union",
+                "Total Non-UK",
+                "Not known",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Birmingham City University",
+                  "22,370",
+                  "80",
+                  "340",
+                  "95",
+                  "20",
+                  "22,905",
+                  "750",
+                  "3,270",
+                  "4,025",
+                  "0",
+                  "26,930",
+                  "2019/20"
+                ],
+                [
+                  "University College Birmingham",
+                  "3,285",
+                  "5",
+                  "50",
+                  "10",
+                  "5",
+                  "3,355",
+                  "1,015",
+                  "560",
+                  "1,575",
+                  "0",
+                  "4,930",
+                  "2019/20"
+                ],
+                [
+                  "The City College",
+                  "135",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "135",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "135",
+                  "2019/20"
+                ]
+              ],
+              "matched_rows": 4,
+              "has_more": true
+            }
+          },
+          {
+            "title": "HE student enrolments by HE provider",
+            "reference": "HE student enrolments by HE provider 2019-20 dt051-table-1 (5).csv",
+            "academic_year": "2019/20",
+            "columns": [
+              "HE provider",
+              "Female",
+              "Male",
+              "Unknown",
+              "Total"
+            ],
+            "score": 0.7,
+            "match_percentage": 70,
+            "matched_terms": [
+              "enrollment"
+            ],
+            "matched_intent": "Data about total student enrolments by HE provider and gender.",
+            "description": "This dataset provides the total number of student enrolments by HE provider, broken down by gender. While it doesn't directly provide enrollment by level of study, it offers the total enrollment figures for Birmingham City University, which can be used in conjunction with other datasets or as a general overview of student numbers.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Female",
+                "Male",
+                "Unknown",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Birmingham City University",
+                  "16,875",
+                  "10,030",
+                  "25",
+                  "26,930",
+                  "2019/20"
+                ],
+                [
+                  "University College Birmingham",
+                  "3,310",
+                  "1,620",
+                  "0",
+                  "4,930",
+                  "2019/20"
+                ],
+                [
+                  "The City College",
+                  "90",
+                  "45",
+                  "0",
+                  "135",
+                  "2019/20"
+                ]
+              ],
+              "matched_rows": 4,
+              "has_more": true
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "England",
+          "Scotland",
+          "Wales",
+          "Northern Ireland",
+          "Other UK",
+          "Total UK",
+          "European Union",
+          "Non-European Union",
+          "Total Non-UK",
+          "Not known",
+          "Total"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "England",
+              "Scotland",
+              "Wales",
+              "Northern Ireland",
+              "Other UK",
+              "Total UK",
+              "European Union",
+              "Non-European Union",
+              "Total Non-UK",
+              "Not known",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Birmingham City University",
+                "22,370",
+                "80",
+                "340",
+                "95",
+                "20",
+                "22,905",
+                "750",
+                "3,270",
+                "4,025",
+                "0",
+                "26,930",
+                "2019/20"
+              ],
+              [
+                "University College Birmingham",
+                "3,285",
+                "5",
+                "50",
+                "10",
+                "5",
+                "3,355",
+                "1,015",
+                "560",
+                "1,575",
+                "0",
+                "4,930",
+                "2019/20"
+              ],
+              [
+                "The City College",
+                "135",
+                "0",
+                "0",
+                "0",
+                "0",
+                "135",
+                "0",
+                "0",
+                "0",
+                "0",
+                "135",
+                "2019/20"
+              ]
+            ],
+            "matched_rows": 4,
+            "has_more": true,
+            "reference": "HE student enrolments by HE provider 2019-20 dt051-table-1 (15).csv",
+            "academic_year": "2019/20"
+          },
+          {
+            "columns": [
+              "HE provider",
+              "Female",
+              "Male",
+              "Unknown",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Birmingham City University",
+                "16,875",
+                "10,030",
+                "25",
+                "26,930",
+                "2019/20"
+              ],
+              [
+                "University College Birmingham",
+                "3,310",
+                "1,620",
+                "0",
+                "4,930",
+                "2019/20"
+              ],
+              [
+                "The City College",
+                "90",
+                "45",
+                "0",
+                "135",
+                "2019/20"
+              ]
+            ],
+            "matched_rows": 4,
+            "has_more": true,
+            "reference": "HE student enrolments by HE provider 2019-20 dt051-table-1 (5).csv",
+            "academic_year": "2019/20"
+          }
+        ]
+      },
+      {
+        "title": "Full-time HE student enrolments by HE provider and term-time accommodation",
+        "score": 0.6,
+        "match_percentage": 60,
+        "academic_years": [
+          "2019/20"
+        ],
+        "references": [
+          "Full-time HE student enrolments by HE provider and term-time accommodation 2019-20 dt051-table-57 (5).csv"
+        ],
+        "matched_terms": [
+          "enrollment"
+        ],
+        "matched_intents": [
+          "Data about full-time student enrollments and their term-time accommodation."
+        ],
+        "descriptions": [
+          "This dataset focuses on full-time student enrollments and their accommodation arrangements. While it doesn't provide a breakdown by level of study, it offers insights into the total number of full-time students at Birmingham City University, which can be useful contextual information related to overall enrollment."
+        ],
+        "matches": [
+          {
+            "title": "Full-time HE student enrolments by HE provider and term-time accommodation",
+            "reference": "Full-time HE student enrolments by HE provider and term-time accommodation 2019-20 dt051-table-57 (5).csv",
+            "academic_year": "2019/20",
+            "columns": [
+              "HE provider",
+              "Provider maintained property",
+              "Private-sector halls",
+              "Parental/guardian home",
+              "Own residence",
+              "Other rented accommodation",
+              "Other",
+              "Not available",
+              "Total"
+            ],
+            "score": 0.6,
+            "match_percentage": 60,
+            "matched_terms": [
+              "enrollment"
+            ],
+            "matched_intent": "Data about full-time student enrollments and their term-time accommodation.",
+            "description": "This dataset focuses on full-time student enrollments and their accommodation arrangements. While it doesn't provide a breakdown by level of study, it offers insights into the total number of full-time students at Birmingham City University, which can be useful contextual information related to overall enrollment.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Provider maintained property",
+                "Private-sector halls",
+                "Parental/guardian home",
+                "Own residence",
+                "Other rented accommodation",
+                "Other",
+                "Not available",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Birmingham City University",
+                  "530",
+                  "3,435",
+                  "9,730",
+                  "3,875",
+                  "5,540",
+                  "0",
+                  "170",
+                  "23,285",
+                  "2019/20"
+                ],
+                [
+                  "University College Birmingham",
+                  "660",
+                  "130",
+                  "1,300",
+                  "1,530",
+                  "400",
+                  "285",
+                  "25",
+                  "4,325",
+                  "2019/20"
+                ],
+                [
+                  "The University of Leicester",
+                  "3,260",
+                  "2,770",
+                  "970",
+                  "2,795",
+                  "4,150",
+                  "165",
+                  "645",
+                  "14,750",
+                  "2019/20"
+                ]
+              ],
+              "matched_rows": 3,
+              "has_more": false
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Provider maintained property",
+          "Private-sector halls",
+          "Parental/guardian home",
+          "Own residence",
+          "Other rented accommodation",
+          "Other",
+          "Not available",
+          "Total"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Provider maintained property",
+              "Private-sector halls",
+              "Parental/guardian home",
+              "Own residence",
+              "Other rented accommodation",
+              "Other",
+              "Not available",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Birmingham City University",
+                "530",
+                "3,435",
+                "9,730",
+                "3,875",
+                "5,540",
+                "0",
+                "170",
+                "23,285",
+                "2019/20"
+              ],
+              [
+                "University College Birmingham",
+                "660",
+                "130",
+                "1,300",
+                "1,530",
+                "400",
+                "285",
+                "25",
+                "4,325",
+                "2019/20"
+              ],
+              [
+                "The University of Leicester",
+                "3,260",
+                "2,770",
+                "970",
+                "2,795",
+                "4,150",
+                "165",
+                "645",
+                "14,750",
+                "2019/20"
+              ]
+            ],
+            "matched_rows": 3,
+            "has_more": false,
+            "reference": "Full-time HE student enrolments by HE provider and term-time accommodation 2019-20 dt051-table-57 (5).csv",
+            "academic_year": "2019/20"
+          }
+        ]
+      }
+    ],
+    "total_matches": 3,
+    "using_mock": false,
+    "missing_years": [],
+    "cached": false
+  }
+}

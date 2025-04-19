@@ -231,8 +231,7 @@ class GeminiClient:
                     # Expand years array to include all years in the range
                     if not result['years']:
                         for year in range(start_year, end_year + 1):
-                            # Add both plain year and academic year format
-                            result['years'].append(str(year))
+                            # Only add academic year format, not plain year
                             result['years'].append(f"{year}/{str(year+1)[2:4]}")
             
             # Apply our academic year logic for special cases if Gemini didn't handle it well
@@ -351,11 +350,19 @@ class GeminiClient:
                         if 'start_year' not in result or result['start_year'] is None:
                             result['start_year'] = year
                         logger.info(f"Processed plain year {year} as academic year {academic_year}")
+                        
+                        # Remove the plain year from the years list if it exists
+                        if year in result['years']:
+                            result['years'].remove(year)
+                            logger.info(f"Removed plain year {year} from years list to avoid duplication")
                 except (ValueError, TypeError) as e:
                     logger.error(f"Error processing plain year {year}: {e}")
                 
         # Make sure years are unique
         result['years'] = list(set(result['years']))
+        
+        # Filter out any plain years that might still be in the list from other sources
+        result['years'] = [year for year in result['years'] if '/' in year]
     
     def get_completion(self, prompt):
         """
