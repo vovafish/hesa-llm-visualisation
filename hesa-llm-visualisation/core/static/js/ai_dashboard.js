@@ -535,16 +535,14 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     const datasetHTML = `
                         <div class="mt-4 mb-4 border rounded-lg p-4 hover:bg-blue-50 transition-colors">
-                            <div class="flex justify-between items-start">
+                            <div class="flex justify-between items-center mb-3">
                                 <h4 class="font-semibold text-blue-800 text-lg">${index + 1}. ${dataset.title || 'Untitled Dataset'}</h4>
                                 <span class="text-sm px-2 py-1 rounded-full ${scoreColorClass}">
                                     Match: ${matchScore} (${matchPercentage}%)
                                 </span>
                             </div>
                             
-                            <!-- Dataset Toggle Button -->
-                            <div class="flex justify-between items-center mt-2">
-                                <p class="text-sm text-gray-500">Academic Years: ${academicYearsDisplay}</p>
+                            <div class="flex justify-end items-center mb-4">
                                 <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm" id="datasetToggle-${index}">
                                     <span class="show-details">Show Details</span>
                                     <span class="hide-details hidden">Hide Details</span>
@@ -553,6 +551,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             <!-- Dataset Details (hidden by default) -->
                             <div id="datasetDetails-${index}" class="hidden mt-4">
+                                <div class="mb-4">
+                                    <p class="font-medium text-gray-700 mb-1">Academic Years: ${academicYearsDisplay}</p>
+                                </div>
+                                
                                 <div class="mb-4">
                                     <p class="font-medium text-gray-700 mb-1">References:</p>
                                     <div class="px-2 py-1 bg-gray-100 rounded">
@@ -594,7 +596,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             
                             <!-- File Previews -->
                             <div class="mt-3">
-                                <div class="border-t pt-3">
+                                <div class="pt-3">
                                     <span class="font-medium text-sm">Available Files:</span>
                                     <div class="mt-2" id="files-container-${index}">
                                         <div class="text-center p-2">
