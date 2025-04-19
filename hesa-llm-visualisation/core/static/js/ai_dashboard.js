@@ -354,7 +354,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Add feedback component at the top
         resultsHTML = `
-            <div id="feedbackContainer" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6">
+            <div id="feedbackContainer" class="bg-yellow-50 border border-yellow-200 rounded-lg p-6 mb-6 mt-6">
                 <h4 class="text-lg font-semibold mb-2">How helpful were these results?</h4>
                 <div class="flex flex-wrap gap-2">
                     <button id="veryHelpfulBtn" class="feedback-btn bg-green-100 hover:bg-green-200 text-green-800 px-4 py-2 rounded-md" data-value="Very Helpful">Very Helpful</button>
@@ -534,7 +534,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         (dataset.description || '');
                     
                     const datasetHTML = `
-                        <div class="border rounded-lg p-4 hover:bg-blue-50 transition-colors">
+                        <div class="mt-4 mb-4 border rounded-lg p-4 hover:bg-blue-50 transition-colors">
                             <div class="flex justify-between items-start">
                                 <h4 class="font-semibold text-blue-800 text-lg">${index + 1}. ${dataset.title || 'Untitled Dataset'}</h4>
                                 <span class="text-sm px-2 py-1 rounded-full ${scoreColorClass}">
@@ -689,7 +689,7 @@ document.addEventListener('DOMContentLoaded', function() {
             console.log(`Processing match for dataset ${datasetIndex + 1}:`, match);
             
             filesHTML += `
-                <div class="border rounded p-3 bg-white my-4">
+                <div class="mt-4 mb-4 border rounded p-3 bg-white">
                     <div class="text-sm font-medium mb-2">${match.academic_year || 'Unknown Year'} - ${match.reference || 'Unknown Reference'}</div>
             `;
             
