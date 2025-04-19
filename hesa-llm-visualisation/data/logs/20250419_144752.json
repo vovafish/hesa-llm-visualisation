@@ -1,0 +1,262 @@
+{
+  "query": "Compare undergraduate enrollment for King's College London and University College London in 2020",
+  "feedback": "Not Helpful",
+  "timestamp": 1745070472,
+  "date": "2025-04-19 14:47:52",
+  "comment": "test ",
+  "result": {
+    "query": "Compare undergraduate enrollment for King's College London and University College London in 2020",
+    "institutions": [
+      "King's College London",
+      "University College London",
+      "University of Leicester"
+    ],
+    "original_institutions": [
+      "King's College London",
+      "University College London"
+    ],
+    "has_institution_typos": false,
+    "years": [
+      "2020/21"
+    ],
+    "original_years": [
+      "2020"
+    ],
+    "has_year_typos": false,
+    "start_year": "2020",
+    "end_year": null,
+    "data_request": [
+      "undergraduate",
+      "enrollment"
+    ],
+    "matching_datasets": [
+      "HE qualifiers by HE provider and level of qualification obtained 2020-21 dt051-table-16 (6).csv"
+    ],
+    "grouped_datasets": [
+      {
+        "title": "HE qualifiers by HE provider and level of qualification obtained",
+        "score": 0.9,
+        "match_percentage": 90,
+        "academic_years": [
+          "2020/21"
+        ],
+        "references": [
+          "HE qualifiers by HE provider and level of qualification obtained 2020-21 dt051-table-16 (6).csv"
+        ],
+        "matched_terms": [
+          "enrollment",
+          "undergraduate"
+        ],
+        "matched_intents": [
+          "Data about undergraduate student enrollment, broken down by qualification level."
+        ],
+        "descriptions": [
+          "This dataset provides the number of undergraduate qualifiers by HE provider, including a total undergraduate figure. This allows for direct comparison of undergraduate enrollment between King's College London and University College London."
+        ],
+        "matches": [
+          {
+            "title": "HE qualifiers by HE provider and level of qualification obtained",
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2020-21 dt051-table-16 (6).csv",
+            "academic_year": "2020/21",
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total"
+            ],
+            "score": 0.9,
+            "match_percentage": 90,
+            "matched_terms": [
+              "undergraduate",
+              "enrollment"
+            ],
+            "matched_intent": "Data about undergraduate student enrollment, broken down by qualification level.",
+            "description": "This dataset provides the number of undergraduate qualifiers by HE provider, including a total undergraduate figure. This allows for direct comparison of undergraduate enrollment between King's College London and University College London.",
+            "preview": {
+              "columns": [
+                "HE provider",
+                "Doctorate research",
+                "Other postgraduate research",
+                "Master's taught",
+                "Postgraduate Certificate in Education",
+                "Other postgraduate taught",
+                "Total postgraduate",
+                "First degree",
+                "Foundation degree",
+                "HNC/HND",
+                "Professional Graduate Certificate in Education",
+                "Other undergraduate",
+                "Total undergraduate",
+                "Total",
+                "Academic Year"
+              ],
+              "data": [
+                [
+                  "Brunel University London",
+                  "110",
+                  "5",
+                  "1,475",
+                  "245",
+                  "215",
+                  "2,055",
+                  "3,085",
+                  "5",
+                  "0",
+                  "0",
+                  "215",
+                  "3,305",
+                  "5,360",
+                  "2020/21"
+                ],
+                [
+                  "London Business School",
+                  "5",
+                  "0",
+                  "1,505",
+                  "0",
+                  "0",
+                  "1,510",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "1,510",
+                  "2020/21"
+                ],
+                [
+                  "Central Film School London",
+                  "0",
+                  "0",
+                  "15",
+                  "0",
+                  "0",
+                  "15",
+                  "30",
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "30",
+                  "45",
+                  "2020/21"
+                ]
+              ],
+              "matched_rows": 38,
+              "has_more": true
+            }
+          }
+        ],
+        "columns": [
+          "HE provider",
+          "Doctorate research",
+          "Other postgraduate research",
+          "Master's taught",
+          "Postgraduate Certificate in Education",
+          "Other postgraduate taught",
+          "Total postgraduate",
+          "First degree",
+          "Foundation degree",
+          "HNC/HND",
+          "Professional Graduate Certificate in Education",
+          "Other undergraduate",
+          "Total undergraduate",
+          "Total"
+        ],
+        "previews": [
+          {
+            "columns": [
+              "HE provider",
+              "Doctorate research",
+              "Other postgraduate research",
+              "Master's taught",
+              "Postgraduate Certificate in Education",
+              "Other postgraduate taught",
+              "Total postgraduate",
+              "First degree",
+              "Foundation degree",
+              "HNC/HND",
+              "Professional Graduate Certificate in Education",
+              "Other undergraduate",
+              "Total undergraduate",
+              "Total",
+              "Academic Year"
+            ],
+            "data": [
+              [
+                "Brunel University London",
+                "110",
+                "5",
+                "1,475",
+                "245",
+                "215",
+                "2,055",
+                "3,085",
+                "5",
+                "0",
+                "0",
+                "215",
+                "3,305",
+                "5,360",
+                "2020/21"
+              ],
+              [
+                "London Business School",
+                "5",
+                "0",
+                "1,505",
+                "0",
+                "0",
+                "1,510",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1,510",
+                "2020/21"
+              ],
+              [
+                "Central Film School London",
+                "0",
+                "0",
+                "15",
+                "0",
+                "0",
+                "15",
+                "30",
+                "0",
+                "0",
+                "0",
+                "0",
+                "30",
+                "45",
+                "2020/21"
+              ]
+            ],
+            "matched_rows": 38,
+            "has_more": true,
+            "reference": "HE qualifiers by HE provider and level of qualification obtained 2020-21 dt051-table-16 (6).csv",
+            "academic_year": "2020/21"
+          }
+        ]
+      }
+    ],
+    "total_matches": 1,
+    "using_mock": false,
+    "missing_years": [],
+    "cached": false
+  }
+}

@@ -268,78 +268,86 @@ document.addEventListener('DOMContentLoaded', function() {
             dataRequestDisplay = data.data_request.map(item => item.replace('_', ' ')).join(', ');
         }
         
-        // Create HTML for the query analysis
+        // Create HTML for the query analysis with collapsible section
         let resultsHTML = `
             <div class="bg-white shadow-md rounded-lg p-6 mt-8">
-                <h3 class="text-lg font-semibold mb-4">
-                    Query Analysis ${data.using_mock ? '(Mock AI)' : 'by Gemini AI'}
-                    ${data.using_mock ? 
-                        '<span class="text-xs font-normal bg-yellow-100 text-yellow-800 px-2 py-1 rounded ml-2">Using offline AI simulation</span>' : 
-                        '<span class="text-xs font-normal bg-green-100 text-green-800 px-2 py-1 rounded ml-2">Using Google Gemini API</span>'}
-                    ${data.cached === true ? 
-                        '<span class="text-xs font-normal bg-purple-100 text-purple-800 px-2 py-1 rounded ml-2">⚡ Retrieved from cache</span>' : ''}
-                </h3>
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">
+                        Query Analysis ${data.using_mock ? '(Mock AI)' : 'by Gemini AI'}
+                        ${data.using_mock ? 
+                            '<span class="text-xs font-normal bg-yellow-100 text-yellow-800 px-2 py-1 rounded ml-2">Using offline AI simulation</span>' : 
+                            '<span class="text-xs font-normal bg-green-100 text-green-800 px-2 py-1 rounded ml-2">Using Google Gemini API</span>'}
+                        ${data.cached === true ? 
+                            '<span class="text-xs font-normal bg-purple-100 text-purple-800 px-2 py-1 rounded ml-2">⚡ Retrieved from cache</span>' : ''}
+                    </h3>
+                    <button id="queryDetailsToggle" class="bg-blue-100 hover:bg-blue-200 text-blue-800 px-3 py-1 rounded-md text-sm transition-colors duration-150 ease-in-out">
+                        <span class="show-text">Show Details</span>
+                        <span class="hide-text hidden">Hide Details</span>
+                    </button>
+                </div>
                 
                 <div class="mb-4">
                     <p class="font-medium text-gray-700">Your query:</p>
                     <p class="text-blue-800 bg-blue-50 p-2 rounded">${data.query}</p>
                 </div>
                 
-                ${data.has_institution_typos || data.has_year_typos ? `
-                <div class="mb-4 bg-blue-50 p-3 rounded border border-blue-200">
-                    <p class="font-medium text-gray-700">Corrected query:</p>
-                    <p class="text-blue-800 p-2">${generateCorrectedQuery(data)}</p>
-                </div>
-                ` : ''}
-                
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="border rounded p-3">
-                        <p class="font-medium text-gray-700">Institutions:</p>
-                        <ul class="list-disc list-inside">
-                            ${data.institutions && data.institutions.length ? 
-                                data.institutions.map(inst => `<li>${inst}</li>`).join('') : 
-                                '<li class="text-gray-500">None specified</li>'}
-                        </ul>
+                <div id="queryDetailsContent" class="hidden">
+                    ${data.has_institution_typos || data.has_year_typos ? `
+                    <div class="mb-4 bg-blue-50 p-3 rounded border border-blue-200">
+                        <p class="font-medium text-gray-700">Corrected query:</p>
+                        <p class="text-blue-800 p-2">${generateCorrectedQuery(data)}</p>
+                    </div>
+                    ` : ''}
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="border rounded p-3">
+                            <p class="font-medium text-gray-700">Institutions:</p>
+                            <ul class="list-disc list-inside">
+                                ${data.institutions && data.institutions.length ? 
+                                    data.institutions.map(inst => `<li>${inst}</li>`).join('') : 
+                                    '<li class="text-gray-500">None specified</li>'}
+                            </ul>
+                        </div>
+                        
+                        <div class="border rounded p-3">
+                            <p class="font-medium text-gray-700">Years:</p>
+                            <ul class="list-disc list-inside">
+                                ${data.years && data.years.length ? 
+                                    data.years.map(year => `<li>${year}</li>`).join('') : 
+                                    '<li class="text-gray-500">All available years</li>'}
+                            </ul>
+                        </div>
+                        
+                        <div class="border rounded p-3">
+                            <p class="font-medium text-gray-700">Year Range:</p>
+                            <p class="${data.start_year ? 'font-semibold text-blue-700' : 'text-gray-500'}">
+                                ${yearRangeDisplay}
+                            </p>
+                        </div>
                     </div>
                     
-                    <div class="border rounded p-3">
-                        <p class="font-medium text-gray-700">Years:</p>
-                        <ul class="list-disc list-inside">
-                            ${data.years && data.years.length ? 
-                                data.years.map(year => `<li>${year}</li>`).join('') : 
-                                '<li class="text-gray-500">All available years</li>'}
-                        </ul>
+                    ${data.mission_group ? `
+                    <div class="mt-4 border rounded p-3 bg-blue-50">
+                        <p class="font-medium text-gray-700">Mission Group Filter:</p>
+                        <p class="font-semibold text-blue-700">${data.mission_group}</p>
+                        <p class="text-sm mt-1">Including data for ${data.mission_group_institutions?.length || 0} institutions from this group</p>
                     </div>
+                    ` : ''}
                     
-                    <div class="border rounded p-3">
-                        <p class="font-medium text-gray-700">Year Range:</p>
-                        <p class="${data.start_year ? 'font-semibold text-blue-700' : 'text-gray-500'}">
-                            ${yearRangeDisplay}
+                    <div class="mt-4 border rounded p-3">
+                        <p class="font-medium text-gray-700">Data requested:</p>
+                        <p class="font-semibold ${dataRequestDisplay === 'General information' ? 'text-gray-500' : 'text-blue-700'}">
+                            ${dataRequestDisplay}
                         </p>
                     </div>
-                </div>
-                
-                ${data.mission_group ? `
-                <div class="mt-4 border rounded p-3 bg-blue-50">
-                    <p class="font-medium text-gray-700">Mission Group Filter:</p>
-                    <p class="font-semibold text-blue-700">${data.mission_group}</p>
-                    <p class="text-sm mt-1">Including data for ${data.mission_group_institutions?.length || 0} institutions from this group</p>
-                </div>
-                ` : ''}
-                
-                <div class="mt-4 border rounded p-3">
-                    <p class="font-medium text-gray-700">Data requested:</p>
-                    <p class="font-semibold ${dataRequestDisplay === 'General information' ? 'text-gray-500' : 'text-blue-700'}">
-                        ${dataRequestDisplay}
-                    </p>
-                </div>
-                
-                <div class="mt-4 text-sm text-gray-600 border-t pt-2">
-                    <p>Entity extraction performed by ${data.using_mock ? 
-                        'local AI simulation (Gemini API unavailable)' : 
-                        'Google\'s Gemini AI'}</p>
-                    ${data.cached === true ? 
-                        '<p>Results retrieved from cache. Last processed: ' + new Date().toLocaleString() + '</p>' : ''}
+                    
+                    <div class="mt-4 text-sm text-gray-600 border-t pt-2">
+                        <p>Entity extraction performed by ${data.using_mock ? 
+                            'local AI simulation (Gemini API unavailable)' : 
+                            'Google\'s Gemini AI'}</p>
+                        ${data.cached === true ? 
+                            '<p>Results retrieved from cache. Last processed: ' + new Date().toLocaleString() + '</p>' : ''}
+                    </div>
                 </div>
             </div>
         `;
@@ -450,6 +458,32 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Store the query result data for feedback
         window.queryResultData = data;
+        
+        // Set up toggle functionality for query details
+        const toggleBtn = document.getElementById('queryDetailsToggle');
+        const contentDiv = document.getElementById('queryDetailsContent');
+        
+        if (toggleBtn && contentDiv) {
+            const showText = toggleBtn.querySelector('.show-text');
+            const hideText = toggleBtn.querySelector('.hide-text');
+            
+            toggleBtn.addEventListener('click', function() {
+                // Toggle content visibility
+                contentDiv.classList.toggle('hidden');
+                
+                // Toggle button text
+                showText.classList.toggle('hidden');
+                hideText.classList.toggle('hidden');
+                
+                // Add smooth animation (if CSS is defined for it)
+                if (!contentDiv.classList.contains('hidden')) {
+                    contentDiv.classList.add('animate-fade-in');
+                    setTimeout(() => {
+                        contentDiv.classList.remove('animate-fade-in');
+                    }, 500);
+                }
+            });
+        }
         
         // Process datasets in a separate step
         if (data.grouped_datasets && data.grouped_datasets.length > 0) {

@@ -33,9 +33,13 @@
         background-color: #ebf5ff;
     }
     
-    @keyframes fadeOut {
-        from { opacity: 1; }
-        to { opacity: 0; }
+    /* Additional CSS for animations */
+    .animate-fade-in {
+        animation: fadeIn 0.3s ease-in forwards;
+    }
+    
+    .animate-fade-out {
+        animation: fadeOut 0.3s ease-out forwards;
     }
     
     @keyframes fadeIn {
@@ -43,12 +47,21 @@
         to { opacity: 1; }
     }
     
-    .animate-fade-out {
-        animation: fadeOut 0.3s forwards;
+    @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
     }
     
-    .animate-fade-in {
-        animation: fadeIn 0.5s forwards;
+    /* Ensure content is initially hidden/visible as needed */
+    #queryDetailsContent {
+        display: block;
+    }
+    
+    #queryDetailsContent.hidden,
+    #queryPreviewContent.hidden,
+    .hide-text.hidden,
+    .show-text.hidden {
+        display: none;
     }
     
     .chart-type-btn.active {
@@ -95,62 +108,69 @@
     <h1 class="text-3xl font-bold mb-4">{{ dataset_title }}</h1>
     
     <!-- Query Information -->
-    <div class="bg-blue-50 shadow-md rounded-lg p-6 mb-8 border border-blue-200">
-        <h2 class="text-xl font-semibold mb-4 text-blue-800">Query Information</h2>
+    <div class="bg-blue-50 rounded-lg p-4 mb-6">
+        <div class="flex justify-between items-center">
+            <h2 class="text-lg font-semibold">Query Information</h2>
+            <button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-md text-sm" id="queryDetailsToggle">
+                <span class="show-text">Show Details</span>
+                <span class="hide-text hidden">Hide Details</span>
+            </button>
+        </div>
         
-        <div class="mb-4">
+        <!-- Hidden Content (shown when expanded) -->
+        <div id="queryDetailsContent" class="hidden mt-4">
             <p class="font-medium text-gray-700">Your query:</p>
-            <p class="text-blue-800 bg-blue-100 p-2 rounded">{{ query }}</p>
-        </div>
-        
-        {% if corrected_query %}
-        <div class="mb-4">
-            <p class="font-medium text-gray-700">Corrected query:</p>
-            <p class="text-green-700 bg-green-50 p-2 rounded">{{ corrected_query }}</p>
-        </div>
-        {% endif %}
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div class="border rounded p-3">
-                <p class="font-medium text-gray-700">Institutions:</p>
-                <ul class="list-disc list-inside">
-                    {% for institution in institutions %}
-                        <li>{{ institution }}</li>
-                    {% empty %}
-                        <li class="text-gray-500">None specified</li>
-                    {% endfor %}
-                </ul>
-            </div>
+            <p class="text-blue-800 bg-blue-100 p-2 rounded mb-4">{{ query }}</p>
             
-            {% if original_institutions and original_institutions != institutions %}
-            <div class="border rounded p-3">
-                <p class="font-medium text-gray-700">Original Institutions (with typos):</p>
-                <ul class="list-disc list-inside">
-                    {% for institution in original_institutions %}
-                        <li>{{ institution }}</li>
-                    {% empty %}
-                        <li class="text-gray-500">None specified</li>
-                    {% endfor %}
-                </ul>
+            {% if corrected_query %}
+            <div class="mb-4">
+                <p class="font-medium text-gray-700">Corrected query:</p>
+                <p class="text-green-700 bg-green-50 p-2 rounded">{{ corrected_query }}</p>
             </div>
             {% endif %}
             
-            {% if mission_group %}
-            <div class="border rounded p-3">
-                <p class="font-medium text-gray-700">Mission Group:</p>
-                <p>{{ mission_group }}</p>
-            </div>
-            {% endif %}
-            
-            <div class="border rounded p-3">
-                <p class="font-medium text-gray-700">Years:</p>
-                <ul class="list-disc list-inside">
-                    {% for year in years %}
-                        <li>{{ year }}</li>
-                    {% empty %}
-                        <li class="text-gray-500">None specified</li>
-                    {% endfor %}
-                </ul>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="border rounded p-3 bg-white">
+                    <p class="font-medium text-gray-700">Institutions:</p>
+                    <ul class="list-disc list-inside">
+                        {% for institution in institutions %}
+                            <li>{{ institution }}</li>
+                        {% empty %}
+                            <li class="text-gray-500">None specified</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                {% if original_institutions and original_institutions != institutions %}
+                <div class="border rounded p-3 bg-white">
+                    <p class="font-medium text-gray-700">Original Institutions (with typos):</p>
+                    <ul class="list-disc list-inside">
+                        {% for institution in original_institutions %}
+                            <li>{{ institution }}</li>
+                        {% empty %}
+                            <li class="text-gray-500">None specified</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+                
+                {% if mission_group %}
+                <div class="border rounded p-3 bg-white">
+                    <p class="font-medium text-gray-700">Mission Group:</p>
+                    <p>{{ mission_group }}</p>
+                </div>
+                {% endif %}
+                
+                <div class="border rounded p-3 bg-white">
+                    <p class="font-medium text-gray-700">Years:</p>
+                    <ul class="list-disc list-inside">
+                        {% for year in years %}
+                            <li>{{ year }}</li>
+                        {% empty %}
+                            <li class="text-gray-500">None specified</li>
+                        {% endfor %}
+                    </ul>
+                </div>
             </div>
         </div>
     </div>
@@ -653,6 +673,42 @@ document.addEventListener('DOMContentLoaded', function() {
     // Get dataset information from the page
     const datasetTitle = document.querySelector('h1').textContent;
     const tables = document.querySelectorAll('table');
+    
+    // Setup query details toggle
+    const toggleBtn = document.getElementById('queryDetailsToggle');
+    const contentDiv = document.getElementById('queryDetailsContent');
+    
+    if (toggleBtn && contentDiv) {
+        const showText = toggleBtn.querySelector('.show-text');
+        const hideText = toggleBtn.querySelector('.hide-text');
+        
+        toggleBtn.addEventListener('click', function() {
+            // Toggle content visibility with animation
+            if (contentDiv.classList.contains('hidden')) {
+                // Show the detailed content
+                contentDiv.classList.remove('hidden');
+                contentDiv.classList.add('animate-fade-in');
+                setTimeout(() => {
+                    contentDiv.classList.remove('animate-fade-in');
+                }, 300);
+                
+                // Toggle button text
+                showText.classList.add('hidden');
+                hideText.classList.remove('hidden');
+            } else {
+                // Hide the content
+                contentDiv.classList.add('animate-fade-out');
+                setTimeout(() => {
+                    contentDiv.classList.add('hidden');
+                    contentDiv.classList.remove('animate-fade-out');
+                }, 300);
+                
+                // Toggle button text
+                hideText.classList.add('hidden');
+                showText.classList.remove('hidden');
+            }
+        });
+    }
     
     if (tables.length === 0) {
         console.error("No tables found on the page");
