@@ -31,7 +31,7 @@ class MockAIClient:
         
         # Data request categories and their keywords
         self.data_categories = {
-            "enrollment": ["enrollment", "enrolment", "students", "postgraduates", "undergraduates", 
+            "enrollment": ["enrollment", "enrolment", "students", "undergraduate", "undergraduates", "postgraduates", 
                           "how many", "number of", "student numbers", "studying"],
             "accommodation": ["accommodation", "housing", "term-time", "residence", "living", "halls"],
             "demographics": ["demographics", "age", "gender", "ethnicity", "nationality", "international"],
@@ -202,26 +202,197 @@ class MockAIClient:
         return start_year, end_year
     
     def _determine_data_categories(self, query: str) -> List[str]:
-        """Determine the data categories being requested."""
-        data_terms = []
+        """Determine data request categories from the query."""
+        categories = []
+        specific_keywords = []
         
-        # Check for individual data terms
-        terms_to_check = ["student", "enrollment", "enrolment", "postgraduate", "undergraduate", 
-                          "accommodation", "demographic", "finance", "staff", "research"]
-                          
-        for term in terms_to_check:
-            if term in query:
-                data_terms.append(term)
+        # Extract specific keywords from the query that should be included directly
+        keyword_checks = ["undergraduate", "postgraduate", "international", "domestic", "part-time", "full-time"]
+        for keyword in keyword_checks:
+            if keyword in query.lower():
+                specific_keywords.append(keyword)
         
-        # Special case for "postgraduates" 
-        if "postgraduate" in query or "postgraduates" in query:
-            if "student" not in data_terms:
-                data_terms.append("student")
-            if "enrollment" not in data_terms and "enrolment" not in data_terms:
-                data_terms.append("enrollment")
+        # Check for each category
+        for category, keywords in self.data_categories.items():
+            if any(keyword in query.lower() for keyword in keywords):
+                categories.append(category)
         
-        # If no specific data request found, use general_data
-        if not data_terms:
-            data_terms = ["general_data"]
+        # Add generic categories if nothing specific was found
+        if not categories:
+            categories = ["student", "data"]
             
-        return data_terms 
+        # Add the specific keywords to the returned categories
+        return categories + specific_keywords
+    
+    def get_chart_recommendation(self, visualization_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Generate a chart recommendation based on the data.
+        
+        Args:
+            visualization_data: Dictionary containing the data to visualize
+            
+        Returns:
+            Dictionary with chart recommendation
+        """
+        logger.info("Mock AI generating chart recommendation")
+        
+        # Get the columns and guess what kind of data we have
+        columns = visualization_data.get('columns', [])
+        rows = visualization_data.get('rows', [])
+        
+        # Default to bar chart
+        chart_type = "bar"
+        reason = "A bar chart is good for comparing values across categories."
+        
+        # If we have time/year data, suggest a line chart
+        if any('year' in col.lower() for col in columns):
+            chart_type = "line"
+            reason = "A line chart is recommended for showing trends over time."
+        
+        # If we have percentage data or small number of rows, suggest pie chart
+        elif any('percent' in col.lower() for col in columns) and len(rows) <= 7:
+            chart_type = "pie"
+            reason = "A pie chart works well for showing proportions of a whole with a small number of categories."
+        
+        # For geographical data, suggest a map
+        elif any(col.lower() in ['country', 'region', 'location'] for col in columns):
+            chart_type = "map"
+            reason = "A map visualization is ideal for geographical data."
+        
+        # Example prompts based on the chart type
+        example_prompts = {
+            "bar": [
+                "Compare values across categories",
+                "Show student numbers by university",
+                "Display enrollment by degree type"
+            ],
+            "line": [
+                "Show trends over time",
+                "Display changes in enrollment from 2018 to 2022",
+                "Visualize growth in student numbers"
+            ],
+            "pie": [
+                "Show composition of student population",
+                "Display proportion of international students",
+                "Visualize budget allocation"
+            ],
+            "map": [
+                "Show student distribution by region",
+                "Visualize geographical spread of universities",
+                "Display student origins by country"
+            ]
+        }
+        
+        return {
+            "recommended_chart_type": chart_type,
+            "recommendation_reason": reason,
+            "example_prompts": example_prompts.get(chart_type, ["Generic visualization prompt"])
+        }
+    
+    def generate_visualization_config(self, visualization_data: Dict[str, Any], query: str, chart_type: str) -> Dict[str, Any]:
+        """
+        Generate a visualization configuration for the specified chart type.
+        
+        Args:
+            visualization_data: Dictionary containing the data to visualize
+            query: The natural language query
+            chart_type: The chart type to generate
+            
+        Returns:
+            Dictionary with chart configuration
+        """
+        logger.info(f"Mock AI generating {chart_type} visualization")
+        
+        # Extract data
+        title = visualization_data.get('title', 'HESA Data Visualization')
+        columns = visualization_data.get('columns', [])
+        rows = visualization_data.get('rows', [])
+        
+        if not columns or not rows:
+            return {
+                "error": "Insufficient data for visualization",
+                "chart_config": {
+                    "type": "bar",
+                    "data": {
+                        "labels": [],
+                        "datasets": []
+                    }
+                }
+            }
+        
+        # For simplicity, assume first column is labels, and second column is data
+        labels = [row[0] for row in rows if len(row) > 0]
+        
+        # Initialize chart configuration
+        chart_config = {
+            "type": chart_type,
+            "data": {
+                "labels": labels,
+                "datasets": []
+            },
+            "options": {
+                "responsive": True,
+                "plugins": {
+                    "title": {
+                        "display": True,
+                        "text": title
+                    }
+                }
+            }
+        }
+        
+        # Generate datasets based on columns
+        if len(columns) > 1:
+            for i in range(1, min(len(columns), 4)):  # Limit to 3 data columns
+                if i < len(columns):
+                    data = [float(row[i]) if i < len(row) and row[i] and row[i].replace('.', '').isdigit() else 0 
+                           for row in rows]
+                    
+                    dataset = {
+                        "label": columns[i],
+                        "data": data,
+                        "backgroundColor": [
+                            "#4e73df", "#1cc88a", "#36b9cc", "#f6c23e", "#e74a3b", 
+                            "#858796", "#5a5c69", "#6610f2", "#fd7e14", "#20c9a6"
+                        ][:len(data)]
+                    }
+                    chart_config["data"]["datasets"].append(dataset)
+        
+        # Generate insights
+        insights = self._generate_insights(chart_type, columns, rows, title)
+        
+        return {
+            "chart_config": chart_config,
+            "insights": insights
+        }
+    
+    def _generate_insights(self, chart_type: str, columns: List[str], rows: List[str], title: str) -> str:
+        """Generate insights for the visualization."""
+        if not rows or not columns:
+            return "<p>No insights available for the provided data.</p>"
+            
+        insights = []
+        
+        # Find the highest value
+        if len(columns) > 1 and all(len(row) > 1 for row in rows):
+            max_index = 0
+            max_value = 0
+            max_column = columns[1] if len(columns) > 1 else "value"
+            
+            for i, row in enumerate(rows):
+                if len(row) > 1:
+                    try:
+                        value = float(row[1]) if isinstance(row[1], str) and row[1].replace('.', '').isdigit() else 0
+                        if value > max_value:
+                            max_value = value
+                            max_index = i
+                    except (ValueError, TypeError):
+                        pass
+            
+            if max_index < len(rows) and len(rows[max_index]) > 0:
+                insights.append(f"<p>{rows[max_index][0]} has the highest {max_column} at {max_value}.</p>")
+        
+        # Add a generic insight about the data
+        insights.append(f"<p>This visualization shows {title.lower()}.</p>")
+        
+        return "".join(insights) 
