@@ -14,8 +14,6 @@ urlpatterns = [
     path('select_file_source/', views.select_file_source, name='select_file_source'),
     path('dataset_details/<str:group_id>/', views.dataset_details, name='dataset_details'),
     path('download/<str:format>/', views.download_data, name='download_data'),
-    path('test-charts/', views.test_charts, name='test_charts'),
-    path('query-builder/', views.query_builder, name='query_builder'),
     path('api/chart/<str:chart_type>/', views.get_chart_data, name='get_chart_data'),
     path('api/process-hesa-query/', views.process_hesa_query, name='api_process_hesa_query'),
     path('api/select-file-source/', views.select_file_source, name='api_select_file_source'),
@@ -27,5 +25,6 @@ urlpatterns = [
     path('ai_dataset_details/<int:dataset_id>/', views.ai_dataset_details, name='ai_dataset_details'),
     path('visualization_api/', views.visualization_api, name='visualization_api'),
     path('save_feedback/', views.save_feedback, name='save_feedback'),
-#    path('test-gemini-analysis/', views.test_gemini_analysis, name='test_gemini_analysis'),
+    path('upload-data/', views.upload_data_view, name='upload_data'),
+    path('process-upload/', views.process_upload, name='process_upload'),
 ]

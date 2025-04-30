@@ -1243,12 +1243,17 @@ function generateVisualization(datasetInfo, request, chartType) {
                     // Add compatibility warning if the chart configuration suggests a different type
                     if (chartType && data.has_compatibility_warning) {
                         console.log("Chart has compatibility warning");
-                        insightsEl.innerHTML = `
-                            <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
-                                <p class="font-bold">Note about ${chartType} chart:</p>
-                                <p>${data.compatibility_warning || `A ${chartType} chart may not be the optimal choice for this data, but we've created one as requested.`}</p>
-                            </div>
-                        ` + (data.insights || "");
+                        // Check if the warning is already in the insights to avoid duplication
+                        if (data.insights && !data.insights.includes(data.compatibility_warning)) {
+                            insightsEl.innerHTML = `
+                                <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4">
+                                    <p class="font-bold">Note about ${chartType} chart:</p>
+                                    <p>${data.compatibility_warning || `A ${chartType} chart may not be the optimal choice for this data, but we've created one as requested.`}</p>
+                                </div>
+                            ` + (data.insights || "");
+                        } else {
+                            insightsEl.innerHTML = data.insights || "";
+                        }
                     } else {
                         insightsEl.innerHTML = data.insights || "";
                     }

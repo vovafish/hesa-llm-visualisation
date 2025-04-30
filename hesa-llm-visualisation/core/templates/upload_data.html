@@ -1,0 +1,252 @@
+{% extends 'base.html' %}
+
+{% block title %}Upload New Data - HESA LLM Visualisation{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">Upload New Data</h1>
+    
+    {% if messages %}
+    <div class="mb-6">
+        {% for message in messages %}
+            <div class="p-4 mb-4 rounded-md {% if message.tags == 'success' %}bg-green-100 text-green-800{% elif message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+                {{ message }}
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if show_form %}
+    <div class="bg-white shadow-md rounded-lg p-6 mb-6" id="form-container">
+        <form method="post" enctype="multipart/form-data" id="upload-form">
+            {% csrf_token %}
+            
+            <div class="mb-6">
+                <label for="csv_files" class="block text-sm font-medium text-gray-700 mb-2">
+                    Select CSV File(s)
+                </label>
+                <div class="flex items-center justify-center w-full">
+                    <label class="flex flex-col w-full h-32 border-4 border-dashed hover:bg-gray-100 hover:border-gray-300 cursor-pointer">
+                        <div class="flex flex-col items-center justify-center pt-7">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-12 h-12 text-gray-400 group-hover:text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd" />
+                            </svg>
+                            <p class="pt-1 text-sm tracking-wider text-gray-400 group-hover:text-gray-600">
+                                Select CSV files (max 1000 lines per file)
+                            </p>
+                        </div>
+                        <input type="file" name="csv_files" id="csv_files" class="opacity-0" accept=".csv" multiple required />
+                    </label>
+                </div>
+                <div id="file-selected" class="mt-2 text-sm text-gray-600"></div>
+                <p class="mt-2 text-xs text-gray-500">
+                    Note: Maximum 50 files can be uploaded at once. Each file must be less than 1000 lines.
+                </p>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Processing Options
+                </label>
+                <div class="flex items-center mb-2">
+                    <input type="radio" id="add_files" name="processing_option" value="add" class="mr-2" checked>
+                    <label for="add_files" class="text-sm text-gray-700">
+                        Add files to existing data
+                    </label>
+                </div>
+                <div class="flex items-center">
+                    <input type="radio" id="overwrite_files" name="processing_option" value="overwrite" class="mr-2">
+                    <label for="overwrite_files" class="text-sm text-gray-700">
+                        Overwrite all existing data (will delete all current files)
+                    </label>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-between">
+                <button type="submit" id="submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    Upload and Process Files
+                </button>
+                <a href="{% url 'core:ai_dashboard' %}" class="px-4 py-2 text-gray-700 rounded-md border border-gray-300 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+    {% endif %}
+    
+    <!-- Processing indicator (hidden by default) -->
+    <div id="processing-indicator" class="hidden fixed top-0 left-0 w-full h-full flex items-center justify-center bg-gray-800 bg-opacity-50 z-50">
+        <div class="backdrop-blur-md bg-gray-800 bg-opacity-20 p-8 rounded-lg shadow-lg flex flex-col items-center max-w-md w-full">
+            <div class="w-16 h-16 mb-4">
+                <svg class="animate-spin w-full h-full text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            </div>
+            <h2 class="text-xl font-semibold mb-2 text-white">Processing Files</h2>
+            <p class="text-gray-200 text-center">Please wait while your files are being processed...</p>
+        </div>
+    </div>
+    
+    <!-- Results section (hidden by default) -->
+    <div id="results-section" class="{% if not show_form %}block{% else %}hidden{% endif %} bg-white shadow-md rounded-lg p-6">
+        <h2 class="text-xl font-semibold mb-4">Processing Results</h2>
+        <div id="results-content">
+            {% if processing_results %}
+                <div class="text-green-600 mb-4">Processing completed successfully!</div>
+                
+                <div class="mb-2"><strong>Files in system:</strong> {{ processing_results.total_files }}</div>
+                <div class="mb-2"><strong>Files added:</strong> {{ processing_results.added_files_count }}</div>
+                
+                {% if processing_results.added_files %}
+                    <div class="mb-2"><strong>Added files:</strong></div>
+                    <ul class="list-disc pl-5 mb-4">
+                        {% for file in processing_results.added_files %}
+                            <li>{{ file }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+                
+                <div class="mb-2"><strong>Cleaning status:</strong> {{ processing_results.cleaning_status }}</div>
+                <div class="mb-2"><strong>Indexing file created:</strong> {% if processing_results.indexing_created %}Yes{% else %}No{% endif %}</div>
+                
+                {% if processing_results.error_files %}
+                    <div class="text-red-600 mt-4 mb-2"><strong>Failed files:</strong></div>
+                    <ul class="list-disc pl-5 text-red-600">
+                        {% for file in processing_results.error_files %}
+                            <li>{{ file }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endif %}
+        </div>
+        <div class="mt-6">
+            <a href="{% url 'core:ai_dashboard' %}" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                Return to Dashboard
+            </a>
+            {% if not show_form %}
+            <a href="{% url 'core:upload_data' %}" class="ml-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                Upload More Files
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('csv_files');
+    const fileSelected = document.getElementById('file-selected');
+    const uploadForm = document.getElementById('upload-form');
+    const formContainer = document.getElementById('form-container');
+    const processingIndicator = document.getElementById('processing-indicator');
+    const resultsSection = document.getElementById('results-section');
+    const resultsContent = document.getElementById('results-content');
+    
+    // If there's no form, we don't need to set up these handlers
+    if (!uploadForm) return;
+    
+    // Show selected files
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            let fileNames = Array.from(fileInput.files).map(file => file.name).join(', ');
+            fileSelected.textContent = `Selected: ${fileNames}`;
+        } else {
+            fileSelected.textContent = '';
+        }
+    });
+    
+    // Handle form submission
+    uploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Validate file size (line count validation will be handled server-side)
+        const maxFileSize = 10 * 1024 * 1024; // 10 MB as a rough proxy for line count
+        const invalidFiles = Array.from(fileInput.files).filter(file => file.size > maxFileSize);
+        
+        if (invalidFiles.length > 0) {
+            alert(`The following files may be too large: ${invalidFiles.map(f => f.name).join(', ')}`);
+            return;
+        }
+        
+        // Show processing indicator
+        formContainer.classList.add('hidden');
+        processingIndicator.classList.remove('hidden');
+        
+        // Submit form via AJAX
+        const formData = new FormData(uploadForm);
+        
+        fetch('{% url "core:process_upload" %}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            // Hide processing indicator
+            processingIndicator.classList.add('hidden');
+            
+            // Show results
+            resultsSection.classList.remove('hidden');
+            
+            // Populate results content
+            if (data.success) {
+                let html = '<div class="text-green-600 mb-4">Processing completed successfully!</div>';
+                
+                html += `<div class="mb-2"><strong>Files in system:</strong> ${data.total_files}</div>`;
+                html += `<div class="mb-2"><strong>Files added:</strong> ${data.added_files_count}</div>`;
+                
+                if (data.added_files && data.added_files.length > 0) {
+                    html += '<div class="mb-2"><strong>Added files:</strong></div>';
+                    html += '<ul class="list-disc pl-5 mb-4">';
+                    data.added_files.forEach(file => {
+                        html += `<li>${file}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                html += `<div class="mb-2"><strong>Cleaning status:</strong> ${data.cleaning_status}</div>`;
+                html += `<div class="mb-2"><strong>Indexing file created:</strong> ${data.indexing_created ? 'Yes' : 'No'}</div>`;
+                
+                if (data.error_files && data.error_files.length > 0) {
+                    html += '<div class="text-red-600 mt-4 mb-2"><strong>Failed files:</strong></div>';
+                    html += '<ul class="list-disc pl-5 text-red-600">';
+                    data.error_files.forEach(file => {
+                        html += `<li>${file}</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                resultsContent.innerHTML = html;
+            } else {
+                resultsContent.innerHTML = `
+                    <div class="text-red-600 mb-4">Processing failed: ${data.error}</div>
+                    <p>Please try again with different files or settings.</p>
+                `;
+            }
+            
+            // Add "Upload More Files" button to results section
+            let buttons = resultsSection.querySelector('.mt-6');
+            if (buttons && !buttons.querySelector('a[href*="upload_data"]')) {
+                let uploadMoreBtn = document.createElement('a');
+                uploadMoreBtn.href = '{% url "core:upload_data" %}';
+                uploadMoreBtn.className = 'ml-4 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500';
+                uploadMoreBtn.textContent = 'Upload More Files';
+                buttons.appendChild(uploadMoreBtn);
+            }
+        })
+        .catch(error => {
+            processingIndicator.classList.add('hidden');
+            resultsSection.classList.remove('hidden');
+            resultsContent.innerHTML = `
+                <div class="text-red-600 mb-4">An error occurred during processing.</div>
+                <p>Please try again later or contact support.</p>
+            `;
+            console.error('Error:', error);
+        });
+    });
+});
+</script>
+{% endblock %} 

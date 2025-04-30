@@ -1,64 +1,321 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block title %}Documentation - HESA LLM Visualisation{% endblock %}
+
 {% block content %}
-<div class="max-w-4xl mx-auto py-8">
-    <h1 class="text-3xl font-bold mb-8">Documentation</h1>
+<div class="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <h1 class="text-3xl font-bold mb-8 border-b pb-4">Documentation</h1>
+    
+    <!-- Table of Contents -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold mb-4">Contents</h2>
+        <ul class="space-y-2">
+            <li><a href="#overview" class="text-blue-600 hover:text-blue-800">1. Project Overview</a></li>
+            <li><a href="#features" class="text-blue-600 hover:text-blue-800">2. Key Features</a></li>
+            <li><a href="#ai-dashboard" class="text-blue-600 hover:text-blue-800">3. Using the AI Dashboard</a></li>
+            <li><a href="#upload-data" class="text-blue-600 hover:text-blue-800">4. Uploading New Data</a></li>
+            <li><a href="#visualization" class="text-blue-600 hover:text-blue-800">5. Data Visualization</a></li>
+            <li><a href="#export" class="text-blue-600 hover:text-blue-800">6. Exporting Data</a></li>
+            <li><a href="#tips" class="text-blue-600 hover:text-blue-800">7. Tips & Tricks</a></li>
+        </ul>
+    </div>
     
     <!-- Overview Section -->
-    <section class="mb-12">
-        <h2 class="text-2xl font-semibold mb-4">Overview</h2>
-        <div class="bg-white rounded-lg shadow p-6">
-            <p class="mb-4">The HESA Data Analysis Dashboard is a powerful tool for analyzing and visualizing Higher Education Statistics Agency (HESA) data. It uses natural language processing to interpret user queries and generate meaningful visualizations.</p>
+    <section id="overview" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">1. Project Overview</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <p class="mb-4">The HESA LLM Visualisation platform is an advanced tool for analyzing and visualizing Higher Education Statistics Agency (HESA) data using AI-powered natural language processing. It allows users to:</p>
+            
+            <ul class="list-disc list-inside space-y-2 ml-4 mb-4">
+                <li>Query education data using plain English</li>
+                <li>Upload and process HESA CSV files</li>
+                <li>Generate insightful visualizations automatically</li>
+                <li>Compare data across institutions and years</li>
+                <li>Explore trends in higher education statistics</li>
+            </ul>
+            
+            <p class="mb-4">This platform leverages Google's Gemini API to understand natural language queries, identify entities such as institutions and time periods, and match them to the most relevant datasets.</p>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mt-2">
+                <p class="font-medium text-blue-800">Key Technologies:</p>
+                <ul class="list-disc list-inside ml-4 text-blue-800">
+                    <li>Google Gemini AI for natural language processing</li>
+                    <li>Django web framework</li>
+                    <li>Interactive data visualizations</li>
+                    <li>CSV processing and cleaning pipeline</li>
+                </ul>
+            </div>
         </div>
     </section>
 
     <!-- Features Section -->
-    <section class="mb-12">
-        <h2 class="text-2xl font-semibold mb-4">Features</h2>
-        <div class="bg-white rounded-lg shadow p-6">
-            <ul class="list-disc list-inside space-y-2">
-                <li>Natural language query processing</li>
-                <li>Interactive data visualizations</li>
-                <li>Multiple data export formats (CSV, Excel, PDF)</li>
-                <li>Summary statistics and insights</li>
-                <li>Historical data analysis</li>
-            </ul>
+    <section id="features" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">2. Key Features</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">🔍 Natural Language Queries</h3>
+                    <p>Ask questions in plain English about higher education data without needing to write complex database queries.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">📊 Intelligent Visualizations</h3>
+                    <p>Automatically generate the most appropriate charts and graphs based on your query and data type.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">📤 Data Upload & Processing</h3>
+                    <p>Upload your own HESA CSV files for cleaning, processing, and integration into the analysis platform.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">🏫 Institution Filtering</h3>
+                    <p>Filter data by specific institutions or mission groups like Russell Group or Million+.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">📅 Time-Series Analysis</h3>
+                    <p>Analyze trends across multiple academic years with intelligent time period detection.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">💾 Data Export</h3>
+                    <p>Export your analysis results in multiple formats for presentations or further analysis.</p>
+                </div>
+            </div>
         </div>
     </section>
 
-    <!-- Usage Guide Section -->
-    <section class="mb-12">
-        <h2 class="text-2xl font-semibold mb-4">Usage Guide</h2>
-        <div class="bg-white rounded-lg shadow p-6">
-            <h3 class="text-xl font-medium mb-3">Querying Data</h3>
-            <p class="mb-4">Enter your query in natural language. For example:</p>
-            <ul class="list-disc list-inside space-y-2 mb-6">
-                <li>"Show postgraduate enrollment trends from 2018 to 2022"</li>
-                <li>"Compare student satisfaction between Russell Group universities"</li>
-                <li>"Display international student numbers by year"</li>
+    <!-- AI Dashboard Section -->
+    <section id="ai-dashboard" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">3. Using the AI Dashboard</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <h3 class="text-xl font-medium mb-3 text-blue-700">Getting Started</h3>
+            
+            <div class="mb-6 border-b pb-4">
+                <ol class="list-decimal list-inside space-y-4 ml-2">
+                    <li class="mb-2">
+                        <strong>Navigate to the Dashboard:</strong> Click on "Dashboard" in the navigation bar.
+                    </li>
+                    <li class="mb-2">
+                        <strong>Enter Your Query:</strong> Type your question in natural language in the search box.
+                        <div class="bg-gray-50 p-3 mt-2 rounded-md">
+                            <p class="text-sm text-gray-600 italic">Example queries:</p>
+                            <ul class="list-disc list-inside ml-2 text-sm">
+                                <li>"Show me student numbers at University of Oxford from 2018 to 2020"</li>
+                                <li>"Compare undergraduate enrollment for Russell Group universities"</li>
+                                <li>"What was the financial income for University of Leicester in 2021/22?"</li>
+                            </ul>
+                        </div>
+                    </li>
+                    <li class="mb-2">
+                        <strong>Review Results:</strong> The system will analyze your query, extract key entities (institutions, years, data types), and present matching datasets.
+                    </li>
+                    <li class="mb-2">
+                        <strong>Select a Dataset:</strong> Click "Select this dataset" on the most relevant match to proceed to detailed analysis.
+                    </li>
+                    <li>
+                        <strong>Provide Feedback:</strong> Rate how helpful the results were to help improve future queries.
+                    </li>
+                </ol>
+            </div>
+            
+            <h3 class="text-xl font-medium mb-3 text-blue-700">Mission Group Filtering</h3>
+            <p class="mb-4">You can filter results by university mission groups:</p>
+            <ul class="list-disc list-inside ml-4 mb-4">
+                <li><strong>Russell Group:</strong> 24 research-intensive universities in the UK</li>
+                <li><strong>Million+:</strong> Association of modern universities</li>
+                <li><strong>University Alliance:</strong> Alliance of professional and technical universities</li>
+                <li><strong>No Filter:</strong> Include all universities in your search</li>
             </ul>
-
-            <h3 class="text-xl font-medium mb-3">Downloading Data</h3>
-            <p>Use the download buttons to export data in your preferred format:</p>
-            <ul class="list-disc list-inside space-y-2">
-                <li>CSV: Raw data format</li>
-                <li>Excel: Spreadsheet format with formatting</li>
-                <li>PDF: Report format with visualizations</li>
-            </ul>
+            
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4">
+                <p class="font-medium">💡 Pro Tip:</p>
+                <p>The system handles typos and common variations in institution names. For example, if you type "Univesty of Lieceter", it will automatically correct to "University of Leicester".</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Upload Data Section -->
+    <section id="upload-data" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">4. Uploading New Data</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <p class="mb-4">You can add your own HESA CSV files to the system for analysis. Here's how:</p>
+            
+            <ol class="list-decimal list-inside space-y-4 ml-2 mb-6">
+                <li class="mb-2">
+                    <strong>Navigate to Upload:</strong> Click "Upload New Data" in the navigation bar.
+                </li>
+                <li class="mb-2">
+                    <strong>Select Files:</strong> Click the upload area to select CSV files from your computer (maximum 50 files at once, each under 1000 lines).
+                </li>
+                <li class="mb-2">
+                    <strong>Choose Processing Option:</strong>
+                    <ul class="list-disc list-inside ml-6 mt-2">
+                        <li><strong>Add files:</strong> Add new files to existing data</li>
+                        <li><strong>Overwrite:</strong> Replace all existing files with new ones</li>
+                    </ul>
+                </li>
+                <li class="mb-2">
+                    <strong>Submit:</strong> Click "Upload and Process Files" and wait for processing to complete.
+                </li>
+                <li>
+                    <strong>Review Results:</strong> Once processing is finished, you'll see a summary of added files and any errors.
+                </li>
+            </ol>
+            
+            <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4">
+                <h4 class="font-medium text-blue-800 mb-2">What happens during processing:</h4>
+                <ol class="list-decimal list-inside ml-2 text-blue-800">
+                    <li>Files are validated for CSV format and line count</li>
+                    <li>Data is cleaned and standardized</li>
+                    <li>Metadata is extracted (academic years, titles, etc.)</li>
+                    <li>An index file is created for quick searching</li>
+                    <li>Files are made available for querying via the AI Dashboard</li>
+                </ol>
+            </div>
+            
+            <div class="bg-red-50 border-l-4 border-red-500 p-4">
+                <p class="font-medium text-red-800">⚠️ Important:</p>
+                <p class="text-red-800">Your CSV files should follow HESA data format. Files that don't match this format may not be processed correctly.</p>
+            </div>
         </div>
     </section>
 
-    <!-- Support Section -->
-    <section>
-        <h2 class="text-2xl font-semibold mb-4">Support</h2>
-        <div class="bg-white rounded-lg shadow p-6">
-            <p class="mb-4">For technical support or questions about the data, please contact:</p>
-            <ul class="list-disc list-inside space-y-2">
-                <li>Technical Support: support@example.com</li>
-                <li>Data Queries: data@example.com</li>
-            </ul>
+    <!-- Visualization Section -->
+    <section id="visualization" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">5. Data Visualization</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <p class="mb-4">After selecting a dataset, the system will analyze your data and recommend the most appropriate visualization type.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">Available Chart Types</h3>
+                    <ul class="list-disc list-inside ml-2">
+                        <li><strong>Bar Charts:</strong> For comparing categories</li>
+                        <li><strong>Line Charts:</strong> For time series data</li>
+                        <li><strong>Pie Charts:</strong> For showing composition</li>
+                    </ul>
+                </div>
+                
+                <div class="border rounded-lg p-4">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">Customizing Visualizations</h3>
+                    <ul class="list-disc list-inside ml-2">
+                        <li>Change chart type with a single click</li>
+                        <li>Modify title and axis labels</li>
+                        <li>Filter data points to focus on specific information</li>
+                        <li>Toggle legend visibility</li>
+                        <li>Change color schemes</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                <p class="font-medium">💡 Pro Tip:</p>
+                <p>You can request specific visualization types by including them in your query. For example: "Show me a bar chart of student numbers at Oxford University."</p>
+            </div>
         </div>
     </section>
+
+    <!-- Export Section -->
+    <section id="export" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">6. Exporting Data</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <p class="mb-4">You can export your analysis results in multiple formats:</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="border rounded-lg p-4 text-center">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">CSV</h3>
+                    <p class="text-sm">Raw data in comma-separated format, ideal for further processing in spreadsheet applications.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 text-center">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">Excel</h3>
+                    <p class="text-sm">Download data in Excel format for advanced analysis and formatting.</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 text-center">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">PDF</h3>
+                    <p class="text-sm">Export data table as PDF for easy sharing and printing.</p>
+                </div>
+            </div>
+            
+            <p class="mb-2">To export data:</p>
+            <ol class="list-decimal list-inside space-y-2 ml-2">
+                <li>Navigate to the visualization view after selecting a dataset</li>
+                <li>Look for the export buttons in the data table section</li>
+                <li>Click the appropriate format button to download the data</li>
+            </ol>
+        </div>
+    </section>
+
+    <!-- Tips Section -->
+    <section id="tips" class="mb-12 scroll-mt-16">
+        <h2 class="text-2xl font-semibold mb-4 bg-gray-100 p-3 rounded-lg">7. Tips & Tricks</h2>
+        <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">🎯 Be Specific</h3>
+                    <p>Include specific institution names, years, and data types in your query for more accurate results.</p>
+                    <p class="text-sm italic mt-2">Example: "Show undergraduate numbers at University of Oxford from 2018/19 to 2020/21" is better than "Show student numbers"</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">🔄 Try Different Phrasings</h3>
+                    <p>If you don't get the results you expect, try rephrasing your query with different terms.</p>
+                    <p class="text-sm italic mt-2">Example: Try "enrollment" instead of "student numbers" or "academic staff" instead of "teachers"</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">📅 Academic Year Format</h3>
+                    <p>The system understands academic years in various formats: 2018/19, 2018-19, or just 2018.</p>
+                    <p class="text-sm italic mt-2">Example: "Show data for 2018" will interpret this as academic year 2018/19</p>
+                </div>
+                
+                <div class="border rounded-lg p-4 hover:shadow-md transition duration-300">
+                    <h3 class="text-lg font-medium mb-2 text-blue-700">🔎 Sample Queries</h3>
+                    <p>Use the sample queries dropdown to see examples of well-formed questions.</p>
+                    <p class="text-sm italic mt-2">These examples are designed to showcase the system's capabilities and help you learn the most effective query patterns.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Back to Top Button -->
+    <div class="fixed bottom-20 right-8 z-50">
+        <a href="#" class="bg-blue-600 text-white rounded-full p-4 shadow-lg hover:bg-blue-700 transition duration-300 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+            </svg>
+        </a>
+    </div>
 </div>
+
+<script>
+    // Smooth scrolling for anchor links
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                
+                const targetId = this.getAttribute('href');
+                if (targetId === '#') {
+                    window.scrollTo({
+                        top: 0,
+                        behavior: 'smooth'
+                    });
+                    return;
+                }
+                
+                const targetElement = document.querySelector(targetId);
+                if (targetElement) {
+                    targetElement.scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+    });
+</script>
 {% endblock %} 

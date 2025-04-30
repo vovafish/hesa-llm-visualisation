@@ -780,15 +780,27 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingIndicator.id = 'aiLoadingIndicator';
             loadingIndicator.className = 'fixed top-0 left-0 w-full h-full flex items-center justify-center bg-gray-800 bg-opacity-50 z-50';
             loadingIndicator.innerHTML = `
-                <div class="bg-white p-5 rounded-lg shadow-lg flex flex-col items-center">
-                    <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-500 mb-3"></div>
-                    <p class="text-gray-700">${message}</p>
+                <div class="backdrop-blur-md bg-gray-800 bg-opacity-20 p-8 rounded-lg shadow-lg flex flex-col items-center max-w-md w-full">
+                    <div class="w-16 h-16 mb-4">
+                        <svg class="animate-spin w-full h-full text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-xl font-semibold mb-2 text-white">Analyzing Data</h2>
+                    <p class="text-gray-200 text-center">${message}</p>
                 </div>
             `;
             
             document.body.appendChild(loadingIndicator);
             console.log('Loading indicator created and added to page');
         } else {
+            // Update the message in the existing loading indicator
+            const messageElement = loadingIndicator.querySelector('p');
+            if (messageElement) {
+                messageElement.textContent = message;
+            }
+            
             // Show existing loading indicator
             loadingIndicator.classList.remove('hidden');
         }

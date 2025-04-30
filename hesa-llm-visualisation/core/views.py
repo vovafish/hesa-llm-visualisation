@@ -4361,17 +4361,19 @@ def generate_visualization(client, dataset_info, user_request, chart_type=None):
                     # Check for common compatibility issues
                     if chart_type == 'line' and not dataset_characteristics["has_multiple_years"]:
                         chart_compatibility_issue = True
-                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Line charts are typically best for showing trends over time. This dataset only contains a single year, which limits the effectiveness of a line chart.</p></div>"
+                        compatibility_warning = "Line charts are typically best for showing trends over time. This dataset only contains a single year, which limits the effectiveness of a line chart."
                     elif chart_type == 'pie' and len([col for col in columns if col not in ['HE provider', 'Academic Year']]) > 5:
                         chart_compatibility_issue = True
-                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Pie charts work best with a small number of categories (5 or fewer). This visualization may be difficult to interpret due to the number of categories shown.</p></div>"
+                        compatibility_warning = "Pie charts work best with a small number of categories (5 or fewer). This visualization may be difficult to interpret due to the number of categories shown."
                     elif chart_type == 'pie' and dataset_characteristics["has_multiple_institutions"] and len(institutions) > 3:
                         chart_compatibility_issue = True
-                        compatibility_warning = "<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> Pie charts work best when comparing parts of a whole rather than multiple institutions. This visualization may be difficult to interpret.</p></div>"
+                        compatibility_warning = "Pie charts work best when comparing parts of a whole rather than multiple institutions. This visualization may be difficult to interpret."
                 
                 # Add compatibility warning to insights if needed
                 if chart_compatibility_issue and compatibility_warning:
-                    insights = compatibility_warning + insights
+                    # Format as HTML for the insights panel
+                    formatted_warning = f"<div class='bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 mb-4'><p><strong>Note:</strong> {compatibility_warning}</p></div>"
+                    insights = formatted_warning + insights
                 
                 # Add a note if we updated the request to use available institutions
                 if len(referenced_institutions) == 0 and any(institution.lower() in user_request.lower() for institution in ["university", "college", "school"]):
@@ -4831,22 +4833,29 @@ def sanitize_json_string(json_string):
     # Replace smart/curly quotes with straight quotes
     sanitized = json_string.replace(''', "'").replace(''', "'").replace('"', '"').replace('"', '"')
     
-    # Replace escaped quotes with temporary markers
-    sanitized = sanitized.replace('\\"', '___QUOTE___')
-    
-    # Remove invalid backslash escapes
+    # More aggressive handling of problematic escape sequences
     sanitized = re.sub(r'\\(?!["\\/bfnrtu]|u[0-9a-fA-F]{4})', '', sanitized)
     
-    # Fix invalid escape sequences
-    sanitized = (sanitized
-                .replace('\\n', ' ')  # Replace newlines with spaces
-                .replace('\\t', ' ')  # Replace tabs with spaces
-                .replace('\\\\"', '\\"')  # Fix double escaped quotes
-                .replace('\\\\', '\\')  # Fix double backslashes
-                )
+    # Handle problematic backslash escapes that might be causing issues
+    sanitized = sanitized.replace('\\n', ' ')       # Replace newlines with spaces
+    sanitized = sanitized.replace('\\t', ' ')       # Replace tabs with spaces
+    sanitized = sanitized.replace('\\\\"', '\\"')   # Fix double escaped quotes
+    sanitized = sanitized.replace('\\\\', '\\')     # Fix double backslashes
     
-    # Restore escaped quotes
-    sanitized = sanitized.replace('___QUOTE___', '\\"')
+    # Additional sanitization for other common escape issues
+    sanitized = sanitized.replace('\\:', ':')       # Remove escape before colons
+    sanitized = sanitized.replace('\\,', ',')       # Remove escape before commas
+    sanitized = sanitized.replace('\\{', '{')       # Remove escape before braces
+    sanitized = sanitized.replace('\\}', '}')       # Remove escape before braces
+    sanitized = sanitized.replace('\\[', '[')       # Remove escape before brackets
+    sanitized = sanitized.replace('\\]', ']')       # Remove escape before brackets
+    
+    # Fix trailing commas in objects and arrays which are invalid in JSON
+    sanitized = re.sub(r',\s*}', '}', sanitized)    # Fix trailing comma in objects
+    sanitized = re.sub(r',\s*]', ']', sanitized)    # Fix trailing comma in arrays
+    
+    # Remove control characters which are not allowed in JSON
+    sanitized = re.sub(r'[\x00-\x1F\x7F]', '', sanitized)
     
     return sanitized
 
@@ -4900,6 +4909,20 @@ def extract_and_sanitize_json(response):
         return json.dumps(parsed)
     except json.JSONDecodeError as e:
         logging.warning(f"Sanitized JSON is still invalid: {str(e)}")
+        
+        # Additional sanitization for specific character issues
+        try:
+            # Try more aggressive cleaning and retry
+            # Replace any remaining problematic escape sequences
+            sanitized = re.sub(r'\\[^"\\\/bfnrtu]', '', sanitized)
+            
+            # Try to parse again with more aggressive cleaning
+            parsed = json.loads(sanitized)
+            logging.info("JSON parsed successfully after additional sanitization")
+            return json.dumps(parsed)
+        except json.JSONDecodeError:
+            logging.warning("JSON still invalid after additional sanitization")
+            
         # Try to extract just the specific fields we need
         try:
             # Extract chart_config field if present
@@ -4914,15 +4937,27 @@ def extract_and_sanitize_json(response):
                     chart_config = chart_config_match.group(1).strip()
                     # Remove trailing commas
                     chart_config = re.sub(r',\s*}', '}', chart_config)
-                    result['chart_config'] = chart_config
-                except Exception:
-                    pass
+                    # Try to parse the chart_config as JSON, if it fails, provide a basic default
+                    try:
+                        json.loads(chart_config)
+                        result['chart_config'] = chart_config
+                    except json.JSONDecodeError:
+                        logging.warning("Could not parse chart_config, using default")
+                        result['chart_config'] = '{"type": "bar", "data": {"labels": [], "datasets": []}}'
+                except Exception as e:
+                    logging.error(f"Error extracting chart_config: {str(e)}")
+                    result['chart_config'] = '{"type": "bar", "data": {"labels": [], "datasets": []}}'
+            else:
+                # Provide a default empty chart configuration
+                result['chart_config'] = '{"type": "bar", "data": {"labels": [], "datasets": []}}'
             
             if insights_match:
                 try:
                     result['insights'] = insights_match.group(1)
                 except Exception:
-                    pass
+                    result['insights'] = "Could not generate insights due to a technical issue."
+            else:
+                result['insights'] = "Could not generate insights due to a technical issue."
                     
             if alternatives_match:
                 try:
@@ -4931,15 +4966,24 @@ def extract_and_sanitize_json(response):
                     alternatives = re.sub(r',\s*]', ']', alternatives)
                     result['alternatives'] = alternatives
                 except Exception:
-                    pass
+                    result['alternatives'] = "[]"
+            else:
+                result['alternatives'] = "[]"
             
             if result:
+                # Add error message to notify user of the issue
+                result['error'] = "Could not generate the requested visualization due to a technical issue."
                 return json.dumps(result)
         except Exception as extract_error:
             logging.error(f"Error extracting specific fields: {str(extract_error)}")
         
-        # If we still can't parse it, return the sanitized string anyway
-        return sanitized
+        # If all else fails, return a valid JSON with an error message
+        return json.dumps({
+            "error": "Could not generate the requested visualization due to a technical issue.",
+            "chart_config": {"type": "bar", "data": {"labels": [], "datasets": []}},
+            "insights": "Unable to process visualization request.",
+            "alternatives": []
+        })
 
 @csrf_exempt
 @require_http_methods(["POST"])
@@ -5052,3 +5096,228 @@ def save_feedback(request):
         logger = logging.getLogger(__name__)
         logger.error(f"Error saving feedback: {str(e)}", exc_info=True)
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@csrf_exempt
+def upload_data_view(request):
+    """Render the upload data page."""
+    return render(request, 'upload_data.html', {'show_form': True})
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def process_upload(request):
+    """
+    Process uploaded CSV files and run the cleaning/indexing process.
+    
+    This view handles:
+    1. Validation of uploaded files
+    2. Storing files in the raw_files directory
+    3. Running the CSV cleaning process
+    4. Generating a response with processing results
+    """
+    import os
+    import shutil
+    import csv
+    from pathlib import Path
+    from django.conf import settings
+    import sys
+    import io
+    import threading
+    import subprocess
+    from django.core.exceptions import RequestDataTooBig, TooManyFieldsSent
+    
+    # Define BASE_DIR
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    
+    # Set up logging
+    logger = logging.getLogger(__name__)
+    logger.info("Processing file upload request")
+    
+    # Prepare response data
+    response_data = {
+        'success': False,
+        'error': None,
+        'total_files': 0,
+        'added_files_count': 0,
+        'added_files': [],
+        'error_files': [],
+        'cleaning_status': 'Not started',
+        'indexing_created': False
+    }
+    
+    try:
+        # Get file processing option
+        processing_option = request.POST.get('processing_option', 'add')
+        logger.info(f"Processing option selected: {processing_option}")
+        
+        # Check if files were uploaded
+        if 'csv_files' not in request.FILES:
+            response_data['error'] = 'No files were uploaded'
+            return JsonResponse(response_data)
+        
+        # Get uploaded files
+        files = request.FILES.getlist('csv_files')
+        logger.info(f"Received {len(files)} files for upload")
+        
+        # Check if uploaded files exceed the maximum allowed number
+        max_files = getattr(settings, 'DATA_UPLOAD_MAX_NUMBER_FILES', 20)  # Default is 20
+        if len(files) > max_files:
+            logger.error(f"Too many files: received {len(files)}, max allowed is {max_files}")
+            response_data['error'] = f"The number of files exceeded the maximum limit of {max_files}. Please upload fewer files at a time."
+            return JsonResponse(response_data)
+        
+        # Validate files are CSVs
+        non_csv_files = [f.name for f in files if not f.name.lower().endswith('.csv')]
+        if non_csv_files:
+            response_data['error'] = f"Only CSV files are allowed. Invalid files: {', '.join(non_csv_files)}"
+            return JsonResponse(response_data)
+        
+        # Define paths
+        raw_files_dir = RAW_FILES_DIR
+        cleaned_files_dir = CLEANED_FILES_DIR
+        
+        # Create directories if they don't exist
+        raw_files_dir.mkdir(parents=True, exist_ok=True)
+        cleaned_files_dir.mkdir(parents=True, exist_ok=True)
+        
+        # If overwrite option is selected, delete existing files
+        if processing_option == 'overwrite':
+            logger.info("Overwrite option selected - removing existing files")
+            # Remove all files in raw_files directory
+            for file_path in raw_files_dir.glob('*.csv'):
+                try:
+                    file_path.unlink()
+                except Exception as e:
+                    logger.error(f"Error deleting raw file {file_path}: {str(e)}")
+            
+            # Remove all files in cleaned_files directory
+            for file_path in cleaned_files_dir.glob('*.csv'):
+                try:
+                    file_path.unlink()
+                except Exception as e:
+                    logger.error(f"Error deleting cleaned file {file_path}: {str(e)}")
+            
+            # Remove index file if it exists
+            index_file_path = BASE_DIR / "hesa_files_index.json"
+            if index_file_path.exists():
+                try:
+                    index_file_path.unlink()
+                    logger.info("Removed existing index file")
+                except Exception as e:
+                    logger.error(f"Error deleting index file: {str(e)}")
+        # For 'add' option, clean only cleaned files and index, but keep raw files
+        elif processing_option == 'add':
+            logger.info("Add files option selected - cleaning only processed files")
+            # Remove all files in cleaned_files directory
+            for file_path in cleaned_files_dir.glob('*.csv'):
+                try:
+                    file_path.unlink()
+                    logger.info(f"Removed cleaned file: {file_path.name}")
+                except Exception as e:
+                    logger.error(f"Error deleting cleaned file {file_path}: {str(e)}")
+            
+            # Remove index file if it exists
+            index_file_path = BASE_DIR / "hesa_files_index.json"
+            if index_file_path.exists():
+                try:
+                    index_file_path.unlink()
+                    logger.info("Removed existing index file")
+                except Exception as e:
+                    logger.error(f"Error deleting index file: {str(e)}")
+        
+        # Process each uploaded file
+        for file in files:
+            file_name = file.name
+            logger.info(f"Processing file: {file_name}")
+            
+            # Check line count
+            try:
+                # Read and count lines without loading entire file into memory
+                line_count = 0
+                for line in file.chunks():
+                    line_count += line.count(b'\n')
+                
+                # Reset file pointer to beginning
+                file.seek(0)
+                
+                # Validate line count
+                if line_count > 1000:
+                    logger.warning(f"File {file_name} exceeds 1000 lines limit ({line_count} lines)")
+                    response_data['error_files'].append(f"{file_name} (exceeds 1000 lines limit)")
+                    continue
+            except Exception as e:
+                logger.error(f"Error checking line count for {file_name}: {str(e)}")
+                response_data['error_files'].append(f"{file_name} (error checking file size)")
+                continue
+            
+            # Save file to raw_files directory
+            try:
+                destination_path = raw_files_dir / file_name
+                with open(destination_path, 'wb+') as destination:
+                    for chunk in file.chunks():
+                        destination.write(chunk)
+                
+                response_data['added_files'].append(file_name)
+                logger.info(f"Successfully saved {file_name} to raw files directory")
+            except Exception as e:
+                logger.error(f"Error saving {file_name}: {str(e)}")
+                response_data['error_files'].append(f"{file_name} (error saving file)")
+                continue
+        
+        # Run CSV cleaning script if files were added
+        if response_data['added_files']:
+            response_data['added_files_count'] = len(response_data['added_files'])
+            
+            try:
+                # Initialize the CSV processor
+                from core.data_processing.csv_processor import CSVProcessor
+                processor = CSVProcessor()
+                
+                # Process the files
+                results = processor.process_all_files()
+                
+                # Check if all files were processed successfully
+                success_count = sum(1 for success in results.values() if success)
+                total_count = len(results)
+                
+                if success_count == total_count:
+                    response_data['cleaning_status'] = f"All files cleaned successfully ({success_count}/{total_count})"
+                else:
+                    response_data['cleaning_status'] = f"Some files failed to clean ({success_count}/{total_count})"
+                
+                logger.info(f"CSV cleaning completed with status: {response_data['cleaning_status']}")
+                
+                # Generate index file
+                import sys
+                import os
+                from pathlib import Path
+                
+                # Add the project root to the path if it's not already there
+                project_root = str(BASE_DIR)
+                if project_root not in sys.path:
+                    sys.path.insert(0, project_root)
+                    
+                # Import create_index_file
+                from csv_cleaning import create_index_file
+                
+                # Generate the index file
+                index_created = create_index_file(processor, results)
+                response_data['indexing_created'] = index_created
+                
+                # Count total files in the system
+                response_data['total_files'] = len(list(raw_files_dir.glob('*.csv')))
+                
+                # Set success flag
+                response_data['success'] = True
+                
+            except Exception as e:
+                logger.error(f"Error during CSV cleaning process: {str(e)}")
+                response_data['error'] = f"Error during processing: {str(e)}"
+                response_data['cleaning_status'] = "Failed"
+        else:
+            response_data['error'] = "No valid files were uploaded"
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in file upload processing: {str(e)}")
+        response_data['error'] = f"Unexpected error: {str(e)}"
+    
+    return JsonResponse(response_data)
