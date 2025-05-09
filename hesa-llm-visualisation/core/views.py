@@ -1160,19 +1160,7 @@ def extract_provider_data_preview(file_path, provider_names=None, max_rows=None,
     """
     Extract data from a CSV file with optional filtering by institution
     This version is optimized for displaying complete data with no row limits
-    
-    Args:
-        file_path: Path to the CSV file
-        provider_names: List of provider (institution) names to filter by
-        max_rows: Maximum number of rows to return (set to None for all rows)
-        use_substring_match: Whether to use substring matching for provider names
-        
-    Returns:
-        dict with:
-            columns: List of column headers
-            data: List of rows (each row is a list of values)
-            total_rows: Total number of rows in the file
-            matched_rows: Number of rows matching the filter
+
     """
     logger = logging.getLogger(__name__)
     logger.info(f"Extracting complete data from {file_path} for providers: {provider_names}")
@@ -1338,17 +1326,6 @@ def find_file_for_year(file_matches, year):
 def get_csv_preview(file_path, max_rows=5, institutions=None, institution=None, mission_group=None, exact_match_institutions=None):
     """
     Generate a preview of a CSV file, optionally filtering for specific institutions.
-    
-    Args:
-        file_path: Path to the CSV file
-        max_rows: Maximum number of rows to include in the preview, None means no limit
-        institutions: Comma-separated string of institution names to filter for
-        institution: Deprecated - use institutions instead. Comma-separated string of institution names.
-        mission_group: Mission group to filter for
-        exact_match_institutions: List of institution names that should be matched exactly, not using fuzzy logic
-    
-    Returns:
-        dict: Dictionary containing columns and data for the preview
     """
     import csv
     import logging
