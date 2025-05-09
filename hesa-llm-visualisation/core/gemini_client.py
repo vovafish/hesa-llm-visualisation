@@ -8,7 +8,7 @@ import logging
 import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from google import genai
+import google.generativeai as genai
 
 # Configure logging to prevent duplicate handlers
 logger = logging.getLogger('core.gemini_client')

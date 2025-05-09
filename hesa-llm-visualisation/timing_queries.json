@@ -177,6 +177,18 @@
       "durations_sec": [
         4.96
       ]
+    },
+    {
+      "id": 14,
+      "query": "How many postgraduates are in University of Cambridge in 2017?",
+      "mission_group": null,
+      "match_count": 3,
+      "durations_ms": [
+        5205
+      ],
+      "durations_sec": [
+        5.21
+      ]
     }
   ]
 }
