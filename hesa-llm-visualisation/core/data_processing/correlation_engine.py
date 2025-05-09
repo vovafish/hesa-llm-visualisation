@@ -3,9 +3,6 @@
 """
 Cross-file Correlation Engine for HESA Data
 
-This module provides tools for correlating data across multiple HESA data files,
-identifying relationships between different metrics, and generating correlation
-reports and visualizations.
 """
 
 import pandas as pd
@@ -38,13 +35,6 @@ class DataCorrelator:
     """
     A class for correlating data across multiple HESA data files.
     
-    This class provides methods to:
-    - Load data from different file formats (CSV, Excel, JSON)
-    - Identify common keys across datasets
-    - Merge data from multiple files
-    - Calculate correlations between variables
-    - Identify the strongest correlations
-    - Generate correlation reports
     """
     
     def __init__(self):
@@ -102,12 +92,6 @@ class DataCorrelator:
     def load_file(self, file_path: str) -> pd.DataFrame:
         """
         Load a data file into a DataFrame based on its extension.
-        
-        Args:
-            file_path: Path to the file to load
-            
-        Returns:
-            DataFrame containing the loaded data
         """
         file_path = Path(file_path)
         
@@ -129,12 +113,6 @@ class DataCorrelator:
     def identify_common_keys(self, dfs: List[pd.DataFrame]) -> List[str]:
         """
         Find column names that are common across all provided DataFrames.
-        
-        Args:
-            dfs: List of DataFrames to analyze
-            
-        Returns:
-            List of common column names
         """
         if not dfs:
             return []
@@ -155,11 +133,7 @@ class DataCorrelator:
         This method looks for columns with similar names or common patterns
         that might be joinable with some transformation.
         
-        Args:
-            dfs: List of DataFrames to analyze
-            
-        Returns:
-            Dictionary mapping each DataFrame index to potential join key columns
+       
         """
         if not dfs:
             return {}
@@ -190,12 +164,6 @@ class DataCorrelator:
         """
         Merge multiple DataFrames using specified key columns.
         
-        Args:
-            dfs: List of DataFrames to merge
-            keys: List of column names to use as join keys
-            
-        Returns:
-            Merged DataFrame
         """
         if not dfs:
             raise ValueError("No DataFrames provided for merging")
@@ -285,12 +253,6 @@ class DataCorrelator:
         """
         Calculate correlation matrices using specified methods.
         
-        Args:
-            df: DataFrame containing data to correlate
-            methods: List of correlation methods to use (default: ['pearson', 'spearman'])
-            
-        Returns:
-            Dictionary mapping method names to correlation matrices
         """
         if methods is None:
             methods = ['pearson', 'spearman']
@@ -317,13 +279,7 @@ class DataCorrelator:
     def identify_strongest_correlations(self, corr_matrix: pd.DataFrame, threshold: float = 0.7) -> List[Tuple]:
         """
         Identify pairs of variables with the strongest correlations.
-        
-        Args:
-            corr_matrix: Correlation matrix
-            threshold: Minimum absolute correlation value to include
-            
-        Returns:
-            List of tuples (variable1, variable2, correlation_value)
+    
         """
         if corr_matrix.empty:
             return []
@@ -357,11 +313,6 @@ class DataCorrelator:
         """
         Generate a comprehensive report of correlations and dataset information.
         
-        Args:
-            merged_df: Merged DataFrame containing data from multiple sources
-            
-        Returns:
-            Dictionary containing correlation analysis and dataset information
         """
         report = {
             'dataset_info': {

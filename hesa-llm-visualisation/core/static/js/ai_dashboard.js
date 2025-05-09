@@ -1,12 +1,6 @@
-/**
- * HESA Data Visualization - AI Dashboard JavaScript
- * 
- * This file contains the JavaScript code for the AI-powered dashboard.
- */
-
-// Add these global variables at the top of the file to store dataset and visualization info
 window.currentDatasetInfo = null;
 window.lastVisualizationData = null;
+window.queryStartTime = null;
 
 // Function to get CSRF token from cookies
 function getCsrfToken() {
@@ -102,6 +96,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
             
+            // Record the start time of the query processing
+            window.queryStartTime = performance.now();
+            console.log('Query processing started at:', window.queryStartTime);
+            
             // Show loading state
             showLoading('Analyzing your query with Gemini AI...');
             
@@ -122,7 +120,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 body: JSON.stringify({
                     query: query,
                     max_matches: maxMatches,
-                    mission_group: selectedMissionGroup === 'none' ? null : selectedMissionGroup
+                    mission_group: selectedMissionGroup === 'none' ? null : selectedMissionGroup,
+                    start_time: window.queryStartTime
                 })
             })
             .then(response => {
@@ -138,6 +137,14 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .then(data => {
                 console.log('Received data from API:', data);
+                // Calculate the end time and total duration
+                const endTime = performance.now();
+                const duration = endTime - window.queryStartTime;
+                console.log(`Query completed in ${duration.toFixed(2)} ms`);
+                
+                // Send timing information to the server
+                recordQueryTiming(query, duration, data.matching_datasets ? data.matching_datasets.length : 0, selectedMissionGroup === 'none' ? null : selectedMissionGroup);
+                
                 hideLoading();
                 
                 if (data.status === 'error') {
@@ -154,6 +161,49 @@ document.addEventListener('DOMContentLoaded', function() {
                 hideLoading();
                 showError('An error occurred while processing your query. Please try again.');
             });
+        });
+    }
+    
+    // Function to record query timing
+    function recordQueryTiming(query, duration, matchCount, missionGroup) {
+        // Make sure we have valid data to send
+        if (!query || duration === undefined || isNaN(duration)) {
+            console.error('Invalid timing data', { query, duration, matchCount, missionGroup });
+            return;
+        }
+        
+        // Get the requested match count from the select input
+        const requestedMatchCount = parseInt(aiMaxMatches ? aiMaxMatches.value : 3);
+        
+        // Limit the query string length
+        const truncatedQuery = query.length > 500 ? query.substring(0, 500) + '...' : query;
+        
+        fetch('/record_query_timing/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCsrfToken(),
+            },
+            body: JSON.stringify({
+                query: truncatedQuery,
+                duration_ms: duration,
+                requested_match_count: requestedMatchCount,
+                mission_group: missionGroup
+            })
+        })
+        .then(response => {
+            if (!response.ok) {
+                console.error('Failed to record query timing:', response.status, response.statusText);
+                return response.text().then(text => {
+                    console.error('Error details:', text);
+                });
+            } else {
+                console.log('Query timing recorded successfully');
+                return response.json();
+            }
+        })
+        .catch(error => {
+            console.error('Error recording query timing:', error);
         });
     }
     
@@ -1174,8 +1224,6 @@ document.addEventListener('DOMContentLoaded', function() {
             showError('Error loading dataset details: ' + error.message);
         });
     }
-
-    // Additional functions can be added here
     
     // Function to set up feedback button event listeners
     function setupFeedbackButtons(query) {

@@ -414,7 +414,6 @@
 <!-- Include SheetJS library for Excel generation -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-<!-- Add inline download CSV function -->
 <script>
 // Direct implementation of downloadTableAsCSV function for this page
 function downloadTableAsCSV(tableId, filename) {
@@ -449,7 +448,7 @@ function downloadTableAsCSV(tableId, filename) {
         const link = document.createElement('a');
         
         // Set up download
-        if (navigator.msSaveBlob) { // IE 10+
+        if (navigator.msSaveBlob) { 
             navigator.msSaveBlob(blob, filename);
         } else {
             link.href = URL.createObjectURL(blob);
@@ -1352,7 +1351,6 @@ function renderChart(chartConfig) {
         document.getElementById('visualizationContainer').classList.remove('hidden');
         document.getElementById('visualizationError').classList.add('hidden');
         
-        // REMOVED: Don't show feedback section after chart rendering
     } catch (error) {
         console.error("Error rendering chart:", error);
         
@@ -1446,7 +1444,6 @@ function setupFeedback() {
     const feedbackComment = document.getElementById('feedbackComment');
     const submitFeedbackBtn = document.getElementById('submitFeedbackBtn');
     
-    // REMOVED: Don't show feedback section after visualization is displayed
     // Keep the section hidden as configured in the HTML
     
     // Handle feedback button clicks

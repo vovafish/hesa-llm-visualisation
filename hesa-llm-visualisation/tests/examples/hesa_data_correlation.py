@@ -150,8 +150,6 @@ def create_sample_hesa_data(output_dir: Path):
     """
     Create sample HESA-like data files for demonstration purposes.
     
-    Args:
-        output_dir: Directory to save sample files
     """
     import numpy as np
     from datetime import datetime, timedelta

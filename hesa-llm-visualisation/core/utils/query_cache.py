@@ -31,12 +31,7 @@ class QueryCache:
     def _generate_cache_key(self, query):
         """
         Generate a unique cache key for a query.
-        
-        Args:
-            query (str): The query string to hash
-            
-        Returns:
-            str: A hash of the query to use as the cache key
+       
         """
         # Create an MD5 hash of the query string to use as the filename
         # This ensures unique filenames and handles special characters
@@ -47,11 +42,6 @@ class QueryCache:
         """
         Get the full path to a cache file.
         
-        Args:
-            cache_key (str): The cache key (hash of the query)
-            
-        Returns:
-            Path: Path object for the cache file
         """
         return self.cache_dir / f"{cache_key}.json"
     
@@ -59,11 +49,6 @@ class QueryCache:
         """
         Retrieve a cached query result if it exists and hasn't expired.
         
-        Args:
-            query (str): The query string to look up
-            
-        Returns:
-            dict or None: The cached result if found and valid, None otherwise
         """
         cache_key = self._generate_cache_key(query)
         cache_file = self._get_cache_file_path(cache_key)
@@ -109,12 +94,7 @@ class QueryCache:
         """
         Cache a query result.
         
-        Args:
-            query (str): The query string to cache
-            result (any): The result to cache (must be JSON serializable)
-            
-        Returns:
-            bool: True if caching was successful, False otherwise
+     
         """
         cache_key = self._generate_cache_key(query)
         cache_file = self._get_cache_file_path(cache_key)
@@ -144,11 +124,6 @@ class QueryCache:
         """
         Clear specific cache entry or all cache entries.
         
-        Args:
-            query (str, optional): Specific query to clear. If None, clears all cache.
-            
-        Returns:
-            int: Number of cache entries cleared
         """
         if query:
             # Clear specific cache entry
@@ -173,9 +148,7 @@ class QueryCache:
     def get_cache_stats(self):
         """
         Get statistics about the current cache.
-        
-        Returns:
-            dict: Cache statistics including total entries, size, etc.
+    
         """
         stats = {
             'total_entries': 0,

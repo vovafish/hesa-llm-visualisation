@@ -36,20 +36,7 @@ class GeminiClient:
     def analyze_query(self, query: str) -> Dict[str, Any]:
         """
         Analyze a natural language query using the Gemini API.
-        
-        Args:
-            query: The natural language query string
-            
-        Returns:
-            dict: Dictionary containing extracted entities:
-                - institutions: List of institution names
-                - years: List of years mentioned
-                - start_year: Start year of range (if applicable)
-                - end_year: End year of range (if applicable)
-                - data_request: List of data categories requested
-                - original_institutions: Original institution names with potential typos
-                - corrected_institutions: Corrected institution names
-                - has_typos: Boolean indicating if typos were detected
+      
         """
         import requests
         import json
@@ -251,10 +238,7 @@ class GeminiClient:
         - "starting in 2017" → 2017/18
         - "end of 2017" → 2016/17
         - "2016 to 2017" → 2016/17 - 2017/18 (both as starting years)
-        
-        Args:
-            query: The original query string
-            result: The result dictionary to modify
+     
         """
         import re
         import logging
@@ -368,11 +352,6 @@ class GeminiClient:
         """
         Get a completion from the Gemini API based on the provided prompt.
         
-        Args:
-            prompt: The prompt to send to Gemini
-            
-        Returns:
-            str: The completion text from Gemini
         """
         import requests
         import logging
@@ -442,12 +421,7 @@ class GeminiClient:
     def generate_text(self, prompt):
         """
         Generate text using the Gemini API - alias for get_completion for compatibility
-        
-        Args:
-            prompt: The prompt to send to Gemini
-            
-        Returns:
-            str: The generated text from Gemini
+       
         """
         return self.get_completion(prompt)
 

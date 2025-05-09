@@ -152,13 +152,8 @@ DASHBOARD_SETTINGS = {
 }
 
 # Google Gemini API settings
-# Set your API key in environment variable: GEMINI_API_KEY
-# Or override it here (not recommended for production)
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
 
-# If you need to specify a Gemini API key directly (not recommended for production):
-# GEMINI_API_KEY = 'your-api-key-here'
-
 # File upload settings
-DATA_UPLOAD_MAX_NUMBER_FILES = 50  # Increase from default 20
+DATA_UPLOAD_MAX_NUMBER_FILES = 50  # Increase from default 50
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10MB

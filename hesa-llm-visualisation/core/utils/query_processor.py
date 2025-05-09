@@ -10,12 +10,7 @@ logger = logging.getLogger(__name__)
 def parse_llm_response(response: Dict[str, Any]) -> Dict[str, Any]:
     """
     Parse the LLM response into a structured format for data operations.
-    
-    Args:
-        response: Dictionary containing the LLM's response
-        
-    Returns:
-        Dictionary with parsed operations
+   
     """
     try:
         # Log the raw response for debugging
@@ -62,12 +57,6 @@ def apply_data_operations(df: pd.DataFrame, operations: Dict[str, Any]) -> pd.Da
     """
     Apply the parsed operations to the dataset.
     
-    Args:
-        df: Input DataFrame
-        operations: Dictionary of operations to apply
-        
-    Returns:
-        Processed DataFrame
     """
     try:
         # Make a copy to avoid modifying the original
@@ -121,11 +110,6 @@ def generate_pandas_query(operations: Dict[str, Any]) -> str:
     """
     Generate a pandas query string from operations
     
-    Args:
-        operations: Dictionary of operations
-        
-    Returns:
-        Pandas query string
     """
     query_processor = QueryProcessor()
     return query_processor.generate_pandas_query(operations)

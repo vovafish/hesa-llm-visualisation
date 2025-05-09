@@ -27,4 +27,5 @@ urlpatterns = [
     path('save_feedback/', views.save_feedback, name='save_feedback'),
     path('upload-data/', views.upload_data_view, name='upload_data'),
     path('process-upload/', views.process_upload, name='process_upload'),
+    path('record_query_timing/', views.record_query_timing, name='record_query_timing'),
 ]

@@ -1,6 +1,3 @@
-/hesa-llm-visualisation/data/raw_files/*
-!/hesa-llm-visualisation/data/raw_files/.gitkeep
-
 /hesa-llm-visualisation/data/cleaned_files/*
 !/hesa-llm-visualisation/data/cleaned_files/.gitkeep
 

@@ -19,8 +19,7 @@ with patch('django.conf.settings') as mock_settings:
     mock_settings.DASHBOARD_SETTINGS = {'MAX_PREVIEW_ROWS': 3}
     from tests.mock_ai_client import MockAIClient
     
-    # We'll mock the functions we want to test instead of importing them
-    # This avoids Django dependency issues
+
 
 class TestQueryParser:
     """Test cases for query parsing functionality."""

@@ -228,11 +228,6 @@ class MockAIClient:
         """
         Generate a chart recommendation based on the data.
         
-        Args:
-            visualization_data: Dictionary containing the data to visualize
-            
-        Returns:
-            Dictionary with chart recommendation
         """
         logger.info("Mock AI generating chart recommendation")
         
@@ -292,14 +287,7 @@ class MockAIClient:
     def generate_visualization_config(self, visualization_data: Dict[str, Any], query: str, chart_type: str) -> Dict[str, Any]:
         """
         Generate a visualization configuration for the specified chart type.
-        
-        Args:
-            visualization_data: Dictionary containing the data to visualize
-            query: The natural language query
-            chart_type: The chart type to generate
-            
-        Returns:
-            Dictionary with chart configuration
+      
         """
         logger.info(f"Mock AI generating {chart_type} visualization")
         

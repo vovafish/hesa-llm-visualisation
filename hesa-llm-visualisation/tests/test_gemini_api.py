@@ -15,7 +15,7 @@ def test_gemini_api():
         load_dotenv(env_path)
         api_key = os.environ.get("GEMINI_API_KEY")
     else:
-        print(f"⚠️ Warning: data.env file not found at {env_path}")
+        print(f"Warning: data.env file not found at {env_path}")
         api_key = "AIzaSyA8DVRyYopbD9FIuBEgRPUDkAvBnhR5ZO0"  # Fallback to hardcoded key
     
     print(f"Using API key from: {'data.env file' if os.path.exists(env_path) else 'fallback hardcoded value'}")

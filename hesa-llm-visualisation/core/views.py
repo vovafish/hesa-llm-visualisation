@@ -3,9 +3,6 @@ from django.http import JsonResponse, HttpResponse, FileResponse
 from django.views.decorators.http import require_http_methods
 from django.contrib import messages
 from .data_processing import CSVProcessor
-#from .utils.query_processor import parse_llm_response, apply_data_operations
-#from .utils.chart_generator import generate_chart
-#from .visualization.chart_generator import ChartGenerator
 import json
 import pandas as pd
 import numpy as np
@@ -19,18 +16,15 @@ from pathlib import Path
 from django.conf import settings
 import os
 import re
-#from .data_processor import transform_chart_data, prepare_chart_data
 import seaborn as sns
 import base64
 import logging
-#from .data_processing.storage.storage_service import StorageService
 from .data_processing.csv_processor import CLEANED_FILES_DIR, RAW_FILES_DIR  # Import the constants
 from django.views.decorators.csrf import csrf_exempt
 import re
 import json
 import glob
 from .gemini_client import GeminiClient, get_llm_client
-#from .mock_ai_client import MockAIClient
 import fnmatch
 from collections import defaultdict
 from core.utils.query_cache import QueryCache
@@ -2508,8 +2502,12 @@ def process_gemini_query(request):
     import json
     import logging
     import os
+    import time
     from django.conf import settings
     from core.utils.query_cache import QueryCache
+    
+    # Record start time for server-side processing
+    server_start_time = time.time()
     
     logger = logging.getLogger(__name__)
     logger.info("=== STARTING GEMINI QUERY PROCESSING ===")
@@ -2551,6 +2549,19 @@ def process_gemini_query(request):
         cached_result = query_cache.get(cache_key)
         if cached_result:
             logger.info(f"Cache hit for query: '{query}'")
+            
+            # Add or update timing information for cache hits
+            server_end_time = time.time()
+            server_processing_time_ms = int((server_end_time - server_start_time) * 1000)  # Convert to integer ms
+            server_processing_time_sec = round(server_processing_time_ms / 1000, 2)
+            
+            # Update cached result with timing info
+            cached_result['processing_time_ms'] = server_processing_time_ms
+            cached_result['processing_time_sec'] = server_processing_time_sec
+            cached_result['cached'] = True
+            
+            logger.info(f"Cache retrieval time: {server_processing_time_ms} ms ({server_processing_time_sec} sec)")
+            
             return JsonResponse(cached_result)
         
         logger.info(f"Cache miss for query: '{query}', processing...")
@@ -2770,11 +2781,33 @@ def process_gemini_query(request):
         query_cache.set(cache_key, response_data)
         
         logger.info(f"Gemini query analysis complete with {len(matching_datasets)} datasets and {len(missing_years)} missing years")
+        
+        # Calculate server-side processing time
+        server_end_time = time.time()
+        server_processing_time_ms = int((server_end_time - server_start_time) * 1000)  # Integer ms
+        server_processing_time_sec = round(server_processing_time_ms / 1000, 2)
+        
+        logger.info(f"Server processing time: {server_processing_time_ms} ms ({server_processing_time_sec} sec)")
+        
+        # Include timing in the response
+        response_data['processing_time_ms'] = server_processing_time_ms
+        response_data['processing_time_sec'] = server_processing_time_sec
+        
         return JsonResponse(response_data)
         
     except Exception as e:
-        logger.error(f"Error processing Gemini query: {str(e)}", exc_info=True)
-        return JsonResponse({'error': str(e)}, status=500)
+        # Record timing even in case of error
+        server_end_time = time.time()
+        server_processing_time_ms = int((server_end_time - server_start_time) * 1000)  # Integer ms
+        server_processing_time_sec = round(server_processing_time_ms / 1000, 2)
+        
+        logger.error(f"Error processing query: {str(e)}", exc_info=True)
+        return JsonResponse({
+            'status': 'error',
+            'error': str(e),
+            'processing_time_ms': server_processing_time_ms,
+            'processing_time_sec': server_processing_time_sec
+        }, status=500)
 
 def local_analyze_query(query):
     """
@@ -5321,3 +5354,126 @@ def process_upload(request):
         response_data['error'] = f"Unexpected error: {str(e)}"
     
     return JsonResponse(response_data)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def record_query_timing(request):
+    """
+    Record timing information for query processing.
+    Data is stored in a JSON file at the root level.
+    """
+    import json
+    import os
+    import logging
+    import traceback
+    from pathlib import Path
+    from django.conf import settings
+    
+    logger = logging.getLogger(__name__)
+    logger.info("=== RECORDING QUERY TIMING ===")
+    
+    try:
+        # Parse the data from the request
+        data = json.loads(request.body.decode('utf-8'))
+        query = data.get('query', '')
+        duration_ms = data.get('duration_ms', 0)
+        # Store the requested match count, not the returned match count
+        requested_match_count = data.get('requested_match_count', 0)
+        mission_group = data.get('mission_group')
+        
+        # Validate incoming data
+        if not query:
+            logger.warning("Empty query received in timing data")
+            return JsonResponse({'status': 'error', 'error': 'Empty query'}, status=400)
+        
+        if not isinstance(duration_ms, (int, float)) or duration_ms <= 0:
+            logger.warning(f"Invalid duration value: {duration_ms}")
+            return JsonResponse({'status': 'error', 'error': 'Invalid duration'}, status=400)
+        
+        # Convert to integer milliseconds
+        duration_ms_int = int(duration_ms)
+        
+        # Format duration in seconds with 2 decimal places
+        duration_sec = round(duration_ms / 1000, 2)
+        
+        # Define the path to the timing data file - ensure it's in the project root
+        timing_file_path = Path(settings.BASE_DIR) / 'timing_queries.json'
+        
+        logger.info(f"Using timing file path: {timing_file_path}")
+        
+        # Create a unique identifier for this query
+        # A query is unique if it has the same text, mission group, and match count
+        query_id = f"{query}|{mission_group or 'none'}|{requested_match_count}"
+        
+        # Initialize with empty data if file doesn't exist
+        if not os.path.exists(timing_file_path):
+            logger.info(f"Creating new timing file at {timing_file_path}")
+            with open(timing_file_path, 'w') as f:
+                json.dump({"queries": []}, f, indent=2)
+        
+        # Read existing data with error handling
+        try:
+            with open(timing_file_path, 'r') as f:
+                timing_data = json.load(f)
+                
+            # Validate the structure
+            if not isinstance(timing_data, dict) or 'queries' not in timing_data:
+                logger.warning("Invalid timing data structure, resetting file")
+                timing_data = {"queries": []}
+        except (json.JSONDecodeError, FileNotFoundError) as e:
+            logger.error(f"Error reading timing file: {str(e)}")
+            # Reset data if file is corrupted
+            timing_data = {"queries": []}
+        
+        # Find if this query already exists
+        existing_entry = None
+        for entry in timing_data.get('queries', []):
+            if (entry.get('query') == query and 
+                entry.get('mission_group') == mission_group and 
+                entry.get('match_count') == requested_match_count):
+                existing_entry = entry
+                break
+        
+        # Update existing entry or add new one
+        if existing_entry:
+            # Add timing to the existing entry
+            if 'durations_ms' not in existing_entry:
+                existing_entry['durations_ms'] = []
+            if 'durations_sec' not in existing_entry:
+                existing_entry['durations_sec'] = []
+                
+            existing_entry['durations_ms'].append(duration_ms_int)
+            existing_entry['durations_sec'].append(duration_sec)
+        else:
+            # Create a new entry with a sequential ID
+            new_id = len(timing_data.get('queries', [])) + 1
+            new_entry = {
+                'id': new_id,
+                'query': query,
+                'mission_group': mission_group,
+                'match_count': requested_match_count,
+                'durations_ms': [duration_ms_int],
+                'durations_sec': [duration_sec]
+            }
+            timing_data['queries'].append(new_entry)
+        
+        # Write the updated data back to the file
+        try:
+            with open(timing_file_path, 'w') as f:
+                json.dump(timing_data, f, indent=2)
+            
+            logger.info(f"Recorded timing for query: '{query}'")
+            logger.info(f"Duration: {duration_ms_int} ms ({duration_sec} sec)")
+        except Exception as write_error:
+            logger.error(f"Error writing timing data: {str(write_error)}")
+            return JsonResponse({'status': 'error', 'error': f'File write error: {str(write_error)}'}, status=500)
+        
+        return JsonResponse({'status': 'success'})
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error in timing data: {str(e)}")
+        return JsonResponse({'status': 'error', 'error': f'Invalid JSON: {str(e)}'}, status=400)
+    except Exception as e:
+        logger.error(f"Error recording query timing: {str(e)}")
+        logger.error(traceback.format_exc())
+        return JsonResponse({'status': 'error', 'error': str(e)}, status=500)

@@ -1,0 +1,182 @@
+{
+  "queries": [
+    {
+      "id": 1,
+      "query": "How many postgraduates are in University of Cambridge in 2017?",
+      "mission_group": null,
+      "match_count": 2,
+      "durations_ms": [
+        6212,
+        59,
+        355
+      ],
+      "durations_sec": [
+        6.21,
+        0.06,
+        0.36
+      ]
+    },
+    {
+      "id": 2,
+      "query": "What was the research income starting in 2017?",
+      "mission_group": null,
+      "match_count": 2,
+      "durations_ms": [
+        5482,
+        47
+      ],
+      "durations_sec": [
+        5.48,
+        0.05
+      ]
+    },
+    {
+      "id": 3,
+      "query": "Show carbon emissions for Coventry University ending in 2021",
+      "mission_group": null,
+      "match_count": 1,
+      "durations_ms": [
+        13173
+      ],
+      "durations_sec": [
+        13.17
+      ]
+    },
+    {
+      "id": 4,
+      "query": "Show carbon emissions for Coventry University in 2021",
+      "mission_group": null,
+      "match_count": 1,
+      "durations_ms": [
+        4292,
+        106
+      ],
+      "durations_sec": [
+        4.29,
+        0.11
+      ]
+    },
+    {
+      "id": 5,
+      "query": "How many full-time students lived in university accommodation at University of York from 2016 to 2018?",
+      "mission_group": null,
+      "match_count": 4,
+      "durations_ms": [
+        8665,
+        98
+      ],
+      "durations_sec": [
+        8.67,
+        0.1
+      ]
+    },
+    {
+      "id": 6,
+      "query": "Research funding for University of Manchester from 2017 to 2019",
+      "mission_group": null,
+      "match_count": 3,
+      "durations_ms": [
+        10309,
+        82
+      ],
+      "durations_sec": [
+        10.31,
+        0.08
+      ]
+    },
+    {
+      "id": 7,
+      "query": "Graduation rates at London institutions for the past 5 years",
+      "mission_group": null,
+      "match_count": 5,
+      "durations_ms": [
+        12935
+      ],
+      "durations_sec": [
+        12.94
+      ]
+    },
+    {
+      "id": 8,
+      "query": "Graduation rates at University of London institutions for the past 5 years",
+      "mission_group": null,
+      "match_count": 5,
+      "durations_ms": [
+        58301,
+        665,
+        181
+      ],
+      "durations_sec": [
+        58.3,
+        0.67,
+        0.18
+      ]
+    },
+    {
+      "id": 9,
+      "query": "Compare teaching and salary in University of Bath",
+      "mission_group": "Million+",
+      "match_count": 3,
+      "durations_ms": [
+        23686,
+        210
+      ],
+      "durations_sec": [
+        23.69,
+        0.21
+      ]
+    },
+    {
+      "id": 10,
+      "query": "Research funding for University of Manchester from 2017 to 2019?",
+      "mission_group": "Million+",
+      "match_count": 3,
+      "durations_ms": [
+        9699
+      ],
+      "durations_sec": [
+        9.7
+      ]
+    },
+    {
+      "id": 11,
+      "query": "What's the trend in total expenditure for all universities in the past 10 years?",
+      "mission_group": "Russell Group",
+      "match_count": 5,
+      "durations_ms": [
+        30807,
+        499
+      ],
+      "durations_sec": [
+        30.81,
+        0.5
+      ]
+    },
+    {
+      "id": 12,
+      "query": "What are the classification  in the University of Bristol from 2014 to 2025",
+      "mission_group": "University Alliance",
+      "match_count": 3,
+      "durations_ms": [
+        25055,
+        243
+      ],
+      "durations_sec": [
+        25.06,
+        0.24
+      ]
+    },
+    {
+      "id": 13,
+      "query": "How many postgraduates studied at Cardiff University between 2018-2020?",
+      "mission_group": null,
+      "match_count": 3,
+      "durations_ms": [
+        4955
+      ],
+      "durations_sec": [
+        4.96
+      ]
+    }
+  ]
+}
