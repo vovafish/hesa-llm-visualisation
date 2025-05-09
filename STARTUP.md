@@ -27,7 +27,12 @@ source venv/bin/activate
 
 3. Install Python Dependencies
 Download dependencies:
-Note: this command can take up to 5 minutes, depending on what is already downloaded on the system, internet speed and other criteria
+Note: this command takes about 5 minutes, depending on what is already downloaded on the system, internet speed and other criteria.
+Please be patient and wait for similar messages that would indicate that the commands have executed
+```[notice] A new release of pip is available: 24.0 -> 25.1.1
+```
+```[notice] To update, run: python.exe -m pip install --upgrade pip
+```
 pip install -r requirements.txt
 
 If facing issue, try creating `requirements.txt` file again:
@@ -48,16 +53,9 @@ When in the right location type:
 npm install
 
 
-5. Configure APY Key
+5. APY Key
 
 Please do not share or leak the provided API Key. In case of any issue or inquiries regarding API Key, please contact the owner of the repo, aka me (vr112)
-
-Option 1:
-1. Create data.env file in this directory -> vr112\hesa-llm-visualisation\
-2. Put the API key as provided in the BB submission
-
-Option 2:
-1. Just drag the provided separately submitted data.env file in the directory -> vr112\hesa-llm-visualisation\
 
 
 6. Prepare the data
