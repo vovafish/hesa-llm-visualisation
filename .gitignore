@@ -17,6 +17,8 @@
 /hesa-llm-visualisation/data/cache/*
 !/hesa-llm-visualisation/data/cache/.gitkeep
 
+notes.md
+
 
 venv/
 mydata.txt
